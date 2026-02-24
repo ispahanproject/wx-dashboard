@@ -883,23 +883,30 @@ function PanelFrame({ children, title, code, style = {} }) {
   );
 }
 
-function TabBtn({ active, onClick, children, icon }) {
+function TabBtn({ active, onClick, children, icon, shortcut }) {
   return (
     <button onClick={onClick} style={{
-      padding: "8px 18px",
-      background: active ? "rgba(110, 231, 183, 0.08)" : "transparent",
-      border: active ? "1px solid rgba(110, 231, 183, 0.4)" : "1px solid rgba(110, 231, 183, 0.08)",
-      borderRadius: "2px",
-      color: active ? "#6ee7b7" : "#475569",
-      fontSize: "11px", fontWeight: active ? 700 : 400, cursor: "pointer",
+      padding: "10px 20px",
+      background: active ? "rgba(110, 231, 183, 0.10)" : "transparent",
+      border: "none",
+      borderBottom: active ? "2px solid #6ee7b7" : "2px solid transparent",
+      color: active ? "#6ee7b7" : "#64748b",
+      fontSize: "12px", fontWeight: active ? 700 : 500, cursor: "pointer",
       display: "flex", alignItems: "center", gap: "8px",
       transition: "all 0.15s ease",
       fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1.5px",
-      textShadow: active ? "0 0 8px rgba(110,231,183,0.6)" : "none",
-      boxShadow: active ? "inset 0 -2px 0 #6ee7b7" : "none",
+      textShadow: active ? "0 0 10px rgba(110,231,183,0.5)" : "none",
+      position: "relative",
     }}>
-      <span style={{ fontSize: "13px", opacity: active ? 1 : 0.5 }}>{icon}</span>
-      {children.toUpperCase?.() ?? children}
+      <span style={{ fontSize: "15px", opacity: active ? 1 : 0.6 }}>{icon}</span>
+      <span>{children.toUpperCase?.() ?? children}</span>
+      {shortcut && (
+        <span style={{
+          fontSize: "8px", color: active ? "#6ee7b780" : "#334155",
+          fontFamily: "'JetBrains Mono', monospace",
+          marginLeft: "2px",
+        }}>{shortcut}</span>
+      )}
     </button>
   );
 }
@@ -4687,42 +4694,59 @@ export default function WeatherBriefing() {
       {/* ===== TAB BAR ===== */}
       <div style={{
         padding: "0 24px",
-        borderBottom: "1px solid rgba(110, 231, 183, 0.1)",
-        borderTop: "1px solid rgba(110, 231, 183, 0.05)",
-        display: "flex", gap: "0", flexWrap: "wrap",
-        background: "rgba(3, 8, 16, 0.8)",
-        alignItems: "center",
+        borderBottom: "1px solid rgba(110, 231, 183, 0.15)",
+        background: "rgba(3, 8, 16, 0.9)",
+        backdropFilter: "blur(8px)",
+        position: "sticky", top: 0, zIndex: 100,
       }}>
-        {tabs.map((tab) => (
-          <TabBtn key={tab.key} active={displayMode === "single" && activeTab === tab.key} onClick={() => { setActiveTab(tab.key); setDisplayMode("single"); }} icon={tab.icon}>
-            {tab.label}
-          </TabBtn>
-        ))}
-        {/* MULTI-DISPLAY モード切り替え */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: "4px", alignItems: "center" }}>
+        <div style={{
+          display: "flex", alignItems: "stretch",
+          maxWidth: "1400px", margin: "0 auto",
+          overflowX: "auto", WebkitOverflowScrolling: "touch",
+          scrollbarWidth: "none",
+        }}>
+          {tabs.map((tab, i) => (
+            <TabBtn
+              key={tab.key}
+              active={displayMode === "single" && activeTab === tab.key}
+              onClick={() => { setActiveTab(tab.key); setDisplayMode("single"); }}
+              icon={tab.icon}
+              shortcut={i < 7 ? `${i + 1}` : null}
+            >
+              {tab.label}
+            </TabBtn>
+          ))}
+
+          {/* セパレーター */}
+          <div style={{ width: "1px", margin: "8px 6px", background: "rgba(110,231,183,0.1)", flexShrink: 0 }} />
+
+          {/* MULTI-DISPLAY モード切り替え */}
           <button onClick={() => setDisplayMode(displayMode === "multi" ? "single" : "multi")} style={{
-            padding: "6px 14px",
-            background: displayMode === "multi" ? "rgba(96,165,250,0.12)" : "transparent",
-            border: displayMode === "multi" ? "1px solid rgba(96,165,250,0.5)" : "1px solid rgba(110, 231, 183, 0.08)",
-            borderRadius: "2px",
-            color: displayMode === "multi" ? "#60a5fa" : "#475569",
-            fontSize: "10px", fontWeight: displayMode === "multi" ? 700 : 400,
+            padding: "10px 16px",
+            background: displayMode === "multi" ? "rgba(96,165,250,0.10)" : "transparent",
+            border: "none",
+            borderBottom: displayMode === "multi" ? "2px solid #60a5fa" : "2px solid transparent",
+            color: displayMode === "multi" ? "#60a5fa" : "#64748b",
+            fontSize: "12px", fontWeight: displayMode === "multi" ? 700 : 500,
             cursor: "pointer",
             fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1.5px",
-            textShadow: displayMode === "multi" ? "0 0 8px rgba(96,165,250,0.6)" : "none",
-            display: "flex", alignItems: "center", gap: "6px",
+            textShadow: displayMode === "multi" ? "0 0 8px rgba(96,165,250,0.5)" : "none",
+            display: "flex", alignItems: "center", gap: "8px",
             transition: "all 0.15s ease",
+            flexShrink: 0,
           }}>
-            <span style={{ fontSize: "11px", display: "inline-grid", gridTemplateColumns: "1fr 1fr", gap: "1px" }}>
+            <span style={{ display: "inline-grid", gridTemplateColumns: "1fr 1fr", gap: "2px" }}>
               {[0,1,2,3].map(i => (
                 <span key={i} style={{
-                  display: "block", width: "5px", height: "4px",
-                  background: displayMode === "multi" ? "#60a5fa" : "#475569",
-                  borderRadius: "0.5px",
+                  display: "block", width: "6px", height: "5px",
+                  background: displayMode === "multi" ? "#60a5fa" : "#64748b",
+                  borderRadius: "1px",
+                  opacity: displayMode === "multi" ? 1 : 0.5,
                 }} />
               ))}
             </span>
             MULTI
+            <span style={{ fontSize: "8px", color: displayMode === "multi" ? "#60a5fa80" : "#334155", fontFamily: "'JetBrains Mono', monospace" }}>M</span>
           </button>
         </div>
       </div>

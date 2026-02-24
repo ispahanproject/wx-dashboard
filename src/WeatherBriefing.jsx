@@ -1,6 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 /* ============================================================
+   AWC API BASE URL
+   dev → Vite proxy (/awc-api)
+   prod → CORS proxy 経由で aviationweather.gov
+   ============================================================ */
+const AWC_BASE = import.meta.env.DEV
+  ? "/awc-api"
+  : "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://aviationweather.gov");
+
+function awcUrl(path) {
+  if (import.meta.env.DEV) return `/awc-api${path}`;
+  return `https://api.allorigins.win/raw?url=${encodeURIComponent("https://aviationweather.gov" + path)}`;
+}
+
+/* ============================================================
    ALMANAC UTILITIES
    ============================================================ */
 
@@ -786,7 +800,7 @@ function MetarQuickStatus() {
     const fetchAll = async () => {
       const icaos = QUICK_AIRPORTS.map(a => a.icao).join(",");
       try {
-        const r = await fetch(`/awc-api/api/data/metar?ids=${icaos}&format=raw&taf=false&hours=1`);
+        const r = await fetch(awcUrl(`/api/data/metar?ids=${icaos}&format=raw&taf=false&hours=1`));
         const text = await r.text();
         const lines = text.trim().split("\n").filter(Boolean);
         const parsed = {};
@@ -1216,8 +1230,8 @@ function MetarTafPanel() {
     setLoading((prev) => ({ ...prev, [icao]: true }));
     try {
       const [mRes, tRes] = await Promise.all([
-        fetch(`/awc-api/api/data/metar?ids=${icao}&format=raw&taf=false&hours=3`),
-        fetch(`/awc-api/api/data/taf?ids=${icao}&format=raw`),
+        fetch(awcUrl(`/api/data/metar?ids=${icao}&format=raw&taf=false&hours=3`)),
+        fetch(awcUrl(`/api/data/taf?ids=${icao}&format=raw`)),
       ]);
       const [mText, tText] = await Promise.all([mRes.text(), tRes.text()]);
       const newMetar = mText.trim() || "No METAR available";
@@ -2831,7 +2845,7 @@ function useSystemStatus() {
     // METAR (AWC) チェック
     try {
       const r = await fetch(
-        "/awc-api/api/data/metar?ids=RJTT&format=raw&taf=false&hours=1",
+        awcUrl("/api/data/metar?ids=RJTT&format=raw&taf=false&hours=1"),
         { signal: fetchTimeout(8000) }
       );
       if (r.ok) {
@@ -3151,7 +3165,7 @@ function EventLog() {
     // METAR取得を監視
     const checkMetar = async () => {
       try {
-        const r = await fetch("/awc-api/api/data/metar?ids=RJTT&format=raw&taf=false&hours=1");
+        const r = await fetch(awcUrl("/api/data/metar?ids=RJTT&format=raw&taf=false&hours=1"));
         if (r.ok) {
           const text = await r.text();
           const line = text.trim().split("\n")[0] ?? "";

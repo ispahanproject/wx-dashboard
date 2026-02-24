@@ -2,14 +2,33 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>PRE-FLIGHT WX BRIEFING</title>
+
+    <!-- PWA / Web App -->
+    <link rel="manifest" href="/wx-dashboard/manifest.json" />
+    <meta name="theme-color" content="#030810" />
+
+    <!-- iOS Web App (iPad full screen) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="WX Briefing" />
+    <link rel="apple-touch-icon" href="/wx-dashboard/icon-192.png" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { background: #030810; }
+      body {
+        background: #030810;
+        /* iOS safe area padding for notch/home indicator */
+        padding-top: env(safe-area-inset-top);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+        padding-bottom: env(safe-area-inset-bottom);
+      }
     </style>
   </head>
   <body>

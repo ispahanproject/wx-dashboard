@@ -220,8 +220,8 @@ function AlmanacBar({ now }) {
    六曜 (ROKUYO) — 旧暦ベースの日本伝統暦注
    ============================================================ */
 function getRokuyo(date) {
-  // 旧暦月日を簡易天文計算で求め、六曜を算出
-  // 朔(新月)から旧暦日を、冬至から旧暦月を近似
+  // 旧暦月日を天文計算で求め、六曜を算出 (JST基準)
+
   const JD = (y, m, d) => {
     if (m <= 2) { y--; m += 12; }
     const A = Math.floor(y / 100);
@@ -229,67 +229,55 @@ function getRokuyo(date) {
     return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + B - 1524.5;
   };
 
-  const jst = new Date(date.getTime() + 9 * 3600000);
-  const y = jst.getUTCFullYear(), m = jst.getUTCMonth() + 1, d = jst.getUTCDate();
-  const jd = JD(y, m, d);
-
-  // 直近の朔(新月)を求める（Meeus簡易法）
-  const k0 = Math.floor((y + (m - 1) / 12 - 2000) * 12.3685);
-  const findNewMoon = (k) => {
-    const T = k / 1236.85;
-    const T2 = T * T;
-    const T3 = T2 * T;
+  // Meeus法 朔(新月)JDE
+  const newMoonJDE = (k) => {
+    const T = k / 1236.85, T2 = T * T, T3 = T2 * T;
     let jde = 2451550.09766 + 29.530588861 * k + 0.00015437 * T2 - 0.000000150 * T3;
     const M = (2.5534 + 29.10535670 * k) * Math.PI / 180;
     const Mp = (201.5643 + 385.81693528 * k) * Math.PI / 180;
     const F = (160.7108 + 390.67050284 * k) * Math.PI / 180;
-    jde += -0.40720 * Math.sin(Mp)
-         + 0.17241 * Math.sin(M)
-         + 0.01608 * Math.sin(2 * Mp)
-         + 0.01039 * Math.sin(2 * F)
+    jde += -0.40720 * Math.sin(Mp) + 0.17241 * Math.sin(M)
+         + 0.01608 * Math.sin(2 * Mp) + 0.01039 * Math.sin(2 * F)
          + 0.00739 * Math.sin(Mp - M);
     return jde;
   };
 
-  // 直前の朔と、その前の朔を探す
-  let k = k0;
-  while (findNewMoon(k) > jd + 0.5) k--;
-  const nm1 = findNewMoon(k);     // 直前の朔
-  const nm0 = findNewMoon(k - 1); // その前の朔
-
-  // 旧暦日 = JD - 直前の朔JD + 1
-  const lunarDay = Math.floor(jd - nm1 + 0.5) + 1;
-
-  // 旧暦月 (近似): 冬至を含む月を11月とする簡易法
-  // ここでは朔の回数から月番号を求める
-  // 春分前後を基準に、旧暦正月(朔)を探す
-  const getSpringNewYear = (yr) => {
-    // 旧暦正月 ≈ 1/21～2/20頃の朔
-    let kk = Math.floor((yr - 2000) * 12.3685) - 1;
-    for (let i = 0; i < 4; i++) {
-      const nmJd = findNewMoon(kk + i);
-      const nmDate = new Date((nmJd - 2440587.5) * 86400000);
-      const nmM = nmDate.getUTCMonth() + 1;
-      const nmD = nmDate.getUTCDate();
-      // 旧暦正月1日は大体1/21〜2/20
-      if ((nmM === 1 && nmD >= 21) || (nmM === 2 && nmD <= 21)) {
-        return kk + i;
-      }
-    }
-    return kk;
+  // 朔のJST日付 (y,m,d)
+  const nmJST = (k) => {
+    const ms = (newMoonJDE(k) - 2440587.5) * 86400000;
+    const j = new Date(ms + 9 * 3600000);
+    return { y: j.getUTCFullYear(), m: j.getUTCMonth() + 1, d: j.getUTCDate() };
   };
 
-  const nyK = getSpringNewYear(y);
+  // JST日付
+  const jst = new Date(date.getTime() + 9 * 3600000);
+  const y = jst.getUTCFullYear(), m = jst.getUTCMonth() + 1, d = jst.getUTCDate();
+  const jdToday = JD(y, m, d);
+
+  // 直前の朔を探す (JST日付ベース)
+  let k = Math.floor((y + (m - 1) / 12 - 2000) * 12.3685) + 1;
+  while (JD(nmJST(k).y, nmJST(k).m, nmJST(k).d) > jdToday) k--;
+  // kが直前の朔。次の朔が今日以前なら進める
+  while (JD(nmJST(k + 1).y, nmJST(k + 1).m, nmJST(k + 1).d) <= jdToday) k++;
+
+  const cur = nmJST(k);
+  const lunarDay = Math.round(jdToday - JD(cur.y, cur.m, cur.d)) + 1;
+
+  // 旧暦正月朔: 雨水を含む朔月の朔
+  const getNewYearK = (yr) => {
+    const usui = JD(yr, 2, 19);
+    let kk = Math.floor((yr + 1.5 / 12 - 2000) * 12.3685) + 1;
+    // 雨水より後の最初の朔を探す
+    while (JD(nmJST(kk).y, nmJST(kk).m, nmJST(kk).d) <= usui) kk++;
+    return kk - 1; // 雨水を含む月の朔
+  };
+
+  const nyK = getNewYearK(y);
   let lunarMonth = k - nyK + 1;
-  if (lunarMonth <= 0) {
-    const nyKPrev = getSpringNewYear(y - 1);
-    lunarMonth = k - nyKPrev + 1;
-  }
-  // 閏月の補正: 月番号が13以上なら12で折り返す
+  if (lunarMonth <= 0) lunarMonth = k - getNewYearK(y - 1) + 1;
   if (lunarMonth > 12) lunarMonth -= 12;
   if (lunarMonth < 1) lunarMonth = 1;
 
-  // 六曜 = (旧暦月 + 旧暦日) % 6
   const ROKUYO = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
   const ROKUYO_EN = ["Taian", "Shakku", "Sensho", "Tomobiki", "Senbu", "Butsumetsu"];
   const ROKUYO_DESC = [
@@ -301,14 +289,7 @@ function getRokuyo(date) {
     "万事凶・慎む日",
   ];
   const idx = (lunarMonth + lunarDay) % 6;
-  return {
-    name: ROKUYO[idx],
-    en: ROKUYO_EN[idx],
-    desc: ROKUYO_DESC[idx],
-    lunarMonth,
-    lunarDay,
-    idx,
-  };
+  return { name: ROKUYO[idx], en: ROKUYO_EN[idx], desc: ROKUYO_DESC[idx], lunarMonth, lunarDay, idx };
 }
 
 /* ============================================================

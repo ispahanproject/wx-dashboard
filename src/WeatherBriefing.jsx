@@ -638,34 +638,36 @@ function JmaWeatherOverview() {
 }
 
 
-const AIRPORTS = [
-  { icao: "RJCC", name: "新千歳" },
-  { icao: "RJSS", name: "仙台" },
-  { icao: "RJSN", name: "新潟" },
-  { icao: "RJNK", name: "小松" },
-  { icao: "RJAA", name: "成田" },
-  { icao: "RJTT", name: "東京/羽田" },
-  { icao: "RJNS", name: "静岡" },
-  { icao: "RJGG", name: "中部" },
-  { icao: "RJOO", name: "伊丹" },
-  { icao: "RJOB", name: "広島" },
-  { icao: "RJBB", name: "関西" },
-  { icao: "RJOT", name: "高松" },
-  { icao: "RJOS", name: "徳島" },
-  { icao: "RJOM", name: "松山" },
-  { icao: "RJFF", name: "福岡" },
-  { icao: "RJOK", name: "高知" },
-  { icao: "RJFO", name: "大分" },
-  { icao: "RJFU", name: "長崎" },
-  { icao: "RJFT", name: "熊本" },
-  { icao: "RJFM", name: "宮崎" },
-  { icao: "RJFK", name: "鹿児島" },
-  { icao: "ROAH", name: "那覇" },
-  { icao: "RJSA", name: "青森" },
-  { icao: "RJCB", name: "帯広" },
-  { icao: "RJEC", name: "旭川" },
-  { icao: "RCTP", name: "台北桃園" },
+const AIRPORT_GROUPS = [
+  { region: "北海道・東北", airports: [
+    { icao: "RJCC", name: "新千歳" }, { icao: "RJCB", name: "帯広" }, { icao: "RJEC", name: "旭川" },
+    { icao: "RJSA", name: "青森" }, { icao: "RJSS", name: "仙台" }, { icao: "RJSN", name: "新潟" },
+  ]},
+  { region: "関東", airports: [
+    { icao: "RJTT", name: "東京/羽田" }, { icao: "RJAA", name: "成田" },
+  ]},
+  { region: "中部・北陸", airports: [
+    { icao: "RJGG", name: "中部" }, { icao: "RJNS", name: "静岡" }, { icao: "RJNK", name: "小松" },
+  ]},
+  { region: "関西", airports: [
+    { icao: "RJOO", name: "伊丹" }, { icao: "RJBB", name: "関西" },
+  ]},
+  { region: "中国・四国", airports: [
+    { icao: "RJOB", name: "広島" }, { icao: "RJOT", name: "高松" },
+    { icao: "RJOS", name: "徳島" }, { icao: "RJOM", name: "松山" }, { icao: "RJOK", name: "高知" },
+  ]},
+  { region: "九州", airports: [
+    { icao: "RJFF", name: "福岡" }, { icao: "RJFO", name: "大分" }, { icao: "RJFU", name: "長崎" },
+    { icao: "RJFT", name: "熊本" }, { icao: "RJFM", name: "宮崎" }, { icao: "RJFK", name: "鹿児島" },
+  ]},
+  { region: "沖縄", airports: [
+    { icao: "ROAH", name: "那覇" },
+  ]},
+  { region: "海外", airports: [
+    { icao: "RCTP", name: "台北桃園" },
+  ]},
 ];
+const AIRPORTS = AIRPORT_GROUPS.flatMap(g => g.airports);
 
 const IATA_TO_ICAO = {
   HND: "RJTT", NRT: "RJAA", CTS: "RJCC", OBO: "RJCB", AKJ: "RJEC",
@@ -1663,22 +1665,72 @@ function MetarTafPanel() {
     });
   };
 
+  const [expandedRegions, setExpandedRegions] = useState(() => {
+    // DUTY空港を含む地域は初期展開
+    const dutyIcaoSet = new Set(selectedAirports);
+    const open = new Set();
+    AIRPORT_GROUPS.forEach(g => {
+      if (g.airports.some(ap => dutyIcaoSet.has(ap.icao))) open.add(g.region);
+    });
+    if (open.size === 0) open.add("関東"); // デフォルト
+    return open;
+  });
+  const toggleRegion = (region) => setExpandedRegions(prev => {
+    const next = new Set(prev);
+    next.has(region) ? next.delete(region) : next.add(region);
+    return next;
+  });
+
   return (
     <div>
       <div style={{ marginBottom: "20px" }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
-          {AIRPORTS.map((ap) => (
-            <button key={ap.icao} onClick={() => selectedAirports.includes(ap.icao) ? removeAirport(ap.icao) : addAirport(ap.icao)}
-              style={{
-                padding: "6px 12px",
-                background: selectedAirports.includes(ap.icao) ? "rgba(110, 231, 183, 0.15)" : "rgba(30, 41, 59, 0.5)",
-                border: selectedAirports.includes(ap.icao) ? "1px solid rgba(110, 231, 183, 0.4)" : "1px solid rgba(148, 163, 184, 0.12)",
-                borderRadius: "6px", color: selectedAirports.includes(ap.icao) ? "#6ee7b7" : "#94a3b8",
-                fontSize: "11px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+        {/* 地域グループ空港選択 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "16px" }}>
+          {AIRPORT_GROUPS.map((group) => {
+            const isOpen = expandedRegions.has(group.region);
+            const selectedCount = group.airports.filter(ap => selectedAirports.includes(ap.icao)).length;
+            return (
+              <div key={group.region} style={{
+                background: "rgba(15, 23, 42, 0.4)",
+                border: `1px solid ${selectedCount > 0 ? "rgba(110,231,183,0.15)" : "rgba(148,163,184,0.08)"}`,
+                borderRadius: "8px", overflow: "hidden",
               }}>
-              {ap.icao} <span style={{ opacity: 0.6, fontSize: "10px" }}>{ap.name}</span>
-            </button>
-          ))}
+                <button onClick={() => toggleRegion(group.region)} style={{
+                  width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "7px 12px", background: "none", border: "none", cursor: "pointer",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ color: "#475569", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", transition: "transform 0.2s", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
+                    <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{group.region}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {selectedCount > 0 && <span style={{ color: "#6ee7b7", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", background: "rgba(110,231,183,0.1)", padding: "1px 6px", borderRadius: "10px" }}>{selectedCount}</span>}
+                    <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>{group.airports.length}</span>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", padding: "0 10px 8px 28px" }}>
+                    {group.airports.map((ap) => {
+                      const sel = selectedAirports.includes(ap.icao);
+                      return (
+                        <button key={ap.icao} onClick={() => sel ? removeAirport(ap.icao) : addAirport(ap.icao)}
+                          style={{
+                            padding: "4px 10px",
+                            background: sel ? "rgba(110, 231, 183, 0.15)" : "rgba(30, 41, 59, 0.5)",
+                            border: sel ? "1px solid rgba(110, 231, 183, 0.4)" : "1px solid rgba(148, 163, 184, 0.12)",
+                            borderRadius: "5px", color: sel ? "#6ee7b7" : "#94a3b8",
+                            fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+                            transition: "all 0.15s",
+                          }}>
+                          {ap.icao} <span style={{ opacity: 0.6, fontSize: "9px" }}>{ap.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <input type="text" placeholder="ICAO (e.g. RJBE)" value={customIcao}

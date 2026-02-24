@@ -537,7 +537,19 @@ const AIRPORTS = [
   { icao: "RJFM", name: "宮崎" },
   { icao: "RJFK", name: "鹿児島" },
   { icao: "ROAH", name: "那覇" },
+  { icao: "RJSA", name: "青森" },
+  { icao: "RJCB", name: "帯広" },
+  { icao: "RJEC", name: "旭川" },
+  { icao: "RCTP", name: "台北桃園" },
 ];
+
+const IATA_TO_ICAO = {
+  HND: "RJTT", NRT: "RJAA", CTS: "RJCC", OBO: "RJCB", AKJ: "RJEC",
+  AOJ: "RJSA", OKJ: "RJOB", MYJ: "RJOM", FUK: "RJFF", ITM: "RJOO",
+  NGO: "RJGG", NGS: "RJFU", TAK: "RJOT", KMI: "RJFM", KMQ: "RJNK",
+  OIT: "RJFO", TPE: "RCTP",
+};
+function iataToIcao(iata) { return IATA_TO_ICAO[iata?.toUpperCase()] || null; }
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -1214,9 +1226,118 @@ function JapanOverview() {
   );
 }
 
+/* ========== TODAY DUTY BAR（PSD直上表示） ========== */
+function TodayDutyBar() {
+  const [todayEvents, setTodayEvents] = useState([]);
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    setTodayEvents(getTodayDutyEvents());
+    const iv = setInterval(() => {
+      setNow(new Date());
+      setTodayEvents(getTodayDutyEvents());
+    }, 30000);
+    return () => clearInterval(iv);
+  }, []);
+
+  if (todayEvents.length === 0) return null;
+
+  const currentEvent = todayEvents.find(e => now >= e.start && now < e.end);
+  const flyEvents = todayEvents.filter(e => e.type === "FLY");
+
+  // Build full route from all FLY legs
+  const fullRoute = [];
+  for (const ev of flyEvents) {
+    if (ev.route) {
+      for (let i = 0; i < ev.route.length; i++) {
+        if (fullRoute.length === 0 || fullRoute[fullRoute.length - 1] !== ev.route[i]) {
+          fullRoute.push(ev.route[i]);
+        }
+      }
+    }
+  }
+
+  const firstStart = todayEvents[0]?.start;
+  const lastEnd = todayEvents[todayEvents.length - 1]?.end;
+  let progressPct = 0;
+  if (firstStart && lastEnd && now >= firstStart && now <= lastEnd) {
+    progressPct = ((now - firstStart) / (lastEnd - firstStart)) * 100;
+  } else if (lastEnd && now > lastEnd) {
+    progressPct = 100;
+  }
+
+  const fmtZ = (d) => {
+    if (!d) return "--:--Z";
+    return d.getUTCHours().toString().padStart(2, "0") + ":" + d.getUTCMinutes().toString().padStart(2, "0") + "Z";
+  };
+
+  const statusColor = currentEvent ? (DUTY_COLORS[currentEvent.type] || "#94a3b8") : "#334155";
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: "12px",
+      padding: "8px 14px",
+      background: "rgba(5, 10, 20, 0.8)",
+      border: "1px solid rgba(110, 231, 183, 0.1)",
+      borderRadius: "4px", marginBottom: "8px",
+    }}>
+      <div style={{
+        width: "8px", height: "8px", borderRadius: "50%",
+        background: statusColor, boxShadow: `0 0 8px ${statusColor}`, flexShrink: 0,
+      }} />
+      <span style={{
+        color: "#6ee7b7", fontSize: "9px", fontWeight: 700,
+        fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", flexShrink: 0,
+      }}>TODAY DUTY</span>
+      {currentEvent && (
+        <span style={{
+          background: DUTY_COLORS[currentEvent.type] || "#94a3b8",
+          color: currentEvent.type === "OFF" ? "#e2e8f0" : "#030810",
+          padding: "2px 8px", borderRadius: "2px", fontSize: "9px", fontWeight: 700,
+          fontFamily: "'JetBrains Mono', monospace", flexShrink: 0,
+        }}>{currentEvent.type}</span>
+      )}
+      <div style={{ width: "1px", height: "16px", background: "rgba(110,231,183,0.15)" }} />
+      {fullRoute.length > 0 ? (
+        <span style={{
+          color: "#e2e8f0", fontSize: "12px", fontWeight: 700,
+          fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
+        }}>{fullRoute.join(" → ")}</span>
+      ) : (
+        <span style={{ color: "#64748b", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+          {todayEvents[0]?.type || "---"}
+        </span>
+      )}
+      <div style={{ width: "1px", height: "16px", background: "rgba(110,231,183,0.15)" }} />
+      <span style={{
+        color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0,
+      }}>{fmtZ(firstStart)} – {fmtZ(lastEnd)}</span>
+      <div style={{
+        flex: 1, height: "3px", minWidth: "60px",
+        background: "rgba(110,231,183,0.08)", borderRadius: "2px", overflow: "hidden",
+      }}>
+        <div style={{
+          width: `${progressPct}%`, height: "100%",
+          background: progressPct >= 100 ? "#475569" : "#6ee7b7",
+          boxShadow: progressPct < 100 ? "0 0 6px #6ee7b7" : "none",
+          borderRadius: "2px", transition: "width 0.5s ease",
+        }} />
+      </div>
+    </div>
+  );
+}
+
 /* ========== METAR/TAF ========== */
 function MetarTafPanel() {
-  const [selectedAirports, setSelectedAirports] = useState(["RJTT", "RJAA"]);
+  const [selectedAirports, setSelectedAirports] = useState(() => {
+    const todayEvents = getTodayDutyEvents();
+    const dutyIcaos = getDutyRouteIcaoCodes(todayEvents);
+    if (dutyIcaos.length > 0) {
+      const base = new Set(["RJTT", ...dutyIcaos]);
+      return [...base];
+    }
+    return ["RJTT", "RJAA"];
+  });
   const [customIcao, setCustomIcao] = useState("");
   const [metarData, setMetarData] = useState({});
   const [tafData, setTafData] = useState({});
@@ -1385,6 +1506,34 @@ function MetarTafPanel() {
             </span>
           )}
         </div>
+        {/* DUTY ROUTE indicator */}
+        {(() => {
+          const todayEvts = getTodayDutyEvents();
+          const dutyIcaos = getDutyRouteIcaoCodes(todayEvts);
+          if (dutyIcaos.length === 0) return null;
+          const flyEvts = todayEvts.filter(e => e.type === "FLY");
+          const route = [];
+          for (const ev of flyEvts) {
+            if (ev.route) ev.route.forEach(c => { if (route.length === 0 || route[route.length - 1] !== c) route.push(c); });
+          }
+          return (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              padding: "5px 12px", marginTop: "6px",
+              background: "rgba(251,191,36,0.06)",
+              border: "1px solid rgba(251,191,36,0.2)",
+              borderRadius: "4px",
+            }}>
+              <span style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>DUTY ROUTE</span>
+              <span style={{ color: "#e2e8f0", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+                {route.join(" → ")}
+              </span>
+              <span style={{ color: "#64748b", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginLeft: "auto" }}>
+                ICAO: {dutyIcaos.join(", ")}
+              </span>
+            </div>
+          );
+        })()}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -2689,6 +2838,31 @@ const DUTY_COLORS = {
   STANDBY: "#c4b5fd",
   GROUND: "#67e8f9",
 };
+
+function getTodayDutyEvents() {
+  try {
+    const saved = localStorage.getItem(DUTY_STORAGE_KEY);
+    if (!saved) return [];
+    const events = JSON.parse(saved).map(e => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
+    const now = new Date();
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const todayEnd = new Date(todayStart.getTime() + 86400000);
+    return events.filter(e => e.start < todayEnd && e.end > todayStart);
+  } catch { return []; }
+}
+
+function getDutyRouteIcaoCodes(events) {
+  const iataSet = new Set();
+  for (const ev of events) {
+    if (ev.type === "FLY" && ev.route) ev.route.forEach(c => iataSet.add(c));
+  }
+  const icaos = [];
+  for (const iata of iataSet) {
+    const icao = iataToIcao(iata);
+    if (icao) icaos.push(icao);
+  }
+  return icaos;
+}
 
 function DutySchedulePanel() {
   const [events, setEvents] = useState(() => {
@@ -4000,6 +4174,7 @@ export default function WeatherBriefing() {
 
       {/* Japan Overview + METAR Quick Status + Upper-Air Data */}
       <div style={{ padding: "16px 24px 0", maxWidth: "1400px", margin: "0 auto" }}>
+        <TodayDutyBar />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "8px", alignItems: "start" }}>
           <JapanOverview />
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>

@@ -2203,12 +2203,12 @@ function AnalysisPanel() {
                     NO DATA FOR {tsLabel}
                   </div>
                 ) : (
-                  <div style={{ background: "#ffffff", borderRadius: "4px", overflow: "hidden" }}>
+                  <div style={{ background: "#e8ecf0", borderRadius: "4px", overflow: "hidden" }}>
                     <img
                       src={imageUrl(lon.code)}
                       alt={`大気解析 ${lon.label} ${tsLabel}`}
                       onError={() => setImgError((prev) => ({ ...prev, [lon.code]: true }))}
-                      style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "none" }}
+                      style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "brightness(0.92) contrast(1.05)" }}
                     />
                   </div>
                 )}
@@ -2236,12 +2236,12 @@ function AnalysisPanel() {
                 NO DATA FOR {tsLabel}
               </div>
             ) : (
-              <div style={{ background: "#ffffff", borderRadius: "4px", overflow: "hidden" }}>
+              <div style={{ background: "#e8ecf0", borderRadius: "4px", overflow: "hidden" }}>
                 <img
                   src={planeUrl(planeLevel)}
                   alt={`平面図 FL${planeLevel}0 ${tsLabel}`}
                   onError={() => setImgError((prev) => ({ ...prev, plane: true }))}
-                  style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "none" }}
+                  style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "brightness(0.92) contrast(1.05)" }}
                 />
               </div>
             )}

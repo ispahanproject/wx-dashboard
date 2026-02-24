@@ -2177,6 +2177,7 @@ function AnalysisPanel() {
   const [viewMode, setViewMode] = useState("cross"); // "cross" | "plane"
   const [planeLevel, setPlaneLevel] = useState("35"); // FL350
   const [imgError, setImgError] = useState({});
+  const [zoomImg, setZoomImg] = useState(null); // { src, label }
 
   // JMAの断面図コード: 経度→内部コード (functions_maiji.jsより)
   const LONS = [
@@ -2336,7 +2337,10 @@ function AnalysisPanel() {
                     NO DATA FOR {tsLabel}
                   </div>
                 ) : (
-                  <div style={{ background: "#3d4044", borderRadius: "4px", overflow: "hidden" }}>
+                  <div
+                    style={{ background: "#3d4044", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
+                    onClick={() => setZoomImg({ src: imageUrl(lon.code), label: `${lon.label} — ${tsLabel}` })}
+                  >
                     <img
                       src={imageUrl(lon.code)}
                       alt={`大気解析 ${lon.label} ${tsLabel}`}
@@ -2369,7 +2373,10 @@ function AnalysisPanel() {
                 NO DATA FOR {tsLabel}
               </div>
             ) : (
-              <div style={{ background: "#3d4044", borderRadius: "4px", overflow: "hidden" }}>
+              <div
+                style={{ background: "#3d4044", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
+                onClick={() => setZoomImg({ src: planeUrl(planeLevel), label: `${PLANE_LEVELS.find(l => l.code === planeLevel)?.label} PLANE — ${tsLabel}` })}
+              >
                 <img
                   src={planeUrl(planeLevel)}
                   alt={`平面図 FL${planeLevel}0 ${tsLabel}`}
@@ -2440,6 +2447,48 @@ function AnalysisPanel() {
           </div>
         ))}
       </div>
+
+      {/* ズームオーバーレイ */}
+      {zoomImg && (
+        <div
+          onClick={() => setZoomImg(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.92)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            cursor: "pointer",
+            padding: "env(safe-area-inset-top, 10px) env(safe-area-inset-right, 10px) env(safe-area-inset-bottom, 10px) env(safe-area-inset-left, 10px)",
+          }}
+        >
+          {/* ヘッダー */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            width: "100%", maxWidth: "95vw", padding: "8px 4px", marginBottom: "8px",
+          }}>
+            <span style={{ color: "#6ee7b7", fontSize: "12px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>
+              {zoomImg.label}
+            </span>
+            <span style={{ color: "#64748b", fontSize: "20px", fontFamily: "'JetBrains Mono', monospace", padding: "4px 12px" }}>✕</span>
+          </div>
+          {/* 画像 */}
+          <div style={{
+            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            width: "100%", maxWidth: "95vw", overflow: "auto", WebkitOverflowScrolling: "touch",
+          }}>
+            <img
+              src={zoomImg.src}
+              alt={zoomImg.label}
+              style={{
+                maxWidth: "100%", maxHeight: "85vh", objectFit: "contain",
+                imageRendering: "crisp-edges",
+                filter: "invert(0.88) hue-rotate(180deg) contrast(1.3) saturate(1.3)",
+                borderRadius: "4px",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

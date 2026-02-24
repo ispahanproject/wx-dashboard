@@ -2638,6 +2638,363 @@ function JmaWeatherTicker() {
 }
 
 
+/* ========== ICS PARSER ========== */
+function parseICS(text) {
+  const events = [];
+  const blocks = text.split("BEGIN:VEVENT");
+  for (let i = 1; i < blocks.length; i++) {
+    const b = blocks[i];
+    const get = (key) => {
+      const m = b.match(new RegExp(`${key}:(.*)`));
+      return m ? m[1].trim() : "";
+    };
+    const uid = get("UID");
+    const summary = get("SUMMARY");
+    const location = get("LOCATION");
+    const dtstart = get("DTSTART");
+    const dtend = get("DTEND");
+
+    // Parse type and route from SUMMARY like "FLY (HND-AOJ-HND)"
+    const typeMatch = summary.match(/^(FLY|NON-FLY|OFF|STANDBY|GROUND)\s*\(([^)]*)\)/);
+    const type = typeMatch ? typeMatch[1] : summary;
+    const routeStr = typeMatch ? typeMatch[2] : "";
+    const route = type === "FLY" && routeStr ? routeStr.split("-") : [];
+
+    // Parse dates: 20260201T030000Z → Date
+    const parseD = (s) => {
+      if (!s) return null;
+      const y = s.slice(0, 4), mo = s.slice(4, 6), d = s.slice(6, 8);
+      const h = s.slice(9, 11), mi = s.slice(11, 13), se = s.slice(13, 15);
+      return new Date(Date.UTC(+y, +mo - 1, +d, +h, +mi, +se));
+    };
+
+    const tripId = uid.replace(/-\d+$/, "");
+
+    events.push({
+      uid, summary, location, type, route, tripId,
+      start: parseD(dtstart),
+      end: parseD(dtend),
+    });
+  }
+  events.sort((a, b) => a.start - b.start);
+  return events;
+}
+
+/* ========== DUTY SCHEDULE PANEL ========== */
+const DUTY_STORAGE_KEY = "wx-dashboard-duty-ics";
+const DUTY_COLORS = {
+  FLY: "#6ee7b7",
+  "NON-FLY": "#fbbf24",
+  OFF: "#475569",
+  STANDBY: "#c4b5fd",
+  GROUND: "#67e8f9",
+};
+
+function DutySchedulePanel() {
+  const [events, setEvents] = useState(() => {
+    try {
+      const saved = localStorage.getItem(DUTY_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.map(e => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
+      }
+    } catch (e) { /* ignore */ }
+    return [];
+  });
+  const [dragOver, setDragOver] = useState(false);
+  const [now, setNow] = useState(new Date());
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const loadICS = (text) => {
+    const parsed = parseICS(text);
+    setEvents(parsed);
+    localStorage.setItem(DUTY_STORAGE_KEY, JSON.stringify(parsed));
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => loadICS(ev.target.result);
+      reader.readAsText(file);
+    }
+  };
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => loadICS(ev.target.result);
+      reader.readAsText(file);
+    }
+  };
+
+  const clearData = () => {
+    setEvents([]);
+    localStorage.removeItem(DUTY_STORAGE_KEY);
+  };
+
+  const fmtZ = (d) => {
+    if (!d) return "--:--Z";
+    return d.getUTCHours().toString().padStart(2, "0") + ":" + d.getUTCMinutes().toString().padStart(2, "0") + "Z";
+  };
+
+  const fmtDate = (d) => {
+    const mo = d.getUTCMonth() + 1;
+    const day = d.getUTCDate();
+    const dow = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][d.getUTCDay()];
+    return `${mo}/${day} (${dow})`;
+  };
+
+  // Current duty
+  const currentEvent = events.find(e => now >= e.start && now < e.end);
+  // Next FLY duty
+  const nextFly = events.find(e => e.type === "FLY" && e.start > now);
+  // Next non-OFF duty
+  const nextDuty = events.find(e => e.type !== "OFF" && e.start > now);
+
+  // Countdown to next duty
+  const countdown = (target) => {
+    if (!target) return null;
+    const diff = target.start - now;
+    if (diff <= 0) return null;
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    return `${h}h ${m}m`;
+  };
+
+  // Group events by UTC date for timeline (today + 6 days)
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const dayStart = new Date(today.getTime() + i * 86400000);
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    const dayEvents = events.filter(e => e.start < dayEnd && e.end > dayStart);
+    days.push({ date: dayStart, events: dayEvents });
+  }
+
+  // No data — show drop zone
+  if (events.length === 0) {
+    return (
+      <div style={{ padding: "20px" }}>
+        <div style={{ fontSize: "11px", color: "#6ee7b7", letterSpacing: "2px", marginBottom: "16px", fontFamily: "'JetBrains Mono', monospace" }}>
+          ▸ DUTY SCHEDULE — CREWACCESS ICS IMPORT
+        </div>
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileRef.current?.click()}
+          style={{
+            border: `2px dashed ${dragOver ? "#6ee7b7" : "rgba(110,231,183,0.3)"}`,
+            borderRadius: "8px",
+            padding: "60px 20px",
+            textAlign: "center",
+            cursor: "pointer",
+            background: dragOver ? "rgba(110,231,183,0.05)" : "transparent",
+            transition: "all 0.2s",
+          }}
+        >
+          <div style={{ fontSize: "36px", marginBottom: "12px" }}>📋</div>
+          <div style={{ color: "#94a3b8", fontSize: "13px", marginBottom: "8px" }}>
+            CrewAccess の .ics ファイルをここにドロップ
+          </div>
+          <div style={{ color: "#475569", fontSize: "11px" }}>
+            またはクリックしてファイルを選択
+          </div>
+          <input ref={fileRef} type="file" accept=".ics" onChange={handleFile} style={{ display: "none" }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: "20px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <div style={{ fontSize: "11px", color: "#6ee7b7", letterSpacing: "2px", fontFamily: "'JetBrains Mono', monospace" }}>
+          ▸ DUTY SCHEDULE — {events.length} EVENTS LOADED
+        </div>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            onClick={() => fileRef.current?.click()}
+            style={{ background: "rgba(110,231,183,0.15)", border: "1px solid rgba(110,231,183,0.3)", color: "#6ee7b7", padding: "4px 10px", borderRadius: "3px", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            ↑ RELOAD
+          </button>
+          <button
+            onClick={clearData}
+            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", padding: "4px 10px", borderRadius: "3px", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            ✕ CLEAR
+          </button>
+          <input ref={fileRef} type="file" accept=".ics" onChange={handleFile} style={{ display: "none" }} />
+        </div>
+      </div>
+
+      {/* Current Status Card */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px",
+      }}>
+        {/* Current Duty */}
+        <div style={{
+          background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)",
+          borderRadius: "4px", padding: "14px",
+        }}>
+          <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "8px" }}>CURRENT STATUS</div>
+          {currentEvent ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                <span style={{
+                  background: DUTY_COLORS[currentEvent.type] || "#94a3b8",
+                  color: currentEvent.type === "OFF" ? "#e2e8f0" : "#030810",
+                  padding: "2px 8px", borderRadius: "3px", fontSize: "11px", fontWeight: 700,
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}>
+                  {currentEvent.type}
+                </span>
+              </div>
+              {currentEvent.route.length > 0 && (
+                <div style={{ color: "#e2e8f0", fontSize: "15px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                  {currentEvent.route.join(" → ")}
+                </div>
+              )}
+              {currentEvent.type === "NON-FLY" && (
+                <div style={{ color: "#fbbf24", fontSize: "13px" }}>STAY: {currentEvent.summary.match(/\(([^)]+)\)/)?.[1] || ""}</div>
+              )}
+              {currentEvent.type === "OFF" && (
+                <div style={{ color: "#94a3b8", fontSize: "13px" }}>REST DAY</div>
+              )}
+              <div style={{ color: "#64748b", fontSize: "10px", marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>
+                {fmtZ(currentEvent.start)} – {fmtZ(currentEvent.end)}
+              </div>
+            </>
+          ) : (
+            <div style={{ color: "#64748b", fontSize: "12px" }}>NO ACTIVE DUTY</div>
+          )}
+        </div>
+
+        {/* Next Duty */}
+        <div style={{
+          background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)",
+          borderRadius: "4px", padding: "14px",
+        }}>
+          <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "8px" }}>NEXT FLIGHT</div>
+          {nextFly ? (
+            <>
+              <div style={{ color: "#e2e8f0", fontSize: "15px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" }}>
+                {nextFly.route.join(" → ")}
+              </div>
+              <div style={{ color: "#6ee7b7", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+                {fmtDate(nextFly.start)} {fmtZ(nextFly.start)}
+              </div>
+              {countdown(nextFly) && (
+                <div style={{ color: "#fbbf24", fontSize: "18px", fontWeight: 700, marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>
+                  T-{countdown(nextFly)}
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ color: "#64748b", fontSize: "12px" }}>NO UPCOMING FLIGHTS</div>
+          )}
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "10px" }}>7-DAY SCHEDULE</div>
+      {days.map((day, di) => {
+        const isToday = di === 0;
+        return (
+          <div key={di} style={{ marginBottom: "2px" }}>
+            {/* Day header */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              padding: "6px 10px",
+              background: isToday ? "rgba(110,231,183,0.08)" : "rgba(5,10,20,0.5)",
+              borderLeft: isToday ? "3px solid #6ee7b7" : "3px solid transparent",
+              borderRadius: "2px",
+            }}>
+              <span style={{
+                color: isToday ? "#6ee7b7" : "#94a3b8",
+                fontSize: "11px", fontWeight: 700,
+                fontFamily: "'JetBrains Mono', monospace",
+                minWidth: "90px",
+              }}>
+                {isToday ? "▶ TODAY" : ""} {fmtDate(day.date)}
+              </span>
+            </div>
+            {/* Events */}
+            {day.events.length === 0 ? (
+              <div style={{ padding: "6px 10px 6px 20px", color: "#334155", fontSize: "10px" }}>—</div>
+            ) : (
+              day.events.map((ev, ei) => {
+                const col = DUTY_COLORS[ev.type] || "#94a3b8";
+                // Check if this event is part of a multi-leg trip
+                const tripEvents = events.filter(e => e.tripId === ev.tripId);
+                const isMultiLeg = tripEvents.length > 1;
+                const legIdx = tripEvents.findIndex(e => e.uid === ev.uid);
+                const isFirst = legIdx === 0;
+                const isLast = legIdx === tripEvents.length - 1;
+                return (
+                  <div
+                    key={ei}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "8px",
+                      padding: "5px 10px 5px 20px",
+                      borderLeft: isMultiLeg ? `2px solid ${col}` : "2px solid transparent",
+                      marginLeft: "12px",
+                      borderRadius: isFirst ? "2px 0 0 0" : isLast ? "0 0 0 2px" : "0",
+                    }}
+                  >
+                    {/* Time */}
+                    <span style={{
+                      color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace",
+                      minWidth: "100px",
+                    }}>
+                      {fmtZ(ev.start)}–{fmtZ(ev.end)}
+                    </span>
+                    {/* Type badge */}
+                    <span style={{
+                      background: col,
+                      color: ev.type === "OFF" ? "#e2e8f0" : "#030810",
+                      padding: "1px 6px", borderRadius: "2px", fontSize: "9px", fontWeight: 700,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      minWidth: "55px", textAlign: "center",
+                    }}>
+                      {ev.type}
+                    </span>
+                    {/* Route / Location */}
+                    <span style={{
+                      color: "#e2e8f0", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
+                    }}>
+                      {ev.type === "FLY" && ev.route.length > 0
+                        ? ev.route.join(" → ")
+                        : ev.type === "NON-FLY"
+                        ? `STAY: ${ev.summary.match(/\(([^)]+)\)/)?.[1] || ""}`
+                        : ev.type === "OFF"
+                        ? "REST"
+                        : ev.summary.match(/\(([^)]+)\)/)?.[1] || ""
+                      }
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
 /* ========== LIVE CAMERA PANEL（空港ライブカメラ） ========== */
 function LiveCameraPanel() {
   const [tick, setTick] = useState(0);
@@ -3428,6 +3785,7 @@ export default function WeatherBriefing() {
     { key: "analysis", label: "大気解析", icon: "📊" },
     { key: "opswx", label: "OPS WX", icon: "🎯" },
     { key: "livecam", label: "LIVE CAM", icon: "📹" },
+    { key: "duty", label: "DUTY", icon: "📋" },
     { key: "links", label: "クイックリンク", icon: "🔗" },
   ];
 
@@ -3438,6 +3796,7 @@ export default function WeatherBriefing() {
     analysis: <AnalysisPanel />,
     opswx: <OpsWxPanel />,
     livecam: <LiveCameraPanel />,
+    duty: <DutySchedulePanel />,
     links: <QuickLinksPanel />,
   };
 

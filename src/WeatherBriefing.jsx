@@ -2501,6 +2501,275 @@ function AnalysisPanel() {
 }
 
 
+/* ========== WX CHARTS — 気象チャート一覧 ========== */
+function WxChartsPanel() {
+  const [surfaceCharts, setSurfaceCharts] = useState(null);
+  const [imgError, setImgError] = useState({});
+  const [zoomImg, setZoomImg] = useState(null);
+
+  const WM_BASE = "https://www.jma.go.jp/bosai/weather_map/data/png/";
+
+  // list.json から地上天気図ファイル名を取得
+  useEffect(() => {
+    fetch("https://www.jma.go.jp/bosai/weather_map/data/list.json")
+      .then((r) => r.json())
+      .then((data) => {
+        // ファイル名からUTC時刻を抽出する helper
+        const extractTime = (fname) => {
+          const m = fname.match(/_(\d{12})_MET/);
+          if (!m) return "";
+          const t = m[1]; // YYYYMMDDHHmmss → YYYYMMDDHHMMSS
+          return `${t.slice(4,6)}/${t.slice(6,8)} ${t.slice(8,10)}:${t.slice(10,12)}z`;
+        };
+
+        setSurfaceCharts({
+          spas: { file: data.near?.now?.slice(-1)[0], label: "SPAS 実況 (日本付近)", time: extractTime(data.near?.now?.slice(-1)[0] || "") },
+          asas: { file: data.asia?.now?.slice(-1)[0], label: "ASAS 実況 (アジア広域)", time: extractTime(data.asia?.now?.slice(-1)[0] || "") },
+          fsas24: { file: data.near?.ft24?.[0], label: "FSAS 24h 予想", time: extractTime(data.near?.ft24?.[0] || "") },
+          fsas48: { file: data.near?.ft48?.[0], label: "FSAS 48h 予想", time: extractTime(data.near?.ft48?.[0] || "") },
+        });
+      })
+      .catch(() => {});
+  }, []);
+
+  // FBJP URL
+  const FBJP_URL = "https://www.data.jma.go.jp/airinfo/data/pict/fbjp/fbjp.png";
+
+  // AUPQ PDF — 現在のUTCに応じて00z/12z
+  const aupqSuffix = new Date().getUTCHours() >= 12 ? "_12" : "_00";
+
+  // カテゴリデータ
+  const LINK_CATEGORIES = [
+    {
+      title: "高層天気図 (UPPER AIR)",
+      icon: "📐",
+      desc: "500/300hPa, 850/700hPa 高層解析",
+      items: [
+        { label: "AUPQ78 500/300hPa", desc: "ジェット気流・トラフ位置", url: `https://www.jma.go.jp/bosai/numericmap/data/nwpmap/aupq78${aupqSuffix}.pdf`, type: "pdf" },
+        { label: "AUPQ35 850/700hPa", desc: "暖気寒気移流・降水域", url: `https://www.jma.go.jp/bosai/numericmap/data/nwpmap/aupq35${aupqSuffix}.pdf`, type: "pdf" },
+        { label: "数値予報天気図一覧", desc: "JMA全チャート", url: "https://www.jma.go.jp/bosai/numericmap/", type: "link" },
+      ],
+    },
+    {
+      title: "国際 SIGWX",
+      icon: "⚠️",
+      desc: "Significant Weather / AWC",
+      items: [
+        { label: "AWC SIGWX Chart", desc: "国際悪天予想図", url: "https://aviationweather.gov/gfa/#area=other", type: "link" },
+        { label: "AWC Turbulence", desc: "乱気流予想", url: "https://aviationweather.gov/gfa/#obs=turb", type: "link" },
+        { label: "AWC Icing", desc: "着氷予想", url: "https://aviationweather.gov/gfa/#obs=ice", type: "link" },
+      ],
+    },
+    {
+      title: "Wind / Temp",
+      icon: "💨",
+      desc: "上層風・気温チャート",
+      items: [
+        { label: "Windy 250hPa Wind", desc: "FL350-410 ジェット気流", url: "https://www.windy.com/-Wind-250hPa-wind250h?wind250h,36,137,5", type: "link" },
+        { label: "Windy 850hPa Temp", desc: "下層気温分布", url: "https://www.windy.com/-Temperature-temp?temp,36,137,5", type: "link" },
+        { label: "JMA WINDAS", desc: "ウィンドプロファイラ", url: "https://www.jma.go.jp/bosai/windprofiler/", type: "link" },
+      ],
+    },
+    {
+      title: "火山灰 (VAAC)",
+      icon: "🌋",
+      desc: "火山灰情報・降灰予報",
+      items: [
+        { label: "Tokyo VAAC", desc: "火山灰拡散予測", url: "https://ds.data.jma.go.jp/svd/vaac/data/", type: "link" },
+        { label: "気象庁 降灰予報", desc: "降灰予報", url: "https://www.jma.go.jp/bosai/ashfall/", type: "link" },
+      ],
+    },
+  ];
+
+  // 画像カードコンポーネント
+  const ChartImageCard = ({ src, label, time, chartKey }) => (
+    <div style={{
+      background: "rgba(0,0,0,0.5)",
+      border: `1px solid ${imgError[chartKey] ? "rgba(248,113,113,0.3)" : "rgba(110,231,183,0.2)"}`,
+      borderRadius: "8px", overflow: "hidden",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", background: "rgba(0,0,0,0.6)", borderBottom: "1px solid rgba(110,231,183,0.15)" }}>
+        <div>
+          <span style={{ color: "#6ee7b7", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{label}</span>
+          {time && <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginLeft: "8px" }}>{time}</span>}
+        </div>
+        <a href={src} target="_blank" rel="noopener noreferrer" style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>↗ JMA</a>
+      </div>
+      {imgError[chartKey] ? (
+        <div style={{ height: "200px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+          NO DATA
+        </div>
+      ) : (
+        <div
+          style={{ background: "#ffffff", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
+          onClick={() => setZoomImg({ src, label: `${label} — ${time}` })}
+        >
+          <img
+            src={src}
+            alt={label}
+            onError={() => setImgError((prev) => ({ ...prev, [chartKey]: true }))}
+            style={{ width: "100%", display: "block" }}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* 地上天気図 */}
+      <div style={{
+        background: "rgba(15, 23, 42, 0.5)",
+        border: "1px solid rgba(148, 163, 184, 0.1)",
+        borderRadius: "12px",
+        padding: "20px",
+      }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "3px", marginBottom: "4px", textShadow: "0 0 12px rgba(110,231,183,0.6)" }}>
+          ◈ WX CHARTS / WEATHER CHARTS
+        </div>
+        <div style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "16px" }}>
+          SOURCE: jma.go.jp — SURFACE ANALYSIS / FORECAST
+        </div>
+
+        {/* 地上天気図 2×2グリッド */}
+        {surfaceCharts ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
+            {["spas", "asas", "fsas24", "fsas48"].map((key) => {
+              const chart = surfaceCharts[key];
+              if (!chart?.file) return null;
+              return <ChartImageCard key={key} src={`${WM_BASE}${chart.file}`} label={chart.label} time={chart.time} chartKey={key} />;
+            })}
+          </div>
+        ) : (
+          <div style={{ height: "200px", display: "flex", alignItems: "center", justifyContent: "center", color: "#475569", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+            LOADING CHART LIST...
+          </div>
+        )}
+      </div>
+
+      {/* 悪天予想図 */}
+      <div style={{
+        background: "rgba(15, 23, 42, 0.5)",
+        border: "1px solid rgba(148, 163, 184, 0.1)",
+        borderRadius: "12px",
+        padding: "20px",
+      }}>
+        <div style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", marginBottom: "4px" }}>
+          ⚡ 悪天予想図 (SEVERE WEATHER PROGNOSIS)
+        </div>
+        <div style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "12px" }}>
+          FBJP 国内悪天 / FBFE 下層悪天
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", alignItems: "start" }}>
+          {/* FBJP 画像 */}
+          <ChartImageCard src={FBJP_URL} label="FBJP 国内悪天予想図" time="CAT/ICE/CB FL別" chartKey="fbjp" />
+
+          {/* FBFE リンク */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {[
+              { label: "FBFE 下層悪天予想図", desc: "FL100以下 ICE/TURB/VIS", url: "https://www.data.jma.go.jp/airinfo/data/awfo_low-level_sigwx.html" },
+              { label: "下層悪天 詳細版", desc: "より詳細な下層悪天情報", url: "https://www.data.jma.go.jp/airinfo/data/awfo_low-level_detailed-sigwx.html" },
+              { label: "FBJP 12h詳細", desc: "12時間詳細悪天予想", url: "https://www.data.jma.go.jp/airinfo/awfo_fbjp112/awfo_fbjp112.html" },
+              { label: "空域悪天情報一覧", desc: "JMA 航空気象情報", url: "https://www.data.jma.go.jp/airinfo/data/awfo_maiji.html" },
+            ].map((item, i) => (
+              <a key={i} href={item.url} target="_blank" rel="noopener noreferrer" style={{
+                display: "block", padding: "10px 12px",
+                background: "rgba(0,0,0,0.4)",
+                border: "1px solid rgba(110,231,183,0.1)",
+                borderRadius: "6px",
+                textDecoration: "none",
+              }}>
+                <div style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>→ {item.label}</div>
+                <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{item.desc}</div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* リンクカテゴリグリッド */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+        {LINK_CATEGORIES.map((cat) => (
+          <div key={cat.title} style={{
+            padding: "16px",
+            background: "rgba(5,10,20,0.8)",
+            border: "1px solid rgba(110,231,183,0.12)",
+            borderRadius: "8px",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <span style={{ fontSize: "14px" }}>{cat.icon}</span>
+              <span style={{ color: "#e2e8f0", fontSize: "12px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{cat.title}</span>
+            </div>
+            <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "10px" }}>{cat.desc}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              {cat.items.map((item, j) => (
+                <a key={j} href={item.url} target="_blank" rel="noopener noreferrer" style={{
+                  display: "flex", alignItems: "center", gap: "8px",
+                  padding: "8px 10px",
+                  background: "rgba(0,0,0,0.3)",
+                  border: "1px solid rgba(110,231,183,0.06)",
+                  borderRadius: "4px",
+                  textDecoration: "none",
+                  transition: "border-color 0.15s ease",
+                }}>
+                  <span style={{ color: item.type === "pdf" ? "#f97316" : "#60a5fa", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
+                    {item.type === "pdf" ? "PDF" : "↗"}
+                  </span>
+                  <div>
+                    <div style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{item.label}</div>
+                    <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>{item.desc}</div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ズームオーバーレイ */}
+      {zoomImg && (
+        <div
+          onClick={() => setZoomImg(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.92)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            cursor: "pointer",
+            padding: "env(safe-area-inset-top, 10px) env(safe-area-inset-right, 10px) env(safe-area-inset-bottom, 10px) env(safe-area-inset-left, 10px)",
+          }}
+        >
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            width: "100%", maxWidth: "95vw", padding: "8px 4px", marginBottom: "8px",
+          }}>
+            <span style={{ color: "#6ee7b7", fontSize: "12px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>
+              {zoomImg.label}
+            </span>
+            <span style={{ color: "#64748b", fontSize: "20px", fontFamily: "'JetBrains Mono', monospace", padding: "4px 12px" }}>✕</span>
+          </div>
+          <div style={{
+            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            width: "100%", maxWidth: "95vw", overflow: "auto", WebkitOverflowScrolling: "touch",
+          }}>
+            <img
+              src={zoomImg.src}
+              alt={zoomImg.label}
+              style={{
+                maxWidth: "100%", maxHeight: "85vh", objectFit: "contain",
+                borderRadius: "4px",
+                background: "#ffffff",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 /* ========== OPS WEATHER BRIEFING ========== */
 
 const OPS_AIRPORTS = [
@@ -4385,8 +4654,22 @@ export default function WeatherBriefing() {
       }
     } catch {}
 
-    // JMA weather maps
+    // JMA weather maps — surface charts
     urls.push("https://www.jma.go.jp/bosai/weather_map/data/png/spas_color.png");
+    try {
+      const listRes = await fetch("https://www.jma.go.jp/bosai/weather_map/data/list.json");
+      const listData = await listRes.json();
+      if (listData?.near?.length) {
+        const latest = listData.near[listData.near.length - 1];
+        for (const el of latest.elements) {
+          if (["SPAS", "FSAS24", "FSAS48", "ASAS"].some(t => el.includes(t)) && el.endsWith(".png")) {
+            urls.push(`https://www.jma.go.jp/bosai/weather_map/data/png/${el}`);
+          }
+        }
+      }
+    } catch {}
+    // FBJP severe weather chart
+    urls.push("https://www.data.jma.go.jp/airinfo/data/pict/fbjp/fbjp.png");
 
     navigator.serviceWorker.controller.postMessage({ type: "PREFLIGHT_CACHE", urls });
   };
@@ -4400,6 +4683,7 @@ export default function WeatherBriefing() {
     { key: "satellite", label: "衛星画像", icon: "🛰️" },
     { key: "radar", label: "レーダー", icon: "🌧️" },
     { key: "analysis", label: "大気解析", icon: "📊" },
+    { key: "charts", label: "WX CHARTS", icon: "📈" },
     { key: "opswx", label: "OPS WX", icon: "🎯" },
     { key: "livecam", label: "LIVE CAM", icon: "📹" },
     { key: "duty", label: "DUTY", icon: "📋" },
@@ -4411,6 +4695,7 @@ export default function WeatherBriefing() {
     satellite: <SatellitePanel />,
     radar: <RadarPanel />,
     analysis: <AnalysisPanel />,
+    charts: <WxChartsPanel />,
     opswx: <OpsWxPanel />,
     livecam: <LiveCameraPanel />,
     duty: <DutySchedulePanel />,
@@ -4437,8 +4722,8 @@ export default function WeatherBriefing() {
 
       const key = e.key;
 
-      // 1-7: タブ切り替え
-      if (key >= "1" && key <= "7") {
+      // 1-9: タブ切り替え
+      if (key >= "1" && key <= "9") {
         e.preventDefault();
         const idx = parseInt(key, 10) - 1;
         if (tabs[idx]) {

@@ -2203,12 +2203,12 @@ function AnalysisPanel() {
                     NO DATA FOR {tsLabel}
                   </div>
                 ) : (
-                  <div style={{ background: "#1a2438", borderRadius: "4px", overflow: "hidden" }}>
+                  <div style={{ background: "#2a3448", borderRadius: "4px", overflow: "hidden" }}>
                     <img
                       src={imageUrl(lon.code)}
                       alt={`大気解析 ${lon.label} ${tsLabel}`}
                       onError={() => setImgError((prev) => ({ ...prev, [lon.code]: true }))}
-                      style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.85) hue-rotate(180deg) contrast(1.3) saturate(1.5)" }}
+                      style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.75) hue-rotate(180deg) contrast(1.4) saturate(1.5)" }}
                     />
                   </div>
                 )}
@@ -2236,12 +2236,12 @@ function AnalysisPanel() {
                 NO DATA FOR {tsLabel}
               </div>
             ) : (
-              <div style={{ background: "#1a2438", borderRadius: "4px", overflow: "hidden" }}>
+              <div style={{ background: "#2a3448", borderRadius: "4px", overflow: "hidden" }}>
                 <img
                   src={planeUrl(planeLevel)}
                   alt={`平面図 FL${planeLevel}0 ${tsLabel}`}
                   onError={() => setImgError((prev) => ({ ...prev, plane: true }))}
-                  style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.85) hue-rotate(180deg) contrast(1.3) saturate(1.5)" }}
+                  style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.75) hue-rotate(180deg) contrast(1.4) saturate(1.5)" }}
                 />
               </div>
             )}

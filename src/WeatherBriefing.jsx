@@ -2532,8 +2532,19 @@ function WxChartsPanel() {
       .catch(() => {});
   }, []);
 
-  // FBJP URL
+  // FBJP URLs — 国内悪天予想図 + 12h予想図（最新初期値自動選択）
   const FBJP_URL = "https://www.data.jma.go.jp/airinfo/data/pict/fbjp/fbjp.png";
+  const fbjp112BaseTime = (() => {
+    const utcH = new Date().getUTCHours();
+    // 初期値は3h毎（00,03,...,21）、約2.5h後に掲載 → 直近の掲載済みを選択
+    const available = utcH >= 2 ? Math.floor((utcH - 2) / 3) * 3 : 21;
+    return String(available).padStart(2, "0");
+  })();
+  const FBJP112_URL = `https://www.data.jma.go.jp/airinfo/data/pict/nwp/fbjp112_${fbjp112BaseTime}.png`;
+  const fbjp112VT = (() => {
+    const bt = parseInt(fbjp112BaseTime, 10);
+    return String((bt + 12) % 24).padStart(2, "0");
+  })();
 
   // AUPQ PDF — 現在のUTCに応じて00z/12z
   const aupqSuffix = new Date().getUTCHours() >= 12 ? "_12" : "_00";
@@ -2658,33 +2669,34 @@ function WxChartsPanel() {
           ⚡ 悪天予想図 (SEVERE WEATHER PROGNOSIS)
         </div>
         <div style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "12px" }}>
-          FBJP 国内悪天 / FBFE 下層悪天
+          FBJP 国内悪天 / FBJP 12h予想 / FBFE 下層悪天
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", alignItems: "start" }}>
-          {/* FBJP 画像 */}
+        {/* FBJP + FBJP112 画像 2枚並び */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
           <ChartImageCard src={FBJP_URL} label="FBJP 国内悪天予想図" time="CAT/ICE/CB FL別" chartKey="fbjp" />
+          <ChartImageCard src={FBJP112_URL} label="FBJP 12h悪天予想" time={`BT ${fbjp112BaseTime}Z → VT ${fbjp112VT}Z`} chartKey="fbjp112" />
+        </div>
 
-          {/* FBFE リンク */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {[
-              { label: "FBFE 下層悪天予想図", desc: "FL100以下 ICE/TURB/VIS", url: "https://www.data.jma.go.jp/airinfo/data/awfo_low-level_sigwx.html" },
-              { label: "下層悪天 詳細版", desc: "より詳細な下層悪天情報", url: "https://www.data.jma.go.jp/airinfo/data/awfo_low-level_detailed-sigwx.html" },
-              { label: "FBJP 12h詳細", desc: "12時間詳細悪天予想", url: "https://www.data.jma.go.jp/airinfo/awfo_fbjp112/awfo_fbjp112.html" },
-              { label: "空域悪天情報一覧", desc: "JMA 航空気象情報", url: "https://www.data.jma.go.jp/airinfo/data/awfo_maiji.html" },
-            ].map((item, i) => (
-              <a key={i} href={item.url} target="_blank" rel="noopener noreferrer" style={{
-                display: "block", padding: "10px 12px",
-                background: "rgba(0,0,0,0.4)",
-                border: "1px solid rgba(110,231,183,0.1)",
-                borderRadius: "6px",
-                textDecoration: "none",
-              }}>
-                <div style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>→ {item.label}</div>
-                <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{item.desc}</div>
-              </a>
-            ))}
-          </div>
+        {/* FBFE + 関連リンク */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "8px" }}>
+          {[
+            { label: "FBFE 下層悪天予想図", desc: "FL100以下 ICE/TURB/VIS", url: "https://www.data.jma.go.jp/airinfo/data/awfo_low-level_sigwx.html" },
+            { label: "下層悪天 詳細版", desc: "より詳細な下層悪天情報", url: "https://www.data.jma.go.jp/airinfo/data/awfo_low-level_detailed-sigwx.html" },
+            { label: "FBJP 12h全時刻", desc: "他の初期値時刻を参照", url: "https://www.data.jma.go.jp/airinfo/awfo_fbjp112/awfo_fbjp112.html" },
+            { label: "空域悪天情報一覧", desc: "JMA 航空気象情報", url: "https://www.data.jma.go.jp/airinfo/data/awfo_maiji.html" },
+          ].map((item, i) => (
+            <a key={i} href={item.url} target="_blank" rel="noopener noreferrer" style={{
+              display: "block", padding: "10px 12px",
+              background: "rgba(0,0,0,0.4)",
+              border: "1px solid rgba(110,231,183,0.1)",
+              borderRadius: "6px",
+              textDecoration: "none",
+            }}>
+              <div style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>→ {item.label}</div>
+              <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{item.desc}</div>
+            </a>
+          ))}
         </div>
       </div>
 
@@ -4668,8 +4680,12 @@ export default function WeatherBriefing() {
         }
       }
     } catch {}
-    // FBJP severe weather chart
+    // FBJP severe weather charts
     urls.push("https://www.data.jma.go.jp/airinfo/data/pict/fbjp/fbjp.png");
+    // FBJP 12h — cache latest base time
+    const cacheUtcH = new Date().getUTCHours();
+    const cacheBT = cacheUtcH >= 2 ? Math.floor((cacheUtcH - 2) / 3) * 3 : 21;
+    urls.push(`https://www.data.jma.go.jp/airinfo/data/pict/nwp/fbjp112_${String(cacheBT).padStart(2, "0")}.png`);
 
     navigator.serviceWorker.controller.postMessage({ type: "PREFLIGHT_CACHE", urls });
   };

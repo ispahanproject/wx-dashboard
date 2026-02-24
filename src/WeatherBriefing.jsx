@@ -3499,7 +3499,7 @@ function LiveCameraPanel() {
     { id: "kix", name: "関西空港", code: "RJBB", camId: "410000153", ytSearch: "関西空港+ライブカメラ", desc: "Kansai Intl / KIX" },
     { id: "fukuoka", name: "福岡空港", code: "RJFF", camId: "410000158", ytSearch: "福岡空港+ライブカメラ", desc: "Fukuoka / FUK" },
     { id: "nagasaki", name: "長崎空港", code: "RJFU", camId: "410000154", ytSearch: "長崎空港+ライブカメラ", desc: "Nagasaki / NGS" },
-    { id: "naha", name: "那覇空港", code: "ROAH", camId: null, ytSearch: "那覇空港+ライブカメラ", desc: "Naha / OKA", jalSpot: "410000170" },
+    { id: "naha", name: "那覇空港", code: "ROAH", camId: "410001066", ytSearch: "那覇空港+ライブカメラ", desc: "Naha / OKA" },
   ];
 
   const imgSrc = (cam) => {

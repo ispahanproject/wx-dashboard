@@ -2845,9 +2845,13 @@ function getTodayDutyEvents() {
     if (!saved) return [];
     const events = JSON.parse(saved).map(e => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
     const now = new Date();
-    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const todayEnd = new Date(todayStart.getTime() + 86400000);
-    return events.filter(e => e.start < todayEnd && e.end > todayStart);
+    // JST-based "today"
+    const JST = 9 * 3600000;
+    const nowJST = new Date(now.getTime() + JST);
+    const todayJST = new Date(Date.UTC(nowJST.getUTCFullYear(), nowJST.getUTCMonth(), nowJST.getUTCDate()));
+    const todayStartUTC = new Date(todayJST.getTime() - JST);
+    const todayEndUTC = new Date(todayStartUTC.getTime() + 86400000);
+    return events.filter(e => e.start < todayEndUTC && e.end > todayStartUTC);
   } catch { return []; }
 }
 
@@ -2944,14 +2948,19 @@ function DutySchedulePanel() {
     return `${h}h ${m}m`;
   };
 
-  // Group events by UTC date for timeline (today + 6 days)
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  // Group events by JST date for timeline (today + 6 days)
+  const JST_OFFSET = 9 * 3600000;
+  const nowJST = new Date(now.getTime() + JST_OFFSET);
+  const todayJST = new Date(Date.UTC(nowJST.getUTCFullYear(), nowJST.getUTCMonth(), nowJST.getUTCDate()));
   const days = [];
   for (let i = 0; i < 7; i++) {
-    const dayStart = new Date(today.getTime() + i * 86400000);
-    const dayEnd = new Date(dayStart.getTime() + 86400000);
-    const dayEvents = events.filter(e => e.start < dayEnd && e.end > dayStart);
-    days.push({ date: dayStart, events: dayEvents });
+    const dayStartJST = new Date(todayJST.getTime() + i * 86400000);
+    const dayEndJST = new Date(dayStartJST.getTime() + 86400000);
+    // Convert JST day boundaries back to UTC for filtering
+    const dayStartUTC = new Date(dayStartJST.getTime() - JST_OFFSET);
+    const dayEndUTC = new Date(dayEndJST.getTime() - JST_OFFSET);
+    const dayEvents = events.filter(e => e.start < dayEndUTC && e.end > dayStartUTC);
+    days.push({ date: dayStartJST, events: dayEvents });
   }
 
   // No data — show drop zone

@@ -2481,8 +2481,8 @@ function AnalysisPanel() {
               style={{
                 maxWidth: "100%", maxHeight: "85vh", objectFit: "contain",
                 imageRendering: "crisp-edges",
-                filter: "invert(0.88) hue-rotate(180deg) contrast(1.3) saturate(1.3)",
                 borderRadius: "4px",
+                background: "#ffffff",
               }}
               onClick={(e) => e.stopPropagation()}
             />

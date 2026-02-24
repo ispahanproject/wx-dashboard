@@ -1236,7 +1236,7 @@ function TodayDutyBar() {
     const iv = setInterval(() => {
       setNow(new Date());
       setTodayEvents(getTodayDutyEvents());
-    }, 30000);
+    }, 10000);
     return () => clearInterval(iv);
   }, []);
 
@@ -1244,84 +1244,168 @@ function TodayDutyBar() {
 
   const currentEvent = todayEvents.find(e => now >= e.start && now < e.end);
   const flyEvents = todayEvents.filter(e => e.type === "FLY");
+  const nextEvent = todayEvents.find(e => e.start > now);
 
-  // Build full route from all FLY legs
+  // Build full route
   const fullRoute = [];
   for (const ev of flyEvents) {
-    if (ev.route) {
-      for (let i = 0; i < ev.route.length; i++) {
-        if (fullRoute.length === 0 || fullRoute[fullRoute.length - 1] !== ev.route[i]) {
-          fullRoute.push(ev.route[i]);
-        }
-      }
-    }
+    if (ev.route) ev.route.forEach(c => { if (fullRoute.length === 0 || fullRoute[fullRoute.length - 1] !== c) fullRoute.push(c); });
   }
 
   const firstStart = todayEvents[0]?.start;
   const lastEnd = todayEvents[todayEvents.length - 1]?.end;
-  let progressPct = 0;
-  if (firstStart && lastEnd && now >= firstStart && now <= lastEnd) {
-    progressPct = ((now - firstStart) / (lastEnd - firstStart)) * 100;
-  } else if (lastEnd && now > lastEnd) {
-    progressPct = 100;
-  }
 
   const fmtZ = (d) => {
     if (!d) return "--:--Z";
     return d.getUTCHours().toString().padStart(2, "0") + ":" + d.getUTCMinutes().toString().padStart(2, "0") + "Z";
   };
+  const fmtL = (d) => {
+    if (!d) return "--:--";
+    const jst = new Date(d.getTime() + 9 * 3600000);
+    return jst.getUTCHours().toString().padStart(2, "0") + ":" + jst.getUTCMinutes().toString().padStart(2, "0");
+  };
 
-  const statusColor = currentEvent ? (DUTY_COLORS[currentEvent.type] || "#94a3b8") : "#334155";
+  // Countdown
+  const cdStr = (target) => {
+    if (!target) return null;
+    const diff = target - now;
+    if (diff <= 0) return null;
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    return h > 0 ? `${h}h${m.toString().padStart(2, "0")}m` : `${m}m`;
+  };
+
+  // Timeline progress: compute position of each event on a normalized bar
+  const totalSpan = lastEnd && firstStart ? lastEnd - firstStart : 1;
+  const nowPct = firstStart && lastEnd && now >= firstStart && now <= lastEnd
+    ? ((now - firstStart) / totalSpan) * 100
+    : now > lastEnd ? 100 : 0;
+
+  const mono = "'JetBrains Mono', 'Fira Code', monospace";
+
+  // Determine if it's a rest day (only OFF events)
+  const isRestDay = todayEvents.every(e => e.type === "OFF");
+  if (isRestDay) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: "12px",
+        padding: "10px 16px", marginBottom: "8px",
+        background: "rgba(5, 10, 20, 0.8)", border: "1px solid rgba(71,85,105,0.2)", borderRadius: "4px",
+      }}>
+        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#475569", flexShrink: 0 }} />
+        <span style={{ color: "#475569", fontSize: "9px", fontWeight: 700, fontFamily: mono, letterSpacing: "2px" }}>TODAY</span>
+        <span style={{ color: "#94a3b8", fontSize: "13px", fontFamily: mono }}>REST DAY</span>
+      </div>
+    );
+  }
 
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: "12px",
-      padding: "8px 14px",
-      background: "rgba(5, 10, 20, 0.8)",
-      border: "1px solid rgba(110, 231, 183, 0.1)",
-      borderRadius: "4px", marginBottom: "8px",
+      padding: "10px 16px", marginBottom: "8px",
+      background: "rgba(5, 10, 20, 0.85)", border: "1px solid rgba(110, 231, 183, 0.12)", borderRadius: "4px",
     }}>
-      <div style={{
-        width: "8px", height: "8px", borderRadius: "50%",
-        background: statusColor, boxShadow: `0 0 8px ${statusColor}`, flexShrink: 0,
-      }} />
-      <span style={{
-        color: "#6ee7b7", fontSize: "9px", fontWeight: 700,
-        fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", flexShrink: 0,
-      }}>TODAY DUTY</span>
-      {currentEvent && (
-        <span style={{
-          background: DUTY_COLORS[currentEvent.type] || "#94a3b8",
-          color: currentEvent.type === "OFF" ? "#e2e8f0" : "#030810",
-          padding: "2px 8px", borderRadius: "2px", fontSize: "9px", fontWeight: 700,
-          fontFamily: "'JetBrains Mono', monospace", flexShrink: 0,
-        }}>{currentEvent.type}</span>
-      )}
-      <div style={{ width: "1px", height: "16px", background: "rgba(110,231,183,0.15)" }} />
-      {fullRoute.length > 0 ? (
-        <span style={{
-          color: "#e2e8f0", fontSize: "12px", fontWeight: 700,
-          fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
-        }}>{fullRoute.join(" → ")}</span>
-      ) : (
-        <span style={{ color: "#64748b", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
-          {todayEvents[0]?.type || "---"}
-        </span>
-      )}
-      <div style={{ width: "1px", height: "16px", background: "rgba(110,231,183,0.15)" }} />
-      <span style={{
-        color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0,
-      }}>{fmtZ(firstStart)} – {fmtZ(lastEnd)}</span>
-      <div style={{
-        flex: 1, height: "3px", minWidth: "60px",
-        background: "rgba(110,231,183,0.08)", borderRadius: "2px", overflow: "hidden",
-      }}>
+      {/* Row 1: Header + Route + Countdown */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+        {/* Status dot */}
         <div style={{
-          width: `${progressPct}%`, height: "100%",
-          background: progressPct >= 100 ? "#475569" : "#6ee7b7",
-          boxShadow: progressPct < 100 ? "0 0 6px #6ee7b7" : "none",
-          borderRadius: "2px", transition: "width 0.5s ease",
+          width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
+          background: currentEvent ? (DUTY_COLORS[currentEvent.type] || "#94a3b8") : "#334155",
+          boxShadow: currentEvent ? `0 0 10px ${DUTY_COLORS[currentEvent.type]}` : "none",
+          animation: currentEvent && currentEvent.type === "FLY" ? "statusBlink 2s ease infinite" : "none",
         }} />
+        {/* Label */}
+        <span style={{ color: "#6ee7b7", fontSize: "9px", fontWeight: 700, fontFamily: mono, letterSpacing: "2px", flexShrink: 0 }}>TODAY DUTY</span>
+        {/* Current badge */}
+        {currentEvent && (
+          <span style={{
+            background: DUTY_COLORS[currentEvent.type] || "#94a3b8",
+            color: currentEvent.type === "OFF" ? "#e2e8f0" : "#030810",
+            padding: "2px 8px", borderRadius: "2px", fontSize: "9px", fontWeight: 700, fontFamily: mono,
+          }}>{currentEvent.type}</span>
+        )}
+        {/* Separator */}
+        <div style={{ width: "1px", height: "16px", background: "rgba(110,231,183,0.12)" }} />
+        {/* Route */}
+        {fullRoute.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            {fullRoute.map((code, i) => (
+              <span key={i} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                {i > 0 && <span style={{ color: "#334155", fontSize: "10px" }}>→</span>}
+                <span style={{
+                  color: currentEvent?.type === "FLY" && currentEvent.route?.includes(code) ? "#6ee7b7" : "#e2e8f0",
+                  fontSize: "13px", fontWeight: 700, fontFamily: mono,
+                }}>{code}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+        {/* Countdown to next event */}
+        {nextEvent && cdStr(nextEvent.start) && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+            <span style={{ color: "#475569", fontSize: "8px", fontFamily: mono, letterSpacing: "1px" }}>NEXT</span>
+            <span style={{
+              background: DUTY_COLORS[nextEvent.type] || "#94a3b8",
+              color: nextEvent.type === "OFF" ? "#e2e8f0" : "#030810",
+              padding: "1px 5px", borderRadius: "2px", fontSize: "8px", fontWeight: 700, fontFamily: mono,
+            }}>{nextEvent.type}</span>
+            <span style={{ color: "#fbbf24", fontSize: "12px", fontWeight: 700, fontFamily: mono }}>T-{cdStr(nextEvent.start)}</span>
+          </div>
+        )}
+        {/* Time range */}
+        <span style={{ color: "#475569", fontSize: "9px", fontFamily: mono, flexShrink: 0 }}>
+          {fmtZ(firstStart)}–{fmtZ(lastEnd)} / {fmtL(firstStart)}–{fmtL(lastEnd)}L
+        </span>
+      </div>
+
+      {/* Row 2: Visual Timeline Bar */}
+      <div style={{ position: "relative", height: "22px", background: "rgba(15,23,42,0.6)", borderRadius: "3px", overflow: "hidden" }}>
+        {/* Event segments */}
+        {todayEvents.map((ev, i) => {
+          const evStart = Math.max(ev.start.getTime(), firstStart.getTime());
+          const evEnd = Math.min(ev.end.getTime(), lastEnd.getTime());
+          const left = ((evStart - firstStart.getTime()) / totalSpan) * 100;
+          const width = ((evEnd - evStart) / totalSpan) * 100;
+          const col = DUTY_COLORS[ev.type] || "#94a3b8";
+          const isCurrent = currentEvent && currentEvent.uid === ev.uid;
+          return (
+            <div key={i} style={{
+              position: "absolute", top: "2px", bottom: "2px",
+              left: `${left}%`, width: `${Math.max(width, 0.5)}%`,
+              background: isCurrent ? col : `${col}33`,
+              border: isCurrent ? `1px solid ${col}` : `1px solid ${col}22`,
+              borderRadius: "2px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              overflow: "hidden",
+              boxShadow: isCurrent ? `0 0 8px ${col}55` : "none",
+            }}>
+              {width > 8 && (
+                <span style={{
+                  color: isCurrent ? (ev.type === "OFF" ? "#e2e8f0" : "#030810") : col,
+                  fontSize: "7px", fontWeight: 700, fontFamily: mono,
+                  whiteSpace: "nowrap", letterSpacing: "0.5px",
+                }}>
+                  {ev.type === "FLY" && ev.route.length > 0 ? ev.route.join("-") : ev.type}
+                </span>
+              )}
+            </div>
+          );
+        })}
+        {/* Now marker */}
+        {nowPct > 0 && nowPct < 100 && (
+          <div style={{
+            position: "absolute", top: 0, bottom: 0, left: `${nowPct}%`,
+            width: "2px", background: "#ef4444", boxShadow: "0 0 6px #ef4444",
+            zIndex: 2,
+          }}>
+            <div style={{
+              position: "absolute", top: "-3px", left: "-3px",
+              width: "8px", height: "8px", borderRadius: "50%",
+              background: "#ef4444", border: "1px solid #030810",
+            }} />
+          </div>
+        )}
       </div>
     </div>
   );

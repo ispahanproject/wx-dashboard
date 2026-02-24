@@ -2175,7 +2175,7 @@ function AnalysisPanel() {
   const [tsIndex, setTsIndex] = useState(0);
   const [tsList, setTsList] = useState([]);
   const [viewMode, setViewMode] = useState("cross"); // "cross" | "plane"
-  const [planeLevel, setPlaneLevel] = useState("30"); // FL300
+  const [planeLevel, setPlaneLevel] = useState("35"); // FL350
   const [imgError, setImgError] = useState({});
 
   // JMAの断面図コード: 経度→内部コード (functions_maiji.jsより)
@@ -2188,9 +2188,9 @@ function AnalysisPanel() {
 
   const PLANE_LEVELS = [
     { code: "45", label: "FL450", hPa: "150hPa", ft: "≈45,000ft" },
-    { code: "39", label: "FL390", hPa: "200hPa", ft: "≈39,000ft" },
-    { code: "30", label: "FL300", hPa: "300hPa", ft: "≈30,000ft" },
+    { code: "35", label: "FL350", hPa: "250hPa", ft: "≈35,000ft" },
     { code: "25", label: "FL250", hPa: "400hPa", ft: "≈25,000ft" },
+    { code: "15", label: "FL150", hPa: "550hPa", ft: "≈15,000ft" },
   ];
 
   // list_maiji.js からタイムスタンプ一覧を取得

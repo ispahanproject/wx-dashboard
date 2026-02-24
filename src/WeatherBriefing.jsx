@@ -217,6 +217,101 @@ function AlmanacBar({ now }) {
 }
 
 /* ============================================================
+   六曜 (ROKUYO) — 旧暦ベースの日本伝統暦注
+   ============================================================ */
+function getRokuyo(date) {
+  // 旧暦月日を簡易天文計算で求め、六曜を算出
+  // 朔(新月)から旧暦日を、冬至から旧暦月を近似
+  const JD = (y, m, d) => {
+    if (m <= 2) { y--; m += 12; }
+    const A = Math.floor(y / 100);
+    const B = 2 - A + Math.floor(A / 4);
+    return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + B - 1524.5;
+  };
+
+  const jst = new Date(date.getTime() + 9 * 3600000);
+  const y = jst.getUTCFullYear(), m = jst.getUTCMonth() + 1, d = jst.getUTCDate();
+  const jd = JD(y, m, d);
+
+  // 直近の朔(新月)を求める（Meeus簡易法）
+  const k0 = Math.floor((y + (m - 1) / 12 - 2000) * 12.3685);
+  const findNewMoon = (k) => {
+    const T = k / 1236.85;
+    const T2 = T * T;
+    const T3 = T2 * T;
+    let jde = 2451550.09766 + 29.530588861 * k + 0.00015437 * T2 - 0.000000150 * T3;
+    const M = (2.5534 + 29.10535670 * k) * Math.PI / 180;
+    const Mp = (201.5643 + 385.81693528 * k) * Math.PI / 180;
+    const F = (160.7108 + 390.67050284 * k) * Math.PI / 180;
+    jde += -0.40720 * Math.sin(Mp)
+         + 0.17241 * Math.sin(M)
+         + 0.01608 * Math.sin(2 * Mp)
+         + 0.01039 * Math.sin(2 * F)
+         + 0.00739 * Math.sin(Mp - M);
+    return jde;
+  };
+
+  // 直前の朔と、その前の朔を探す
+  let k = k0;
+  while (findNewMoon(k) > jd + 0.5) k--;
+  const nm1 = findNewMoon(k);     // 直前の朔
+  const nm0 = findNewMoon(k - 1); // その前の朔
+
+  // 旧暦日 = JD - 直前の朔JD + 1
+  const lunarDay = Math.floor(jd - nm1 + 0.5) + 1;
+
+  // 旧暦月 (近似): 冬至を含む月を11月とする簡易法
+  // ここでは朔の回数から月番号を求める
+  // 春分前後を基準に、旧暦正月(朔)を探す
+  const getSpringNewYear = (yr) => {
+    // 旧暦正月 ≈ 1/21～2/20頃の朔
+    let kk = Math.floor((yr - 2000) * 12.3685) - 1;
+    for (let i = 0; i < 4; i++) {
+      const nmJd = findNewMoon(kk + i);
+      const nmDate = new Date((nmJd - 2440587.5) * 86400000);
+      const nmM = nmDate.getUTCMonth() + 1;
+      const nmD = nmDate.getUTCDate();
+      // 旧暦正月1日は大体1/21〜2/20
+      if ((nmM === 1 && nmD >= 21) || (nmM === 2 && nmD <= 21)) {
+        return kk + i;
+      }
+    }
+    return kk;
+  };
+
+  const nyK = getSpringNewYear(y);
+  let lunarMonth = k - nyK + 1;
+  if (lunarMonth <= 0) {
+    const nyKPrev = getSpringNewYear(y - 1);
+    lunarMonth = k - nyKPrev + 1;
+  }
+  // 閏月の補正: 月番号が13以上なら12で折り返す
+  if (lunarMonth > 12) lunarMonth -= 12;
+  if (lunarMonth < 1) lunarMonth = 1;
+
+  // 六曜 = (旧暦月 + 旧暦日) % 6
+  const ROKUYO = ["大安", "赤口", "先勝", "友引", "先負", "仏滅"];
+  const ROKUYO_EN = ["Taian", "Shakku", "Sensho", "Tomobiki", "Senbu", "Butsumetsu"];
+  const ROKUYO_DESC = [
+    "大吉日・万事良し",
+    "正午のみ吉",
+    "午前中が吉",
+    "朝夕は吉、昼は凶",
+    "午後が吉",
+    "万事凶・慎む日",
+  ];
+  const idx = (lunarMonth + lunarDay) % 6;
+  return {
+    name: ROKUYO[idx],
+    en: ROKUYO_EN[idx],
+    desc: ROKUYO_DESC[idx],
+    lunarMonth,
+    lunarDay,
+    idx,
+  };
+}
+
+/* ============================================================
    ASTRO SIDEBAR PANEL — 月・太陽詳細 (タブコンテンツ内サイドバー用)
    ============================================================ */
 function AstroDetail({ now }) {
@@ -319,6 +414,54 @@ function AstroDetail({ now }) {
           );
         })}
       </div>
+
+      {/* 六曜 */}
+      {(() => {
+        const rokuyo = getRokuyo(now);
+        const rokuyoColors = ["#6ee7b7", "#ef4444", "#3b82f6", "#a855f7", "#f97316", "#64748b"];
+        const rokuyoBg = ["rgba(110,231,183,0.08)", "rgba(239,68,68,0.08)", "rgba(59,130,246,0.08)", "rgba(168,85,247,0.08)", "rgba(249,115,22,0.08)", "rgba(100,116,139,0.08)"];
+        // 7日分の六曜カレンダー
+        const days = Array.from({ length: 7 }).map((_, i) => {
+          const d = new Date(now.getTime() + i * 86400000);
+          const r = getRokuyo(d);
+          const jst = new Date(d.getTime() + 9 * 3600000);
+          const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+          return { ...r, date: d, jstDay: jst.getUTCDate(), jstDow: dayNames[jst.getUTCDay()] };
+        });
+        return (
+          <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>
+            <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", marginBottom: "8px" }}>六曜 ROKUYO</div>
+            {/* 今日の六曜（大きく表示） */}
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
+              <div style={{
+                padding: "6px 14px", borderRadius: "4px",
+                background: rokuyoBg[rokuyo.idx],
+                border: `1px solid ${rokuyoColors[rokuyo.idx]}40`,
+              }}>
+                <span style={{ fontSize: "20px", fontWeight: 700, color: rokuyoColors[rokuyo.idx], fontFamily: "'JetBrains Mono', monospace" }}>{rokuyo.name}</span>
+              </div>
+              <div>
+                <div style={{ fontSize: "10px", color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}>{rokuyo.en}</div>
+                <div style={{ fontSize: "9px", color: "#475569", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{rokuyo.desc}</div>
+                <div style={{ fontSize: "8px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>旧暦 {rokuyo.lunarMonth}月{rokuyo.lunarDay}日</div>
+              </div>
+            </div>
+            {/* 7日分ミニカレンダー */}
+            <div style={{ display: "flex", gap: "3px" }}>
+              {days.map((d, i) => (
+                <div key={i} style={{
+                  flex: 1, textAlign: "center", padding: "4px 2px", borderRadius: "3px",
+                  background: i === 0 ? "rgba(110,231,183,0.1)" : "rgba(0,0,0,0.3)",
+                  border: i === 0 ? "1px solid rgba(110,231,183,0.2)" : "1px solid transparent",
+                }}>
+                  <div style={{ fontSize: "8px", color: i === 0 ? "#6ee7b7" : "#475569", fontFamily: "'JetBrains Mono', monospace" }}>{d.jstDay}{d.jstDow}</div>
+                  <div style={{ fontSize: "10px", fontWeight: 700, color: rokuyoColors[d.idx], fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{d.name}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 暦情報 */}
       <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>

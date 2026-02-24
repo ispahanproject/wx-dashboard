@@ -4311,6 +4311,83 @@ export default function WeatherBriefing() {
     return () => clearInterval(iv);
   }, []);
 
+  // === Offline / Preflight Cache ===
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [cacheState, setCacheState] = useState("idle"); // idle | caching | done | error
+  const [cacheInfo, setCacheInfo] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("wx-cache-info")); } catch { return null; }
+  });
+
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+
+    // Listen for SW messages
+    const swHandler = (e) => {
+      if (e.data?.type === "PREFLIGHT_CACHE_DONE") {
+        const info = { cached: e.data.cached, failed: e.data.failed, total: e.data.total, ts: e.data.timestamp };
+        setCacheInfo(info);
+        localStorage.setItem("wx-cache-info", JSON.stringify(info));
+        setCacheState("done");
+        setTimeout(() => setCacheState("idle"), 5000);
+      }
+      if (e.data?.type === "CACHE_CLEARED") {
+        setCacheInfo(null);
+        localStorage.removeItem("wx-cache-info");
+        setCacheState("idle");
+      }
+    };
+    navigator.serviceWorker?.addEventListener("message", swHandler);
+
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+      navigator.serviceWorker?.removeEventListener("message", swHandler);
+    };
+  }, []);
+
+  const doPreflightCache = async () => {
+    if (!navigator.serviceWorker?.controller) return;
+    setCacheState("caching");
+
+    // Collect URLs to cache
+    const urls = [];
+
+    // METAR/TAF — current duty airports + defaults
+    const todayEvents = getTodayDutyEvents();
+    const dutyIcaos = getDutyRouteIcaoCodes(todayEvents);
+    const metarAirports = [...new Set(["RJTT", "RJAA", ...dutyIcaos])];
+    const metarIds = metarAirports.join(",");
+    urls.push(awcUrl(`/api/data/metar?ids=${metarIds}&format=raw&taf=true&hours=4`));
+
+    // Atmospheric analysis images — all 4 cross sections + 4 plane levels × latest timestamp
+    try {
+      const tsRes = await fetch("https://www.data.jma.go.jp/airinfo/data/conf/list_maiji.js");
+      const tsText = await tsRes.text();
+      const tsMatches = [...tsText.matchAll(/"(\d{14})"/g)].map(m => m[1]);
+      const latestTs = tsMatches[0];
+      if (latestTs) {
+        for (const code of ["50", "52", "54", "56"]) {
+          urls.push(`https://www.data.jma.go.jp/airinfo/data/pict/maiji/WANLC1${code}_RJTD_${latestTs}.PNG`);
+        }
+        for (const code of ["15", "25", "35", "45"]) {
+          urls.push(`https://www.data.jma.go.jp/airinfo/data/pict/maiji/WANLF1${code}_RJTD_${latestTs}.PNG`);
+        }
+      }
+    } catch {}
+
+    // JMA weather maps
+    urls.push("https://www.jma.go.jp/bosai/weather_map/data/png/spas_color.png");
+
+    navigator.serviceWorker.controller.postMessage({ type: "PREFLIGHT_CACHE", urls });
+  };
+
+  const doClearCache = () => {
+    navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_CACHE" });
+  };
+
   const tabs = [
     { key: "metar", label: "METAR / TAF", icon: "📡" },
     { key: "satellite", label: "衛星画像", icon: "🛰️" },
@@ -4517,6 +4594,67 @@ export default function WeatherBriefing() {
         <SystemStatusIndicator sysStatus={sysStatus} />
 
         <Clock />
+
+        {/* Preflight Cache Controls */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {/* Online/Offline indicator */}
+          {isOffline && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "4px",
+              padding: "4px 10px",
+              background: "rgba(251, 191, 36, 0.12)",
+              border: "1px solid rgba(251, 191, 36, 0.4)",
+              borderRadius: "3px",
+            }}>
+              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#fbbf24", boxShadow: "0 0 6px #fbbf24" }} />
+              <span style={{ fontSize: "9px", color: "#fbbf24", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, letterSpacing: "1px" }}>OFFLINE</span>
+              {cacheInfo && (
+                <span style={{ fontSize: "8px", color: "#92702a", fontFamily: "'JetBrains Mono', monospace" }}>
+                  {new Date(cacheInfo.ts).toISOString().slice(11,16)}z
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Cache button */}
+          <button
+            onClick={doPreflightCache}
+            disabled={cacheState === "caching" || isOffline}
+            style={{
+              padding: "5px 12px",
+              background: cacheState === "done" ? "rgba(110,231,183,0.15)" : cacheState === "caching" ? "rgba(251,191,36,0.1)" : "rgba(110,231,183,0.06)",
+              border: `1px solid ${cacheState === "done" ? "rgba(110,231,183,0.5)" : cacheState === "caching" ? "rgba(251,191,36,0.3)" : "rgba(110,231,183,0.2)"}`,
+              borderRadius: "3px",
+              color: cacheState === "done" ? "#6ee7b7" : cacheState === "caching" ? "#fbbf24" : "#64748b",
+              fontSize: "9px", fontWeight: 700,
+              fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: "1px",
+              cursor: cacheState === "caching" || isOffline ? "default" : "pointer",
+              opacity: isOffline ? 0.4 : 1,
+            }}
+          >
+            {cacheState === "caching" ? "📥 CACHING..." : cacheState === "done" ? `✓ CACHED ${cacheInfo?.cached || 0}` : "📥 PREFLIGHT"}
+          </button>
+
+          {/* Clear cache button (show only when cache exists) */}
+          {cacheInfo && (
+            <button
+              onClick={doClearCache}
+              style={{
+                padding: "5px 8px",
+                background: "rgba(239,68,68,0.06)",
+                border: "1px solid rgba(239,68,68,0.2)",
+                borderRadius: "3px",
+                color: "#ef4444",
+                fontSize: "9px", fontWeight: 700,
+                fontFamily: "'JetBrains Mono', monospace",
+                cursor: "pointer",
+              }}
+            >
+              🗑️
+            </button>
+          )}
+        </div>
 
         {/* Bottom border glow */}
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "1px", background: "linear-gradient(90deg, transparent, #6ee7b7, transparent)", opacity: 0.3 }} />

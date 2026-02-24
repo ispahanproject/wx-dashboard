@@ -2127,6 +2127,15 @@ function AnalysisPanel() {
 
   return (
     <div>
+      {/* SVGフィルター定義（エッジ強調・シャープネス） */}
+      <svg style={{ position: "absolute", width: 0, height: 0 }} xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="sharpen-lines">
+            <feConvolveMatrix order="3" kernelMatrix="0 -0.6 0 -0.6 3.4 -0.6 0 -0.6 0" preserveAlpha="true" />
+          </filter>
+        </defs>
+      </svg>
+
       {/* ヘッダー */}
       <div style={panelStyle}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
@@ -2208,7 +2217,7 @@ function AnalysisPanel() {
                       src={imageUrl(lon.code)}
                       alt={`大気解析 ${lon.label} ${tsLabel}`}
                       onError={() => setImgError((prev) => ({ ...prev, [lon.code]: true }))}
-                      style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.88) hue-rotate(180deg) contrast(1.1) saturate(1.2)" }}
+                      style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.88) hue-rotate(180deg) contrast(1.3) saturate(1.3) url(#sharpen-lines)" }}
                     />
                   </div>
                 )}
@@ -2241,7 +2250,7 @@ function AnalysisPanel() {
                   src={planeUrl(planeLevel)}
                   alt={`平面図 FL${planeLevel}0 ${tsLabel}`}
                   onError={() => setImgError((prev) => ({ ...prev, plane: true }))}
-                  style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.88) hue-rotate(180deg) contrast(1.1) saturate(1.2)" }}
+                  style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.88) hue-rotate(180deg) contrast(1.3) saturate(1.3) url(#sharpen-lines)" }}
                 />
               </div>
             )}

@@ -1665,73 +1665,51 @@ function MetarTafPanel() {
     });
   };
 
-  const [expandedRegions, setExpandedRegions] = useState(() => {
-    // DUTY空港を含む地域は初期展開
-    const dutyIcaoSet = new Set(selectedAirports);
-    const open = new Set();
-    AIRPORT_GROUPS.forEach(g => {
-      if (g.airports.some(ap => dutyIcaoSet.has(ap.icao))) open.add(g.region);
-    });
-    if (open.size === 0) open.add("関東"); // デフォルト
-    return open;
-  });
-  const toggleRegion = (region) => setExpandedRegions(prev => {
-    const next = new Set(prev);
-    next.has(region) ? next.delete(region) : next.add(region);
-    return next;
-  });
+  const [activeRegion, setActiveRegion] = useState(null);
 
   return (
     <div>
-      <div style={{ marginBottom: "20px" }}>
-        {/* 地域グループ空港選択 */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "16px" }}>
+      <div style={{ marginBottom: "16px" }}>
+        {/* 地域タブ横並び + 空港チップ展開 */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: activeRegion ? "8px" : "0" }}>
           {AIRPORT_GROUPS.map((group) => {
-            const isOpen = expandedRegions.has(group.region);
             const selectedCount = group.airports.filter(ap => selectedAirports.includes(ap.icao)).length;
+            const isActive = activeRegion === group.region;
             return (
-              <div key={group.region} style={{
-                background: "rgba(15, 23, 42, 0.4)",
-                border: `1px solid ${selectedCount > 0 ? "rgba(110,231,183,0.15)" : "rgba(148,163,184,0.08)"}`,
-                borderRadius: "8px", overflow: "hidden",
+              <button key={group.region} onClick={() => setActiveRegion(isActive ? null : group.region)} style={{
+                padding: "3px 8px", background: isActive ? "rgba(110,231,183,0.12)" : "transparent",
+                border: `1px solid ${isActive ? "rgba(110,231,183,0.4)" : selectedCount > 0 ? "rgba(110,231,183,0.2)" : "rgba(148,163,184,0.1)"}`,
+                borderRadius: "4px", cursor: "pointer",
+                color: isActive ? "#6ee7b7" : selectedCount > 0 ? "#6ee7b7" : "#64748b",
+                fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", fontWeight: isActive ? 700 : 400,
               }}>
-                <button onClick={() => toggleRegion(group.region)} style={{
-                  width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "7px 12px", background: "none", border: "none", cursor: "pointer",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ color: "#475569", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", transition: "transform 0.2s", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
-                    <span style={{ color: "#94a3b8", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{group.region}</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    {selectedCount > 0 && <span style={{ color: "#6ee7b7", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", background: "rgba(110,231,183,0.1)", padding: "1px 6px", borderRadius: "10px" }}>{selectedCount}</span>}
-                    <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>{group.airports.length}</span>
-                  </div>
-                </button>
-                {isOpen && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", padding: "0 10px 8px 28px" }}>
-                    {group.airports.map((ap) => {
-                      const sel = selectedAirports.includes(ap.icao);
-                      return (
-                        <button key={ap.icao} onClick={() => sel ? removeAirport(ap.icao) : addAirport(ap.icao)}
-                          style={{
-                            padding: "4px 10px",
-                            background: sel ? "rgba(110, 231, 183, 0.15)" : "rgba(30, 41, 59, 0.5)",
-                            border: sel ? "1px solid rgba(110, 231, 183, 0.4)" : "1px solid rgba(148, 163, 184, 0.12)",
-                            borderRadius: "5px", color: sel ? "#6ee7b7" : "#94a3b8",
-                            fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
-                            transition: "all 0.15s",
-                          }}>
-                          {ap.icao} <span style={{ opacity: 0.6, fontSize: "9px" }}>{ap.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                {group.region}{selectedCount > 0 && <span style={{ marginLeft: "3px", fontSize: "9px", opacity: 0.7 }}>({selectedCount})</span>}
+              </button>
             );
           })}
         </div>
+        {activeRegion && (() => {
+          const group = AIRPORT_GROUPS.find(g => g.region === activeRegion);
+          return group ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", padding: "6px 0" }}>
+              {group.airports.map((ap) => {
+                const sel = selectedAirports.includes(ap.icao);
+                return (
+                  <button key={ap.icao} onClick={() => sel ? removeAirport(ap.icao) : addAirport(ap.icao)}
+                    style={{
+                      padding: "3px 8px",
+                      background: sel ? "rgba(110, 231, 183, 0.15)" : "rgba(30, 41, 59, 0.5)",
+                      border: sel ? "1px solid rgba(110, 231, 183, 0.4)" : "1px solid rgba(148, 163, 184, 0.12)",
+                      borderRadius: "4px", color: sel ? "#6ee7b7" : "#94a3b8",
+                      fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+                    }}>
+                    {ap.icao} <span style={{ opacity: 0.6, fontSize: "9px" }}>{ap.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null;
+        })()}
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <input type="text" placeholder="ICAO (e.g. RJBE)" value={customIcao}
             onChange={(e) => setCustomIcao(e.target.value.toUpperCase())}

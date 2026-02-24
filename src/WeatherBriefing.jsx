@@ -2989,6 +2989,37 @@ function DutySchedulePanel() {
     );
   }
 
+  // Group events by tripId for trip summary
+  const trips = [];
+  const seenTrips = new Set();
+  for (const ev of events) {
+    if (!seenTrips.has(ev.tripId)) {
+      seenTrips.add(ev.tripId);
+      const tripEvts = events.filter(e => e.tripId === ev.tripId);
+      const flyLegs = tripEvts.filter(e => e.type === "FLY");
+      const route = [];
+      for (const f of flyLegs) {
+        if (f.route) f.route.forEach(c => { if (route.length === 0 || route[route.length - 1] !== c) route.push(c); });
+      }
+      trips.push({ tripId: ev.tripId, events: tripEvts, route, start: tripEvts[0].start, end: tripEvts[tripEvts.length - 1].end, type: tripEvts[0].type });
+    }
+  }
+
+  // Duration helper
+  const durStr = (start, end) => {
+    const diff = end - start;
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    return h > 0 ? `${h}h${m > 0 ? m + "m" : ""}` : `${m}m`;
+  };
+
+  // JST helper
+  const fmtJST = (d) => {
+    if (!d) return "--:--";
+    const jst = new Date(d.getTime() + 9 * 3600000);
+    return jst.getUTCHours().toString().padStart(2, "0") + ":" + jst.getUTCMinutes().toString().padStart(2, "0");
+  };
+
   return (
     <div style={{ padding: "20px" }}>
       {/* Header */}
@@ -2997,157 +3028,204 @@ function DutySchedulePanel() {
           ▸ DUTY SCHEDULE — {events.length} EVENTS LOADED
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button
-            onClick={() => fileRef.current?.click()}
-            style={{ background: "rgba(110,231,183,0.15)", border: "1px solid rgba(110,231,183,0.3)", color: "#6ee7b7", padding: "4px 10px", borderRadius: "3px", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}
-          >
+          <button onClick={() => fileRef.current?.click()}
+            style={{ background: "rgba(110,231,183,0.15)", border: "1px solid rgba(110,231,183,0.3)", color: "#6ee7b7", padding: "4px 10px", borderRadius: "3px", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>
             ↑ RELOAD
           </button>
-          <button
-            onClick={clearData}
-            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", padding: "4px 10px", borderRadius: "3px", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}
-          >
+          <button onClick={clearData}
+            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", padding: "4px 10px", borderRadius: "3px", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>
             ✕ CLEAR
           </button>
           <input ref={fileRef} type="file" accept=".ics" onChange={handleFile} style={{ display: "none" }} />
         </div>
       </div>
 
-      {/* Current Status Card */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px",
-      }}>
-        {/* Current Duty */}
-        <div style={{
-          background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)",
-          borderRadius: "4px", padding: "14px",
-        }}>
+      {/* Status Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "20px" }}>
+        {/* Current Status */}
+        <div style={{ background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px", padding: "14px" }}>
           <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "8px" }}>CURRENT STATUS</div>
           {currentEvent ? (
             <>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                <span style={{
-                  background: DUTY_COLORS[currentEvent.type] || "#94a3b8",
-                  color: currentEvent.type === "OFF" ? "#e2e8f0" : "#030810",
-                  padding: "2px 8px", borderRadius: "3px", fontSize: "11px", fontWeight: 700,
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}>
+                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: DUTY_COLORS[currentEvent.type] || "#94a3b8", boxShadow: `0 0 8px ${DUTY_COLORS[currentEvent.type]}`, animation: "statusBlink 2s ease infinite" }} />
+                <span style={{ background: DUTY_COLORS[currentEvent.type] || "#94a3b8", color: currentEvent.type === "OFF" ? "#e2e8f0" : "#030810", padding: "2px 8px", borderRadius: "3px", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
                   {currentEvent.type}
                 </span>
               </div>
               {currentEvent.route.length > 0 && (
-                <div style={{ color: "#e2e8f0", fontSize: "15px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ color: "#e2e8f0", fontSize: "16px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
                   {currentEvent.route.join(" → ")}
                 </div>
               )}
-              {currentEvent.type === "NON-FLY" && (
-                <div style={{ color: "#fbbf24", fontSize: "13px" }}>STAY: {currentEvent.summary.match(/\(([^)]+)\)/)?.[1] || ""}</div>
-              )}
-              {currentEvent.type === "OFF" && (
-                <div style={{ color: "#94a3b8", fontSize: "13px" }}>REST DAY</div>
-              )}
+              {currentEvent.type === "NON-FLY" && <div style={{ color: "#fbbf24", fontSize: "14px", fontWeight: 600 }}>STAY: {currentEvent.summary.match(/\(([^)]+)\)/)?.[1] || ""}</div>}
+              {currentEvent.type === "OFF" && <div style={{ color: "#94a3b8", fontSize: "14px" }}>REST DAY</div>}
+              {currentEvent.type === "STANDBY" && <div style={{ color: "#c4b5fd", fontSize: "14px" }}>STANDBY</div>}
               <div style={{ color: "#64748b", fontSize: "10px", marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>
-                {fmtZ(currentEvent.start)} – {fmtZ(currentEvent.end)}
+                {fmtZ(currentEvent.start)} – {fmtZ(currentEvent.end)} ({fmtJST(currentEvent.start)} – {fmtJST(currentEvent.end)} JST)
               </div>
             </>
           ) : (
-            <div style={{ color: "#64748b", fontSize: "12px" }}>NO ACTIVE DUTY</div>
+            <div style={{ color: "#475569", fontSize: "12px", marginTop: "4px" }}>NO ACTIVE DUTY</div>
           )}
         </div>
 
-        {/* Next Duty */}
-        <div style={{
-          background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)",
-          borderRadius: "4px", padding: "14px",
-        }}>
+        {/* Next Flight */}
+        <div style={{ background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px", padding: "14px" }}>
           <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "8px" }}>NEXT FLIGHT</div>
           {nextFly ? (
             <>
-              <div style={{ color: "#e2e8f0", fontSize: "15px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" }}>
+              <div style={{ color: "#e2e8f0", fontSize: "16px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" }}>
                 {nextFly.route.join(" → ")}
               </div>
               <div style={{ color: "#6ee7b7", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
                 {fmtDate(nextFly.start)} {fmtZ(nextFly.start)}
               </div>
+              <div style={{ color: "#64748b", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>
+                ({fmtJST(nextFly.start)} JST)
+              </div>
               {countdown(nextFly) && (
-                <div style={{ color: "#fbbf24", fontSize: "18px", fontWeight: 700, marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ color: "#fbbf24", fontSize: "20px", fontWeight: 700, marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>
                   T-{countdown(nextFly)}
                 </div>
               )}
             </>
           ) : (
-            <div style={{ color: "#64748b", fontSize: "12px" }}>NO UPCOMING FLIGHTS</div>
+            <div style={{ color: "#475569", fontSize: "12px", marginTop: "4px" }}>NO UPCOMING FLIGHTS</div>
           )}
+        </div>
+
+        {/* Monthly Summary */}
+        <div style={{ background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px", padding: "14px" }}>
+          <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "8px" }}>MONTHLY SUMMARY</div>
+          {(() => {
+            const flyCount = events.filter(e => e.type === "FLY").length;
+            const offCount = events.filter(e => e.type === "OFF").length;
+            const nonFlyCount = events.filter(e => e.type === "NON-FLY").length;
+            const stbyCount = events.filter(e => e.type === "STANDBY").length;
+            const gndCount = events.filter(e => e.type === "GROUND").length;
+            const totalFlyMs = events.filter(e => e.type === "FLY").reduce((s, e) => s + (e.end - e.start), 0);
+            const flyH = Math.floor(totalFlyMs / 3600000);
+            const flyM = Math.floor((totalFlyMs % 3600000) / 60000);
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>FLY LEGS</span>
+                  <span style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{flyCount}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>DUTY TIME</span>
+                  <span style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{flyH}h{flyM}m</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#475569", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>OFF DAYS</span>
+                  <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{offCount}</span>
+                </div>
+                {stbyCount > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#c4b5fd", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>STANDBY</span>
+                  <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{stbyCount}</span>
+                </div>}
+                {gndCount > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#67e8f9", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>GROUND</span>
+                  <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{gndCount}</span>
+                </div>}
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#fbbf24", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>STAYS</span>
+                  <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{nonFlyCount}</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
-      {/* Timeline */}
+      {/* 7-Day Timeline */}
       <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "10px" }}>7-DAY SCHEDULE</div>
       {days.map((day, di) => {
         const isToday = di === 0;
+        // Get trip summaries that start on this day
+        const dayTrips = trips.filter(t => {
+          const tStart = new Date(Date.UTC(t.start.getUTCFullYear(), t.start.getUTCMonth(), t.start.getUTCDate()));
+          return tStart.getTime() === day.date.getTime();
+        });
         return (
-          <div key={di} style={{ marginBottom: "2px" }}>
+          <div key={di} style={{ marginBottom: "4px" }}>
             {/* Day header */}
             <div style={{
-              display: "flex", alignItems: "center", gap: "8px",
-              padding: "6px 10px",
-              background: isToday ? "rgba(110,231,183,0.08)" : "rgba(5,10,20,0.5)",
-              borderLeft: isToday ? "3px solid #6ee7b7" : "3px solid transparent",
+              display: "flex", alignItems: "center", gap: "10px",
+              padding: "7px 12px",
+              background: isToday ? "rgba(110,231,183,0.1)" : "rgba(5,10,20,0.5)",
+              borderLeft: isToday ? "3px solid #6ee7b7" : "3px solid #1e293b",
               borderRadius: "2px",
             }}>
               <span style={{
-                color: isToday ? "#6ee7b7" : "#94a3b8",
-                fontSize: "11px", fontWeight: 700,
-                fontFamily: "'JetBrains Mono', monospace",
-                minWidth: "90px",
+                color: isToday ? "#6ee7b7" : "#94a3b8", fontSize: "11px", fontWeight: 700,
+                fontFamily: "'JetBrains Mono', monospace", minWidth: "110px",
               }}>
-                {isToday ? "▶ TODAY" : ""} {fmtDate(day.date)}
+                {isToday ? "▶ " : "  "}{fmtDate(day.date)}
               </span>
+              {/* Day summary badges */}
+              {day.events.length > 0 && (
+                <div style={{ display: "flex", gap: "4px", flex: 1 }}>
+                  {(() => {
+                    const types = [...new Set(day.events.map(e => e.type))];
+                    return types.map(t => (
+                      <span key={t} style={{
+                        background: DUTY_COLORS[t] || "#94a3b8",
+                        color: t === "OFF" ? "#e2e8f0" : "#030810",
+                        padding: "1px 6px", borderRadius: "2px", fontSize: "8px", fontWeight: 700,
+                        fontFamily: "'JetBrains Mono', monospace", opacity: 0.8,
+                      }}>{t}</span>
+                    ));
+                  })()}
+                </div>
+              )}
             </div>
             {/* Events */}
             {day.events.length === 0 ? (
-              <div style={{ padding: "6px 10px 6px 20px", color: "#334155", fontSize: "10px" }}>—</div>
+              <div style={{ padding: "4px 12px 4px 24px", color: "#1e293b", fontSize: "10px" }}>—</div>
             ) : (
               day.events.map((ev, ei) => {
                 const col = DUTY_COLORS[ev.type] || "#94a3b8";
-                // Check if this event is part of a multi-leg trip
-                const tripEvents = events.filter(e => e.tripId === ev.tripId);
-                const isMultiLeg = tripEvents.length > 1;
-                const legIdx = tripEvents.findIndex(e => e.uid === ev.uid);
-                const isFirst = legIdx === 0;
-                const isLast = legIdx === tripEvents.length - 1;
+                const tripEvts = events.filter(e => e.tripId === ev.tripId);
+                const isMultiLeg = tripEvts.length > 1;
+                const legIdx = tripEvts.findIndex(e => e.uid === ev.uid);
+                const isCurrent = currentEvent && currentEvent.uid === ev.uid;
                 return (
-                  <div
-                    key={ei}
-                    style={{
-                      display: "flex", alignItems: "center", gap: "8px",
-                      padding: "5px 10px 5px 20px",
-                      borderLeft: isMultiLeg ? `2px solid ${col}` : "2px solid transparent",
-                      marginLeft: "12px",
-                      borderRadius: isFirst ? "2px 0 0 0" : isLast ? "0 0 0 2px" : "0",
-                    }}
-                  >
-                    {/* Time */}
-                    <span style={{
-                      color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace",
-                      minWidth: "100px",
-                    }}>
+                  <div key={ei} style={{
+                    display: "flex", alignItems: "center", gap: "8px",
+                    padding: "6px 12px 6px 24px",
+                    borderLeft: isMultiLeg ? `2px solid ${col}` : "2px solid transparent",
+                    marginLeft: "14px",
+                    background: isCurrent ? "rgba(110,231,183,0.06)" : "transparent",
+                    borderRadius: "2px",
+                  }}>
+                    {/* Current indicator */}
+                    {isCurrent ? (
+                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", boxShadow: "0 0 8px #6ee7b7", animation: "statusBlink 2s ease infinite", flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: "6px", flexShrink: 0 }} />
+                    )}
+                    {/* Time UTC */}
+                    <span style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", minWidth: "95px" }}>
                       {fmtZ(ev.start)}–{fmtZ(ev.end)}
+                    </span>
+                    {/* Time JST */}
+                    <span style={{ color: "#334155", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", minWidth: "75px" }}>
+                      {fmtJST(ev.start)}-{fmtJST(ev.end)}L
+                    </span>
+                    {/* Duration */}
+                    <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", minWidth: "40px" }}>
+                      {durStr(ev.start, ev.end)}
                     </span>
                     {/* Type badge */}
                     <span style={{
-                      background: col,
-                      color: ev.type === "OFF" ? "#e2e8f0" : "#030810",
-                      padding: "1px 6px", borderRadius: "2px", fontSize: "9px", fontWeight: 700,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      minWidth: "55px", textAlign: "center",
-                    }}>
-                      {ev.type}
-                    </span>
+                      background: col, color: ev.type === "OFF" ? "#e2e8f0" : "#030810",
+                      padding: "2px 8px", borderRadius: "2px", fontSize: "9px", fontWeight: 700,
+                      fontFamily: "'JetBrains Mono', monospace", minWidth: "58px", textAlign: "center",
+                    }}>{ev.type}</span>
                     {/* Route / Location */}
-                    <span style={{
-                      color: "#e2e8f0", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace",
-                    }}>
+                    <span style={{ color: "#e2e8f0", fontSize: "12px", fontWeight: ev.type === "FLY" ? 700 : 400, fontFamily: "'JetBrains Mono', monospace" }}>
                       {ev.type === "FLY" && ev.route.length > 0
                         ? ev.route.join(" → ")
                         : ev.type === "NON-FLY"
@@ -3157,6 +3235,12 @@ function DutySchedulePanel() {
                         : ev.summary.match(/\(([^)]+)\)/)?.[1] || ""
                       }
                     </span>
+                    {/* Leg indicator for multi-leg trips */}
+                    {isMultiLeg && ev.type === "FLY" && (
+                      <span style={{ color: "#334155", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace", marginLeft: "auto" }}>
+                        LEG {tripEvts.filter(e => e.type === "FLY").indexOf(ev) + 1}/{tripEvts.filter(e => e.type === "FLY").length}
+                      </span>
+                    )}
                   </div>
                 );
               })

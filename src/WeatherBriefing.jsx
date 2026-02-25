@@ -3378,20 +3378,9 @@ function QuickLinksPanel() {
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
       {[
         {
-          title: "NOTAM / AIP", items: [
-            { label: "AIS Japan", url: "https://aisjapan.mlit.go.jp/" },
-            { label: "FAA NOTAM Search", url: "https://notams.aim.faa.gov/notamSearch/" },
-          ]
-        },
-        {
           title: "火山灰情報", items: [
             { label: "Tokyo VAAC", url: "https://ds.data.jma.go.jp/svd/vaac/data/" },
             { label: "気象庁 降灰予報", url: "https://www.jma.go.jp/bosai/ashfall/" },
-          ]
-        },
-        {
-          title: "AMEDAS / 地上観測", items: [
-            { label: "気象庁 AMEDAS", url: "https://www.jma.go.jp/bosai/amedas/" },
           ]
         },
         {

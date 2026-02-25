@@ -2838,6 +2838,162 @@ const OPS_OVERLAYS = [
     src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=6&lat=36.5&lon=137&overlay=radar&product=radar&level=surface&calendar=now&message=true" },
 ];
 
+/* ========== SEVERE WX — ゲリラ豪雨・台風 ========== */
+const SEVERE_OVERLAYS = [
+  { key: "thunder", label: "THUNDERSTORMS", icon: "⛈️", desc: "雷雨確率分布。高確率域=Cb活動予測。",
+    src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=6&lat=35.5&lon=137&overlay=thunder&product=ecmwf&level=surface&calendar=now&message=true" },
+  { key: "cape", label: "CAPE", icon: "⚡", desc: "対流有効位置エネルギー。>1000 J/kg=ゲリラ豪雨リスク。",
+    src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=6&lat=35.5&lon=137&overlay=cape&product=ecmwf&level=surface&calendar=now&message=true" },
+  { key: "rainAccu", label: "3h RAIN", icon: "🌊", desc: "3時間積算雨量予想。集中豪雨域の特定。",
+    src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=6&lat=35.5&lon=137&overlay=rainAccu&product=ecmwf&level=surface&calendar=now&message=true" },
+  { key: "cloudtop", label: "CLOUD TOP", icon: "☁️", desc: "雲頂高度。FL350超=Cb頂部。積乱雲の発達度合い。",
+    src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=6&lat=35.5&lon=137&overlay=cloudtop&product=ecmwf&level=surface&calendar=now&message=true" },
+];
+
+const TYPHOON_LINKS = [
+  { label: "JMA 台風情報", desc: "経路図・基本情報・予報円", url: "https://www.jma.go.jp/bosai/typhoon/", accent: true },
+  { label: "JTWC", desc: "Joint Typhoon Warning Center", url: "https://www.metoc.navy.mil/jtwc/jtwc.html" },
+  { label: "Windy Hurricanes", desc: "Global tropical cyclone tracks", url: "https://www.windy.com/-Hurricanes-tropical-storms/hurricanes?36,137,5" },
+  { label: "earth.nullschool", desc: "Global wind visualization", url: "https://earth.nullschool.net/#current/wind/surface/level/orthographic=-222.00,35.00,512" },
+  { label: "過去の台風経路", desc: "JMA Best Track Archive", url: "https://www.data.jma.go.jp/yoho/typhoon/route_map/bstv.html" },
+];
+
+const RISK_CRITERIA = [
+  { condition: "CAPE >1000", level: "MOD", color: "#fbbf24" },
+  { condition: "CAPE >2500", level: "HIGH", color: "#f87171" },
+  { condition: "雷活動度 3+", level: "CB", color: "#f87171" },
+  { condition: "雲頂 >FL400", level: "SEV CB", color: "#ef4444" },
+  { condition: ">50mm/h", level: "EXTREME", color: "#ef4444" },
+];
+
+function SevereWxPanel() {
+  const [activeSection, setActiveSection] = useState("rain");
+  const [overlayKey, setOverlayKey] = useState("thunder");
+
+  const jstMonth = new Date(Date.now() + 9 * 3600000).getUTCMonth() + 1;
+  const isTyphoonSeason = jstMonth >= 6 && jstMonth <= 11;
+
+  const sections = [
+    { key: "rain", label: "ゲリラ豪雨", icon: "⛈️" },
+    { key: "typhoon", label: "台風", icon: "🌀" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      {/* サブタブ切替 */}
+      <div style={{ display: "flex", gap: "6px" }}>
+        {sections.map(s => (
+          <button key={s.key} onClick={() => setActiveSection(s.key)} style={{
+            padding: "6px 16px", background: activeSection === s.key ? "rgba(110,231,183,0.12)" : "transparent",
+            border: `1px solid ${activeSection === s.key ? "rgba(110,231,183,0.4)" : "rgba(148,163,184,0.12)"}`,
+            borderRadius: "4px", color: activeSection === s.key ? "#6ee7b7" : "#64748b",
+            fontSize: "12px", fontWeight: activeSection === s.key ? 700 : 400, cursor: "pointer",
+            fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
+          }}>
+            {s.icon} {s.label}
+          </button>
+        ))}
+      </div>
+
+      {activeSection === "rain" && (
+        <PanelFrame title="GUERRILLA RAIN MONITOR / ゲリラ豪雨モニター" code="SECT-GR">
+          {/* Overlay切替 */}
+          <div style={{ display: "flex", gap: "4px", padding: "12px 16px", borderBottom: "1px solid rgba(110,231,183,0.08)", flexWrap: "wrap" }}>
+            {SEVERE_OVERLAYS.map(o => (
+              <button key={o.key} onClick={() => setOverlayKey(o.key)} style={{
+                padding: "4px 10px", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace",
+                background: overlayKey === o.key ? "rgba(110,231,183,0.15)" : "transparent",
+                border: `1px solid ${overlayKey === o.key ? "rgba(110,231,183,0.4)" : "rgba(148,163,184,0.1)"}`,
+                borderRadius: "3px", color: overlayKey === o.key ? "#6ee7b7" : "#94a3b8", cursor: "pointer",
+              }}>
+                {o.icon} {o.label}
+              </button>
+            ))}
+          </div>
+          {/* Overlay説明 */}
+          <div style={{ padding: "6px 16px", color: "#475569", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>
+            {SEVERE_OVERLAYS.find(o => o.key === overlayKey)?.desc}
+          </div>
+          {/* Windy iframe */}
+          <div style={{ position: "relative", background: "#000" }}>
+            <iframe
+              key={overlayKey}
+              src={SEVERE_OVERLAYS.find(o => o.key === overlayKey)?.src}
+              style={{ width: "100%", height: "440px", border: "none", display: "block" }}
+              title={`Severe WX - ${overlayKey}`}
+              loading="lazy"
+            />
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", boxShadow: "inset 0 0 40px rgba(0,0,0,0.4)" }} />
+          </div>
+          {/* リスク判定基準 */}
+          <div style={{ display: "flex", gap: "8px", padding: "10px 16px", flexWrap: "wrap", borderTop: "1px solid rgba(110,231,183,0.08)" }}>
+            <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", alignSelf: "center" }}>RISK:</span>
+            {RISK_CRITERIA.map((r, i) => (
+              <span key={i} style={{
+                fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", padding: "2px 6px",
+                border: `1px solid ${r.color}33`, borderRadius: "3px", color: r.color,
+              }}>
+                {r.condition} = {r.level}
+              </span>
+            ))}
+          </div>
+          {/* JMAリンク */}
+          <div style={{ display: "flex", gap: "6px", padding: "10px 16px", flexWrap: "wrap", borderTop: "1px solid rgba(110,231,183,0.08)" }}>
+            <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:hrpns" accent>降水ナウキャスト</ExtLink>
+            <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:thunder">雷ナウキャスト</ExtLink>
+            <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:tornado">竜巻ナウキャスト</ExtLink>
+            <ExtLink href="https://www.river.go.jp/kawabou/mb/rd/xbandmap.html">XRAIN 高精度降水</ExtLink>
+            <ExtLink href="https://www.jma.go.jp/bosai/risk/">キキクル</ExtLink>
+          </div>
+        </PanelFrame>
+      )}
+
+      {activeSection === "typhoon" && (
+        <PanelFrame title="TYPHOON TRACKER / 台風トラッカー" code="SECT-TY">
+          {/* 台風シーズン表示 */}
+          <div style={{
+            padding: "8px 16px", borderBottom: "1px solid rgba(110,231,183,0.08)",
+            background: isTyphoonSeason ? "rgba(251,191,36,0.06)" : "transparent",
+          }}>
+            <span style={{
+              fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
+              color: isTyphoonSeason ? "#fbbf24" : "#334155",
+            }}>
+              {isTyphoonSeason ? "TYPHOON SEASON ACTIVE (JUN-NOV) — 台風情報を定期的に確認" : "OFF-SEASON — 台風発生は稀ですが監視継続"}
+            </span>
+          </div>
+          {/* Windy wind overlay 広域 */}
+          <div style={{ position: "relative", background: "#000" }}>
+            <iframe
+              src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=4&lat=25&lon=135&overlay=wind&product=ecmwf&level=surface&calendar=now&message=true"
+              style={{ width: "100%", height: "400px", border: "none", display: "block" }}
+              title="Typhoon Wind"
+              loading="lazy"
+            />
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", boxShadow: "inset 0 0 40px rgba(0,0,0,0.4)" }} />
+          </div>
+          {/* 台風関連リンク */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px", padding: "12px 16px" }}>
+            {TYPHOON_LINKS.map((link, i) => (
+              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" style={{
+                display: "block", padding: "10px 12px",
+                background: link.accent ? "rgba(110,231,183,0.07)" : "rgba(0,0,0,0.3)",
+                border: `1px solid ${link.accent ? "rgba(110,231,183,0.25)" : "rgba(148,163,184,0.08)"}`,
+                borderRadius: "4px", textDecoration: "none",
+              }}>
+                <div style={{ color: link.accent ? "#6ee7b7" : "#e2e8f0", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
+                  {link.label} <span style={{ fontSize: "9px", opacity: 0.5 }}>↗</span>
+                </div>
+                <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{link.desc}</div>
+              </a>
+            ))}
+          </div>
+        </PanelFrame>
+      )}
+    </div>
+  );
+}
+
 const JMA_UPPER_CHARTS = [
   { title: "AUPQ78 (500/300hPa)", desc: "ジェット気流・トラフ・リッジ位置", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq78" },
   { title: "AUPQ35 (850/700hPa)", desc: "暖気・寒気移流。850hPa 0℃/-6℃ライン", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq35" },
@@ -4514,7 +4670,7 @@ function BootSequence({ onComplete }) {
     { text: "[OK] Event Logger ── RECORDING", delay: 3500, color: "#6ee7b7" },
     { text: "────────────────────────────────────────", delay: 3700, color: "#1e293b" },
     { text: "ALL SYSTEMS NOMINAL ── DASHBOARD READY", delay: 3900, color: "#6ee7b7", bold: true },
-    { text: "KEYBOARD: [1-7] TAB  [M] MULTI  [F] FULLSCREEN  [R] REFRESH", delay: 4100, color: "#334155" },
+    { text: "KEYBOARD: [1-9,0] TAB  [M] MULTI  [F] FULLSCREEN  [R] REFRESH", delay: 4100, color: "#334155" },
   ];
 
   useEffect(() => {
@@ -4734,6 +4890,7 @@ export default function WeatherBriefing() {
     { key: "livecam", label: "LIVE CAM", icon: "📹" },
     { key: "duty", label: "DUTY", icon: "📋" },
     { key: "links", label: "クイックリンク", icon: "🔗" },
+    { key: "severe", label: "SEVERE WX", icon: "⛈️" },
   ];
 
   const panelMap = {
@@ -4746,6 +4903,7 @@ export default function WeatherBriefing() {
     livecam: <LiveCameraPanel />,
     duty: <DutySchedulePanel />,
     links: <QuickLinksPanel />,
+    severe: <SevereWxPanel />,
   };
 
   // マルチディスプレイのスロット切り替え
@@ -4768,10 +4926,10 @@ export default function WeatherBriefing() {
 
       const key = e.key;
 
-      // 1-9: タブ切り替え
-      if (key >= "1" && key <= "9") {
+      // 1-9,0: タブ切り替え
+      if ((key >= "1" && key <= "9") || key === "0") {
         e.preventDefault();
-        const idx = parseInt(key, 10) - 1;
+        const idx = key === "0" ? 9 : parseInt(key, 10) - 1;
         if (tabs[idx]) {
           setActiveTab(tabs[idx].key);
           setDisplayMode("single");
@@ -4844,7 +5002,7 @@ export default function WeatherBriefing() {
               textShadow: "0 0 10px rgba(110,231,183,0.5)",
             }}>◈ KEYBOARD SHORTCUTS</div>
             {[
-              { keys: "1 - 7", desc: "タブ切り替え（METAR / 衛星 / レーダー / 解析 / OPS WX / CAM / リンク）" },
+              { keys: "1-9, 0", desc: "タブ切り替え（METAR / 衛星 / レーダー / 解析 / CHARTS / OPS / CAM / DUTY / LINKS / SEVERE）" },
               { keys: "M", desc: "マルチディスプレイモード ON/OFF" },
               { keys: "F", desc: "フルスクリーン ON/OFF" },
               { keys: "R", desc: "ページリフレッシュ" },
@@ -5042,7 +5200,7 @@ export default function WeatherBriefing() {
               active={displayMode === "single" && activeTab === tab.key}
               onClick={() => { setActiveTab(tab.key); setDisplayMode("single"); }}
               icon={tab.icon}
-              shortcut={i < 7 ? `${i + 1}` : null}
+              shortcut={i < 9 ? `${i + 1}` : i === 9 ? "0" : null}
             >
               {tab.label}
             </TabBtn>

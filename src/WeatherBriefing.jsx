@@ -9,9 +9,39 @@ const AWC_BASE = import.meta.env.DEV
   ? "/awc-api"
   : "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://aviationweather.gov");
 
-function awcUrl(path) {
-  if (import.meta.env.DEV) return `/awc-api${path}`;
-  return `https://api.allorigins.win/raw?url=${encodeURIComponent("https://aviationweather.gov" + path)}`;
+// AWC proxy URL — 複数プロキシをフォールバック
+function awcProxyUrls(path) {
+  const target = encodeURIComponent("https://aviationweather.gov" + path);
+  if (import.meta.env.DEV) return [`/awc-api${path}`];
+  return [
+    `https://api.allorigins.win/raw?url=${target}`,
+    `https://api.allorigins.win/get?url=${target}`,  // JSON wrapper
+  ];
+}
+
+// 順番にプロキシを試す共通ヘルパー
+async function fetchViaProxy(path, signal, timeoutMs = 8000) {
+  const urls = awcProxyUrls(path);
+  for (const url of urls) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      const combinedSignal = signal
+        ? { signal: (typeof AbortSignal.any === "function" ? AbortSignal.any([signal, ctrl.signal]) : ctrl.signal) }
+        : { signal: ctrl.signal };
+      const r = await fetch(url, combinedSignal);
+      clearTimeout(timer);
+      if (!r.ok) continue;
+      const text = await r.text();
+      if (!text.trim()) continue;
+      // /get endpoint returns JSON with "contents" field
+      if (url.includes("/get?")) {
+        try { const j = JSON.parse(text); return (j.contents || "").trim(); } catch { continue; }
+      }
+      return text.trim();
+    } catch { /* try next */ }
+  }
+  throw new Error("All proxies failed");
 }
 
 // VATSIM METAR API — CORS対応、プロキシ不要、高速
@@ -29,16 +59,12 @@ async function fetchMetarRaw(icaos, signal) {
     }
   } catch { /* fallback */ }
   // フォールバック: AWC via proxy
-  const r2 = await fetch(awcUrl(`/api/data/metar?ids=${icaos}&format=raw&taf=false&hours=3`), { signal });
-  const text2 = await r2.text();
-  return text2.trim();
+  return fetchViaProxy(`/api/data/metar?ids=${icaos}&format=raw&taf=false&hours=3`, signal);
 }
 
-// TAF取得: AWC (VATSIM TAFなし)
+// TAF取得: AWC via proxy (多段フォールバック)
 async function fetchTafRaw(icao, signal) {
-  const r = await fetch(awcUrl(`/api/data/taf?ids=${icao}&format=raw`), { signal });
-  const text = await r.text();
-  return text.trim();
+  return fetchViaProxy(`/api/data/taf?ids=${icao}&format=raw`, signal, 12000);
 }
 
 /* ============================================================
@@ -4861,7 +4887,7 @@ export default function WeatherBriefing() {
     const metarAirports = [...new Set(["RJTT", "RJAA", ...dutyIcaos])];
     const metarIds = metarAirports.join(",");
     urls.push(vatsimMetarUrl(metarIds));
-    urls.push(awcUrl(`/api/data/taf?ids=${metarIds}&format=raw`));
+    urls.push(...awcProxyUrls(`/api/data/taf?ids=${metarIds}&format=raw`));
 
     // Atmospheric analysis images — all 4 cross sections + 4 plane levels × latest timestamp
     try {

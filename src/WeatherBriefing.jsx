@@ -1876,7 +1876,7 @@ function MetarTafPanel() {
 function HimawariTileView({ band }) {
   // バンドキーをURLキーにマッピング
   const bandKey = {
-    B13: "b13", B03: "b03", B08: "b08", B07: "b07", TrueColor: "truecolor",
+    B13: "b13", B03: "b03", B08: "b08", B07: "b07", TrueColor: "tre",
   }[band] ?? "b13";
 
   // 現在UTC時刻から最新10分刻みのHHMMを生成（5分遅延を見込む）

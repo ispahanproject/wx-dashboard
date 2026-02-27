@@ -3426,35 +3426,288 @@ function OpsWxPanel() {
   );
 }
 
-/* ========== QUICK LINKS ========== */
-function QuickLinksPanel() {
+/* ========== SIGMET / AIRMET ========== */
+const SIGMET_HAZARD_STYLE = {
+  TURB: { color: "#fbbf24", icon: "🌀", label: "TURBULENCE" },
+  TS:   { color: "#f87171", icon: "⛈️", label: "THUNDERSTORM" },
+  ICE:  { color: "#7dd3fc", icon: "❄️", label: "ICING" },
+  VA:   { color: "#a78bfa", icon: "🌋", label: "VOLCANIC ASH" },
+  TC:   { color: "#fb923c", icon: "🌀", label: "TROPICAL CYCLONE" },
+  MTW:  { color: "#d4d4d8", icon: "🏔️", label: "MOUNTAIN WAVE" },
+  SS:   { color: "#d4a574", icon: "🏜️", label: "SANDSTORM" },
+};
+
+const SIGMET_IMAGES = [
+  { key: "full", label: "福岡FIR 全域", code: "QGMA98" },
+  { key: "honshu", label: "本州 拡大", code: "QGOA98" },
+  { key: "sw", label: "南西諸島", code: "QGPA98" },
+];
+
+function SigmetPanel() {
+  const [viewMode, setViewMode] = useState("map"); // "map" | "text" | "commentary"
+  const [mapView, setMapView] = useState("full");
+  const [sigmets, setSigmets] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
+  const [lastFetch, setLastFetch] = useState(null);
+
+  const fetchSigmets = useCallback(() => {
+    setLoading(true);
+    setFetchError(false);
+    fetch(awcUrl("/api/data/isigmet?format=json"))
+      .then(r => r.json())
+      .then(data => {
+        // RJJJ (福岡FIR) + 近隣FIR
+        const relevant = data.filter(s =>
+          ["RJJJ", "ZSHA", "RKRR", "RPHI", "VHHK"].includes(s.firId)
+        );
+        setSigmets(relevant);
+        setLastFetch(new Date());
+      })
+      .catch(() => setFetchError(true))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { fetchSigmets(); }, []);
+
+  const rjjjSigmets = sigmets?.filter(s => s.firId === "RJJJ") || [];
+  const nearbyFirSigmets = sigmets?.filter(s => s.firId !== "RJJJ") || [];
+
+  const formatValidTime = (epoch) => {
+    if (!epoch) return "??";
+    const d = new Date(epoch * 1000);
+    return `${String(d.getUTCDate()).padStart(2,"0")}/${String(d.getUTCHours()).padStart(2,"0")}${String(d.getUTCMinutes()).padStart(2,"0")}Z`;
+  };
+
+  const imgUrl = (code) => `https://www.data.jma.go.jp/airinfo/data/pict/sigmet/${code}.png`;
+
+  const mono = "'JetBrains Mono', monospace";
+  const cardBg = "rgba(5,10,20,0.8)";
+  const cardBorder = "1px solid rgba(110,231,183,0.08)";
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
-      {[
-        {
-          title: "火山灰情報", items: [
-            { label: "Tokyo VAAC", url: "https://ds.data.jma.go.jp/svd/vaac/data/" },
-            { label: "気象庁 降灰予報", url: "https://www.jma.go.jp/bosai/ashfall/" },
-          ]
-        },
-        {
-          title: "その他ツール", items: [
-            { label: "SkyVector", url: "https://skyvector.com/" },
-            { label: "FlightRadar24", url: "https://www.flightradar24.com/" },
-            { label: "Great Circle Mapper", url: "http://www.gcmap.com/" },
-            { label: "NOAA Sunrise/Sunset", url: "https://gml.noaa.gov/grad/solcalc/" },
-          ]
-        },
-      ].map((cat, i) => (
-        <div key={i} style={{ padding: "16px", background: "rgba(15, 23, 42, 0.4)", border: "1px solid rgba(148, 163, 184, 0.08)", borderRadius: "10px" }}>
-          <div style={{ color: "#e2e8f0", fontSize: "13px", fontWeight: 600, marginBottom: "10px" }}>{cat.title}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {cat.items.map((item, j) => (
-              <a key={j} href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", fontSize: "12px", textDecoration: "none", fontFamily: "'JetBrains Mono', monospace" }}>↗ {item.label}</a>
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+      <PanelFrame title="SIGMET / AIRMET — FUKUOKA FIR" code="SECT-SIGMET" style={{ padding: "0" }}>
+        {/* Control bar */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "10px 14px", flexWrap: "wrap", gap: "8px",
+          borderBottom: "1px solid rgba(110, 231, 183, 0.08)",
+          background: "rgba(0,0,0,0.4)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ width: "6px", height: "6px", borderRadius: "50%",
+              background: rjjjSigmets.length > 0 ? "#f87171" : "#6ee7b7",
+              boxShadow: `0 0 8px ${rjjjSigmets.length > 0 ? "#f87171" : "#6ee7b7"}`,
+              animation: rjjjSigmets.length > 0 ? "statusBlink 1.5s ease-in-out infinite" : "none",
+            }} />
+            <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: mono, letterSpacing: "2px", textShadow: "0 0 8px rgba(110,231,183,0.5)" }}>
+              SIGMET / AIRMET
+            </span>
+            {sigmets !== null && (
+              <span style={{
+                padding: "2px 8px", borderRadius: "3px", fontSize: "9px", fontFamily: mono, fontWeight: 700,
+                background: rjjjSigmets.length > 0 ? "rgba(248,113,113,0.15)" : "rgba(110,231,183,0.1)",
+                color: rjjjSigmets.length > 0 ? "#f87171" : "#6ee7b7",
+                border: `1px solid ${rjjjSigmets.length > 0 ? "rgba(248,113,113,0.3)" : "rgba(110,231,183,0.2)"}`,
+              }}>
+                {rjjjSigmets.length > 0 ? `${rjjjSigmets.length} ACTIVE` : "NIL SIGMET"}
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+            {[
+              { key: "map", label: "🗺️ SIGMET MAP" },
+              { key: "text", label: "📝 TEXT" },
+              { key: "commentary", label: "📋 解説" },
+            ].map(m => (
+              <button key={m.key} onClick={() => setViewMode(m.key)} style={{
+                padding: "4px 10px",
+                background: viewMode === m.key ? "rgba(110, 231, 183, 0.12)" : "transparent",
+                border: viewMode === m.key ? "1px solid rgba(110, 231, 183, 0.5)" : "1px solid rgba(110, 231, 183, 0.06)",
+                borderRadius: "2px",
+                color: viewMode === m.key ? "#6ee7b7" : "#475569",
+                fontSize: "9px", cursor: "pointer", fontFamily: mono,
+                transition: "all 0.15s ease",
+              }}>{m.label}</button>
             ))}
           </div>
         </div>
-      ))}
+
+        {/* === MAP MODE === */}
+        {viewMode === "map" && (
+          <div>
+            <div style={{ display: "flex", gap: "4px", padding: "8px 14px", background: "rgba(0,0,0,0.3)" }}>
+              {SIGMET_IMAGES.map(v => (
+                <button key={v.key} onClick={() => setMapView(v.key)} style={{
+                  padding: "3px 10px",
+                  background: mapView === v.key ? "rgba(110,231,183,0.1)" : "transparent",
+                  border: mapView === v.key ? "1px solid rgba(110,231,183,0.3)" : "1px solid rgba(110,231,183,0.05)",
+                  borderRadius: "3px", color: mapView === v.key ? "#6ee7b7" : "#475569",
+                  fontSize: "9px", cursor: "pointer", fontFamily: mono,
+                }}>{v.label}</button>
+              ))}
+            </div>
+            <div style={{ position: "relative", background: "#010408", minHeight: "400px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img
+                key={mapView}
+                src={imgUrl(SIGMET_IMAGES.find(v => v.key === mapView)?.code)}
+                alt="JMA SIGMET"
+                style={{ width: "100%", display: "block", maxHeight: "560px", objectFit: "contain" }}
+              />
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none", boxShadow: "inset 0 0 60px rgba(0,0,0,0.4)" }} />
+              <div style={{ position: "absolute", bottom: "8px", right: "10px", pointerEvents: "none",
+                background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: "2px",
+                color: "#334155", fontSize: "9px", fontFamily: mono, letterSpacing: "1px",
+              }}>JMA SIGMET — {SIGMET_IMAGES.find(v => v.key === mapView)?.label}</div>
+            </div>
+          </div>
+        )}
+
+        {/* === TEXT MODE === */}
+        {viewMode === "text" && (
+          <div style={{ padding: "14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+              <button onClick={fetchSigmets} disabled={loading} style={{
+                padding: "4px 10px", background: "rgba(30,41,59,0.8)", border: "1px solid rgba(148,163,184,0.2)",
+                borderRadius: "4px", color: loading ? "#6ee7b7" : "#94a3b8", fontSize: "11px",
+                cursor: loading ? "wait" : "pointer", fontFamily: mono,
+              }}>↻ {loading ? "FETCHING…" : "REFRESH"}</button>
+              {lastFetch && (
+                <span style={{ color: "#334155", fontSize: "9px", fontFamily: mono }}>
+                  Updated {lastFetch.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+              {fetchError && <span style={{ color: "#f87171", fontSize: "9px", fontFamily: mono }}>⚠ AWC FETCH FAILED — MAP MODE AVAILABLE</span>}
+            </div>
+
+            {/* RJJJ SIGMETs */}
+            <div style={{ fontSize: "9px", color: "#334155", fontFamily: mono, letterSpacing: "2px", marginBottom: "8px" }}>RJJJ FUKUOKA FIR</div>
+            {rjjjSigmets.length === 0 && !loading && (
+              <div style={{
+                padding: "20px", background: "rgba(110,231,183,0.05)", border: "1px solid rgba(110,231,183,0.15)",
+                borderRadius: "6px", textAlign: "center", marginBottom: "16px",
+              }}>
+                <div style={{ color: "#6ee7b7", fontSize: "14px", fontWeight: 700, fontFamily: mono, letterSpacing: "3px" }}>NIL SIGMET</div>
+                <div style={{ color: "#475569", fontSize: "10px", fontFamily: mono, marginTop: "4px" }}>NO SIGNIFICANT WEATHER REPORTED IN FUKUOKA FIR</div>
+              </div>
+            )}
+            {rjjjSigmets.map((s, i) => {
+              const style = SIGMET_HAZARD_STYLE[s.hazard] || { color: "#94a3b8", icon: "⚠️", label: s.hazard };
+              return (
+                <div key={i} style={{
+                  padding: "12px", marginBottom: "8px",
+                  background: `${style.color}08`, border: `1px solid ${style.color}30`,
+                  borderRadius: "6px", borderLeft: `3px solid ${style.color}`,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "16px" }}>{style.icon}</span>
+                    <span style={{ color: style.color, fontSize: "11px", fontWeight: 700, fontFamily: mono, letterSpacing: "1px" }}>
+                      {s.qualifier ? `${s.qualifier} ` : ""}{style.label}
+                    </span>
+                    <span style={{ color: "#475569", fontSize: "9px", fontFamily: mono, marginLeft: "auto" }}>
+                      {formatValidTime(s.validTimeFrom)} → {formatValidTime(s.validTimeTo)}
+                    </span>
+                  </div>
+                  {(s.base || s.top) && (
+                    <div style={{ color: "#94a3b8", fontSize: "10px", fontFamily: mono, marginBottom: "4px" }}>
+                      ALT: {s.base || "SFC"} — {s.top || "UNL"}
+                      {s.dir && ` | MOV ${s.dir} ${s.spd || ""}KT`}
+                      {s.chng && ` | ${s.chng}`}
+                    </div>
+                  )}
+                  <pre style={{
+                    margin: "6px 0 0", padding: "8px", background: "rgba(0,0,0,0.4)", borderRadius: "3px",
+                    color: "#cbd5e1", fontSize: "10px", fontFamily: mono, lineHeight: "1.5",
+                    whiteSpace: "pre-wrap", wordBreak: "break-all", overflow: "hidden",
+                  }}>{s.rawSigmet}</pre>
+                </div>
+              );
+            })}
+
+            {/* 近隣FIR */}
+            {nearbyFirSigmets.length > 0 && (
+              <>
+                <div style={{ fontSize: "9px", color: "#334155", fontFamily: mono, letterSpacing: "2px", margin: "16px 0 8px" }}>NEARBY FIR</div>
+                {nearbyFirSigmets.map((s, i) => {
+                  const style = SIGMET_HAZARD_STYLE[s.hazard] || { color: "#94a3b8", icon: "⚠️", label: s.hazard };
+                  return (
+                    <div key={i} style={{
+                      padding: "8px 12px", marginBottom: "4px",
+                      background: "rgba(15,23,42,0.4)", border: "1px solid rgba(148,163,184,0.06)",
+                      borderRadius: "4px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
+                    }}>
+                      <span style={{ fontSize: "12px" }}>{style.icon}</span>
+                      <span style={{ color: "#94a3b8", fontSize: "10px", fontFamily: mono, fontWeight: 700 }}>{s.firId}</span>
+                      <span style={{ color: style.color, fontSize: "10px", fontFamily: mono }}>
+                        {s.qualifier ? `${s.qualifier} ` : ""}{style.label}
+                      </span>
+                      <span style={{ color: "#475569", fontSize: "9px", fontFamily: mono, marginLeft: "auto" }}>
+                        {formatValidTime(s.validTimeFrom)}→{formatValidTime(s.validTimeTo)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* === COMMENTARY MODE === */}
+        {viewMode === "commentary" && (
+          <div style={{ position: "relative", background: "#010408", minHeight: "400px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <img
+              src="https://www.data.jma.go.jp/airinfo/data/pict/ajpn_cmnt/qyya83.png"
+              alt="JMA Aviation Weather Commentary"
+              style={{ width: "100%", display: "block", maxHeight: "600px", objectFit: "contain" }}
+            />
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", boxShadow: "inset 0 0 60px rgba(0,0,0,0.4)" }} />
+            <div style={{ position: "absolute", bottom: "8px", right: "10px", pointerEvents: "none",
+              background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: "2px",
+              color: "#334155", fontSize: "9px", fontFamily: mono, letterSpacing: "1px",
+            }}>JMA 航空気象コメンタリー</div>
+          </div>
+        )}
+
+        {/* Links */}
+        <div style={{
+          display: "flex", gap: "4px", padding: "8px 14px", flexWrap: "wrap",
+          borderTop: "1px solid rgba(110, 231, 183, 0.06)",
+          background: "rgba(0,0,0,0.4)",
+        }}>
+          <ExtLink href="https://www.data.jma.go.jp/airinfo/" accent>JMA 航空気象情報</ExtLink>
+          <ExtLink href="https://aviationweather.gov/sigmet">AWC Intl SIGMET</ExtLink>
+          <ExtLink href="https://ds.data.jma.go.jp/svd/vaac/data/">Tokyo VAAC</ExtLink>
+          <ExtLink href="https://skyvector.com/">SkyVector</ExtLink>
+          <ExtLink href="https://www.flightradar24.com/">FlightRadar24</ExtLink>
+        </div>
+      </PanelFrame>
+
+      {/* リスクサマリーバー */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "6px",
+      }}>
+        {Object.entries(SIGMET_HAZARD_STYLE).map(([key, s]) => {
+          const active = rjjjSigmets.filter(sig => sig.hazard === key);
+          return (
+            <div key={key} style={{
+              padding: "8px 10px", borderRadius: "4px",
+              background: active.length > 0 ? `${s.color}12` : cardBg,
+              border: active.length > 0 ? `1px solid ${s.color}40` : cardBorder,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                <span style={{ fontSize: "13px" }}>{s.icon}</span>
+                <span style={{ color: active.length > 0 ? s.color : "#334155", fontSize: "9px", fontWeight: 700, fontFamily: mono, letterSpacing: "1px" }}>{s.label}</span>
+              </div>
+              <div style={{ color: active.length > 0 ? s.color : "#1e293b", fontSize: "10px", fontFamily: mono }}>
+                {active.length > 0
+                  ? active.map(a => `${a.qualifier || ""} ${a.base || "SFC"}-${a.top || "UNL"}`).join(", ")
+                  : "—"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -4903,6 +5156,12 @@ export default function WeatherBriefing() {
         }
       }
     } catch {}
+    // SIGMET images
+    for (const code of ["QGMA98", "QGOA98", "QGPA98"]) {
+      urls.push(`https://www.data.jma.go.jp/airinfo/data/pict/sigmet/${code}.png`);
+    }
+    urls.push("https://www.data.jma.go.jp/airinfo/data/pict/ajpn_cmnt/qyya83.png");
+
     // FBJP severe weather charts
     urls.push("https://www.data.jma.go.jp/airinfo/data/pict/fbjp/fbjp.png");
     // FBJP 12h — cache latest base time
@@ -4926,7 +5185,7 @@ export default function WeatherBriefing() {
     { key: "opswx", label: "OPS WX", icon: "🎯" },
     { key: "livecam", label: "LIVE CAM", icon: "📹" },
     { key: "duty", label: "DUTY", icon: "📋" },
-    { key: "links", label: "クイックリンク", icon: "🔗" },
+    { key: "sigmet", label: "SIGMET", icon: "⚠️" },
     { key: "severe", label: "SEVERE WX", icon: "⛈️" },
   ];
 
@@ -4939,7 +5198,7 @@ export default function WeatherBriefing() {
     opswx: <OpsWxPanel />,
     livecam: <LiveCameraPanel />,
     duty: <DutySchedulePanel />,
-    links: <QuickLinksPanel />,
+    sigmet: <SigmetPanel />,
     severe: <SevereWxPanel />,
   };
 
@@ -5039,7 +5298,7 @@ export default function WeatherBriefing() {
               textShadow: "0 0 10px rgba(110,231,183,0.5)",
             }}>◈ KEYBOARD SHORTCUTS</div>
             {[
-              { keys: "1-9, 0", desc: "タブ切り替え（METAR / 衛星 / レーダー / 解析 / CHARTS / OPS / CAM / DUTY / LINKS / SEVERE）" },
+              { keys: "1-9, 0", desc: "タブ切り替え（METAR / 衛星 / レーダー / 解析 / CHARTS / OPS / CAM / DUTY / SIGMET / SEVERE）" },
               { keys: "M", desc: "マルチディスプレイモード ON/OFF" },
               { keys: "F", desc: "フルスクリーン ON/OFF" },
               { keys: "R", desc: "ページリフレッシュ" },

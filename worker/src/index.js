@@ -1,10 +1,10 @@
 // AWC CORS Proxy — Cloudflare Worker
 // Proxies requests to aviationweather.gov/api/data/* with CORS headers
 
-const AWC_BASE = "https://aviationweather.gov/api/data";
+const AWC_BASE = "https://aviationweather.gov";
 
 // Allowed API paths (whitelist)
-const ALLOWED_PATHS = ["/taf", "/metar", "/isigmet", "/airsigmet", "/pirep"];
+const ALLOWED_PATHS = ["/api/data/taf", "/api/data/metar", "/api/data/isigmet", "/api/data/airsigmet", "/api/data/pirep"];
 
 // Allowed origins (restrict to our dashboard)
 const ALLOWED_ORIGINS = [

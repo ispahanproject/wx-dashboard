@@ -9,13 +9,16 @@ const AWC_BASE = import.meta.env.DEV
   ? "/awc-api"
   : "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://aviationweather.gov");
 
-// AWC proxy URL — 複数プロキシをフォールバック
+// AWC proxy URL — CF Worker 優先、allorigins フォールバック
+const CF_WORKER = "https://wx-awc-proxy.trinity-funkyboy.workers.dev";
+
 function awcProxyUrls(path) {
-  const target = encodeURIComponent("https://aviationweather.gov" + path);
   if (import.meta.env.DEV) return [`/awc-api${path}`];
+  const target = encodeURIComponent("https://aviationweather.gov" + path);
   return [
-    `https://api.allorigins.win/raw?url=${target}`,
-    `https://api.allorigins.win/get?url=${target}`,  // JSON wrapper
+    `${CF_WORKER}${path}`,                            // Cloudflare Worker (fastest)
+    `https://api.allorigins.win/raw?url=${target}`,    // allorigins fallback
+    `https://api.allorigins.win/get?url=${target}`,    // allorigins JSON wrapper
   ];
 }
 

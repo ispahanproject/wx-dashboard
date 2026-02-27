@@ -2260,9 +2260,13 @@ function AnalysisPanel() {
     { code: "15", label: "FL150", hPa: "550hPa", ft: "≈15,000ft" },
   ];
 
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
+
   // list_maiji.js からタイムスタンプ一覧を取得
-  useEffect(() => {
-    fetch("https://www.data.jma.go.jp/airinfo/data/conf/list_maiji.js")
+  const fetchTimestamps = useCallback((isManual = false) => {
+    if (isManual) setRefreshing(true);
+    fetch("https://www.data.jma.go.jp/airinfo/data/conf/list_maiji.js", { cache: "no-store" })
       .then((r) => r.text())
       .then((text) => {
         const matches = [...text.matchAll(/"(\d{14})"/g)].map((m) => m[1]);
@@ -2270,19 +2274,26 @@ function AnalysisPanel() {
         if (matches.length > 0) {
           const list = matches.map((ts, i) => ({ ts, label: labels[i] || ts }));
           setTsList(list);
+          setTsIndex(0);
           setTimestamp(list[0].ts);
           setTsLabel(list[0].label);
+          setImgError({});
         }
+        setLastRefresh(new Date());
       })
       .catch(() => {
-        // フォールバック: 現在時刻から概算
-        const now = new Date();
-        now.setUTCMinutes(0, 0, 0);
-        const ts = now.toISOString().replace(/[-:T]/g, "").slice(0, 14).padEnd(14, "0");
-        setTimestamp(ts);
-        setTsLabel("latest");
-      });
-  }, []);
+        if (!timestamp) {
+          const now = new Date();
+          now.setUTCMinutes(0, 0, 0);
+          const ts = now.toISOString().replace(/[-:T]/g, "").slice(0, 14).padEnd(14, "0");
+          setTimestamp(ts);
+          setTsLabel("latest");
+        }
+      })
+      .finally(() => setRefreshing(false));
+  }, [timestamp]);
+
+  useEffect(() => { fetchTimestamps(); }, []);
 
   const goTs = (dir) => {
     const next = tsIndex + dir;
@@ -2318,6 +2329,7 @@ function AnalysisPanel() {
 
   return (
     <div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       {/* SVGフィルター定義（エッジ強調・シャープネス） */}
       <svg style={{ position: "absolute", width: 0, height: 0 }} xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -2369,6 +2381,19 @@ function AnalysisPanel() {
           <div style={{ color: "#475569", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>
             {tsIndex + 1} / {tsList.length}
           </div>
+          <button onClick={() => fetchTimestamps(true)} disabled={refreshing} style={{
+            padding: "4px 10px", background: "rgba(30, 41, 59, 0.8)", border: "1px solid rgba(148, 163, 184, 0.2)",
+            borderRadius: "4px", color: refreshing ? "#6ee7b7" : "#94a3b8", fontSize: "12px", cursor: refreshing ? "wait" : "pointer",
+            fontFamily: "'JetBrains Mono', monospace", transition: "all 0.15s ease",
+          }}>
+            <span style={{ display: "inline-block", animation: refreshing ? "spin 1s linear infinite" : "none" }}>↻</span>
+            {refreshing ? " UPDATING…" : " REFRESH"}
+          </button>
+          {lastRefresh && (
+            <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>
+              {lastRefresh.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </div>
+          )}
           {/* FL切り替え（平面図時のみ） */}
           {viewMode === "plane" && (
             <div style={{ display: "flex", gap: "6px", marginLeft: "auto" }}>

@@ -3631,6 +3631,7 @@ function DutySchedulePanel() {
   });
   const [dragOver, setDragOver] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [summaryMonth, setSummaryMonth] = useState(() => new Date());
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -3856,18 +3857,39 @@ function DutySchedulePanel() {
 
         {/* Monthly Summary */}
         <div style={{ background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px", padding: "14px" }}>
-          <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "8px" }}>MONTHLY SUMMARY</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+            <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px" }}>MONTHLY SUMMARY</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+              <button onClick={() => setSummaryMonth(p => { const d = new Date(p); d.setMonth(d.getMonth() - 1); return d; })} style={{
+                background: "none", border: "none", color: "#64748b", fontSize: "10px", cursor: "pointer", padding: "0 4px", fontFamily: "'JetBrains Mono', monospace",
+              }}>◀</button>
+              <span style={{ color: "#94a3b8", fontSize: "10px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", minWidth: "60px", textAlign: "center" }}>
+                {summaryMonth.getFullYear()}/{String(summaryMonth.getMonth() + 1).padStart(2, "0")}
+              </span>
+              <button onClick={() => setSummaryMonth(p => { const d = new Date(p); d.setMonth(d.getMonth() + 1); return d; })} style={{
+                background: "none", border: "none", color: "#64748b", fontSize: "10px", cursor: "pointer", padding: "0 4px", fontFamily: "'JetBrains Mono', monospace",
+              }}>▶</button>
+            </div>
+          </div>
           {(() => {
-            const flyCount = events.filter(e => e.type === "FLY").length;
-            const offCount = events.filter(e => e.type === "OFF").length;
-            const nonFlyCount = events.filter(e => e.type === "NON-FLY").length;
-            const stbyCount = events.filter(e => e.type === "STANDBY").length;
-            const gndCount = events.filter(e => e.type === "GROUND").length;
-            const totalFlyMs = events.filter(e => e.type === "FLY").reduce((s, e) => s + (e.end - e.start), 0);
+            const y = summaryMonth.getFullYear(), m = summaryMonth.getMonth();
+            const monthStart = new Date(Date.UTC(y, m, 1));
+            const monthEnd = new Date(Date.UTC(y, m + 1, 1));
+            const me = events.filter(e => e.start < monthEnd && e.end > monthStart);
+            const flyCount = me.filter(e => e.type === "FLY").length;
+            const offCount = me.filter(e => e.type === "OFF").length;
+            const nonFlyCount = me.filter(e => e.type === "NON-FLY").length;
+            const stbyCount = me.filter(e => e.type === "STANDBY").length;
+            const gndCount = me.filter(e => e.type === "GROUND").length;
+            const totalFlyMs = me.filter(e => e.type === "FLY").reduce((s, e) => s + (e.end - e.start), 0);
             const flyH = Math.floor(totalFlyMs / 3600000);
             const flyM = Math.floor((totalFlyMs % 3600000) / 60000);
+            const total = me.length;
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                {total === 0 ? (
+                  <div style={{ color: "#334155", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", textAlign: "center", padding: "8px 0" }}>NO DATA</div>
+                ) : (<>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>FLY LEGS</span>
                   <span style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{flyCount}</span>
@@ -3892,6 +3914,7 @@ function DutySchedulePanel() {
                   <span style={{ color: "#fbbf24", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>STAYS</span>
                   <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{nonFlyCount}</span>
                 </div>
+                </>)}
               </div>
             );
           })()}

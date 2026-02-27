@@ -15,6 +15,7 @@ self.addEventListener("fetch", (e) => {
 
   const url = new URL(e.request.url);
   const isCacheable =
+    url.hostname === "metar.vatsim.net" ||
     url.hostname === "aviationweather.gov" ||
     url.hostname === "api.allorigins.win" ||
     url.hostname === "www.data.jma.go.jp" ||

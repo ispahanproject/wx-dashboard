@@ -14,6 +14,33 @@ function awcUrl(path) {
   return `https://api.allorigins.win/raw?url=${encodeURIComponent("https://aviationweather.gov" + path)}`;
 }
 
+// VATSIM METAR API — CORS対応、プロキシ不要、高速
+function vatsimMetarUrl(icaos) {
+  return `https://metar.vatsim.net/metar.php?id=${icaos}`;
+}
+
+// METAR取得: VATSIM優先 → AWCフォールバック
+async function fetchMetarRaw(icaos, signal) {
+  try {
+    const r = await fetch(vatsimMetarUrl(icaos), { signal });
+    if (r.ok) {
+      const text = await r.text();
+      if (text.trim()) return text.trim();
+    }
+  } catch { /* fallback */ }
+  // フォールバック: AWC via proxy
+  const r2 = await fetch(awcUrl(`/api/data/metar?ids=${icaos}&format=raw&taf=false&hours=3`), { signal });
+  const text2 = await r2.text();
+  return text2.trim();
+}
+
+// TAF取得: AWC (VATSIM TAFなし)
+async function fetchTafRaw(icao, signal) {
+  const r = await fetch(awcUrl(`/api/data/taf?ids=${icao}&format=raw`), { signal });
+  const text = await r.text();
+  return text.trim();
+}
+
 /* ============================================================
    ALMANAC UTILITIES
    ============================================================ */
@@ -945,11 +972,12 @@ function MetarQuickStatus() {
     const fetchAll = async () => {
       const icaos = QUICK_AIRPORTS.map(a => a.icao).join(",");
       try {
-        const r = await fetch(awcUrl(`/api/data/metar?ids=${icaos}&format=raw&taf=false&hours=1`));
-        const text = await r.text();
-        const lines = text.trim().split("\n").filter(Boolean);
+        const text = await fetchMetarRaw(icaos);
+        const lines = text.split("\n").filter(Boolean);
         const parsed = {};
-        for (const line of lines) {
+        for (let line of lines) {
+          // AWC形式 "METAR RJTT..." / "SPECI RJTT..." のプレフィックス除去
+          line = line.replace(/^(METAR|SPECI)\s+/, "");
           const icao = line.slice(0, 4);
           // 風抽出
           const windMatch = line.match(/\b(\d{3}|VRB)(\d{2,3})(G\d{2,3})?KT\b/);
@@ -1569,12 +1597,11 @@ function MetarTafPanel() {
   const fetchMetar = useCallback(async (icao) => {
     setLoading((prev) => ({ ...prev, [icao]: true }));
     try {
-      const [mRes, tRes] = await Promise.all([
-        fetch(awcUrl(`/api/data/metar?ids=${icao}&format=raw&taf=false&hours=3`)),
-        fetch(awcUrl(`/api/data/taf?ids=${icao}&format=raw`)),
+      const [mText, tText] = await Promise.all([
+        fetchMetarRaw(icao),
+        fetchTafRaw(icao),
       ]);
-      const [mText, tText] = await Promise.all([mRes.text(), tRes.text()]);
-      const newMetar = mText.trim() || "No METAR available";
+      const newMetar = mText || "No METAR available";
 
       // 変化検知: 前回と異なる場合にフラグ
       setMetarData((prev) => {
@@ -4197,17 +4224,13 @@ function useSystemStatus() {
       setStatus(p => ({ ...p, jma: { state: "OFFLINE", color: "#f87171", lastCheck: new Date() } }));
     }
 
-    // METAR (AWC) チェック
+    // METAR (VATSIM → AWC fallback) チェック
     try {
-      const r = await fetch(
-        awcUrl("/api/data/metar?ids=RJTT&format=raw&taf=false&hours=1"),
-        { signal: fetchTimeout(8000) }
-      );
-      if (r.ok) {
-        const text = await r.text();
-        setStatus(p => ({ ...p, metar: { state: text.trim() ? "ONLINE" : "NO DATA", color: text.trim() ? "#6ee7b7" : "#fbbf24", lastCheck: new Date() } }));
+      const text = await fetchMetarRaw("RJTT", fetchTimeout(8000));
+      if (text && text.length > 10) {
+        setStatus(p => ({ ...p, metar: { state: "ONLINE", color: "#6ee7b7", lastCheck: new Date() } }));
       } else {
-        setStatus(p => ({ ...p, metar: { state: "DEGRADED", color: "#fbbf24", lastCheck: new Date() } }));
+        setStatus(p => ({ ...p, metar: { state: "NO DATA", color: "#fbbf24", lastCheck: new Date() } }));
       }
     } catch {
       setStatus(p => ({ ...p, metar: { state: "OFFLINE", color: "#f87171", lastCheck: new Date() } }));
@@ -4520,14 +4543,11 @@ function EventLog() {
     // METAR取得を監視
     const checkMetar = async () => {
       try {
-        const r = await fetch(awcUrl("/api/data/metar?ids=RJTT&format=raw&taf=false&hours=1"));
-        if (r.ok) {
-          const text = await r.text();
-          const line = text.trim().split("\n")[0] ?? "";
-          if (line.length > 10) {
-            const obsTime = line.match(/\d{6}Z/)?.[0] ?? "";
-            addLog("METAR", `RJTT ${obsTime} DATA RECEIVED`);
-          }
+        const text = await fetchMetarRaw("RJTT");
+        const line = text.split("\n")[0] ?? "";
+        if (line.length > 10) {
+          const obsTime = line.match(/\d{6}Z/)?.[0] ?? "";
+          addLog("METAR", `RJTT ${obsTime} DATA RECEIVED`);
         }
       } catch { addLog("ERR", "AWC METAR FETCH FAILED"); }
     };
@@ -4825,7 +4845,8 @@ export default function WeatherBriefing() {
     const dutyIcaos = getDutyRouteIcaoCodes(todayEvents);
     const metarAirports = [...new Set(["RJTT", "RJAA", ...dutyIcaos])];
     const metarIds = metarAirports.join(",");
-    urls.push(awcUrl(`/api/data/metar?ids=${metarIds}&format=raw&taf=true&hours=4`));
+    urls.push(vatsimMetarUrl(metarIds));
+    urls.push(awcUrl(`/api/data/taf?ids=${metarIds}&format=raw`));
 
     // Atmospheric analysis images — all 4 cross sections + 4 plane levels × latest timestamp
     try {

@@ -954,23 +954,25 @@ function MetarQuickStatus() {
           // 風抽出
           const windMatch = line.match(/\b(\d{3}|VRB)(\d{2,3})(G\d{2,3})?KT\b/);
           const wind = windMatch ? windMatch[0] : "---";
-          // 視程抽出
-          const visMatch = line.match(/\b(\d{4})\b/g);
-          const vis = visMatch && visMatch.length > 1 ? visMatch[1] : "----";
-          // 雲抽出（最低雲底）
+          // 視程抽出 — 風の後の最初の独立4桁数字が視程(m)
+          const afterWind = line.replace(/.*?\d{3,5}(G\d{2,3})?KT\b/, "");
+          const visMatch = afterWind.match(/\b(\d{4})\b/);
+          const vis = visMatch ? visMatch[1] : "----";
+          // 雲抽出（表示用=最低雲底、ceiling判定=BKN/OVC/VVのみ）
           const cloudMatches = [...line.matchAll(/(FEW|SCT|BKN|OVC|VV)(\d{3})/g)];
           const clouds = cloudMatches.length > 0 ? cloudMatches[0][0] : (line.includes("CAVOK") ? "CAVOK" : "---");
+          const ceilingMatch = cloudMatches.find(m => /^(BKN|OVC|VV)/.test(m[0]));
           // 現象
           const wxMatch = line.match(/\b(\+?-?)(TS|TSRA|RA|SN|FG|BR|HZ|DZ|GR|SQ|FC|SS|DS|FZRA|FZDZ|SHRA|SHSN)\b/);
           const wx = wxMatch ? wxMatch[0] : "";
-          // ステータス判定
+          // ステータス判定 — FAA基準: LIFR <500ft/<1SM, IFR <1000ft/<3SM, MVFR <3000ft/<5SM
           const visNum = parseInt(vis, 10);
-          const cloudH = cloudMatches.length > 0 ? parseInt(cloudMatches[0][2], 10) * 100 : 99999;
+          const ceilFt = ceilingMatch ? parseInt(ceilingMatch[2], 10) * 100 : 99999;
           let status = "VFR";
           let statusColor = "#6ee7b7";
-          if (visNum < 1600 || cloudH < 200) { status = "LIFR"; statusColor = "#c084fc"; }
-          else if (visNum < 3000 || cloudH < 500) { status = "IFR"; statusColor = "#f87171"; }
-          else if (visNum < 5000 || cloudH < 1500) { status = "MVFR"; statusColor = "#60a5fa"; }
+          if (visNum < 1600 || ceilFt < 500) { status = "LIFR"; statusColor = "#c084fc"; }
+          else if (visNum < 4800 || ceilFt < 1000) { status = "IFR"; statusColor = "#f87171"; }
+          else if (visNum < 8000 || ceilFt < 3000) { status = "MVFR"; statusColor = "#60a5fa"; }
           if (line.includes("CAVOK")) { status = "VFR"; statusColor = "#6ee7b7"; }
 
           parsed[icao] = { wind, vis, clouds, wx, status, statusColor, raw: line };

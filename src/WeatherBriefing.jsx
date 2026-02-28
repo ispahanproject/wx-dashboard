@@ -561,7 +561,7 @@ function AstroDetail({ now }) {
         const info = pollenData ? POLLEN_LEVELS[pollenData.level] || POLLEN_LEVELS[99] : null;
         return (
           <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>
-            <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", marginBottom: "8px" }}>花粉 POLLEN</div>
+            <div style={{ fontSize: "10px", color: "#e879f9", letterSpacing: "2px", marginBottom: "8px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>🌿 花粉 POLLEN</div>
             {pollenData && info ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: "32px" }}>{info.emoji}</span>

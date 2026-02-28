@@ -1,10 +1,12 @@
-// AWC CORS Proxy — Cloudflare Worker
-// Proxies requests to aviationweather.gov/api/data/* with CORS headers
+// WX Dashboard CORS Proxy — Cloudflare Worker
+// Proxies requests to aviationweather.gov & tenki.jp with CORS headers
 
 const AWC_BASE = "https://aviationweather.gov";
+const TENKI_BASE = "https://static.tenki.jp";
 
 // Allowed API paths (whitelist)
 const ALLOWED_PATHS = ["/api/data/taf", "/api/data/metar", "/api/data/isigmet", "/api/data/airsigmet", "/api/data/pirep"];
+const TENKI_PREFIX = "/tenki/";
 
 // Allowed origins (restrict to our dashboard)
 const ALLOWED_ORIGINS = [
@@ -38,19 +40,27 @@ export default {
       return new Response("Method not allowed", { status: 405, headers: corsHeaders(origin) });
     }
 
-    // Validate path
+    // Validate path & route
     const path = url.pathname;
-    if (!ALLOWED_PATHS.some(p => path === p || path.startsWith(p + "/"))) {
+    let upstreamUrl;
+
+    if (path.startsWith(TENKI_PREFIX)) {
+      // tenki.jp pollen API: /tenki/static-api/history/pollen/13101.js
+      const tenkiPath = "/" + path.slice(TENKI_PREFIX.length);
+      if (!tenkiPath.startsWith("/static-api/history/pollen/")) {
+        return new Response("Not found", { status: 404, headers: corsHeaders(origin) });
+      }
+      upstreamUrl = TENKI_BASE + tenkiPath;
+    } else if (ALLOWED_PATHS.some(p => path === p || path.startsWith(p + "/"))) {
+      upstreamUrl = AWC_BASE + path + url.search;
+    } else {
       return new Response("Not found", { status: 404, headers: corsHeaders(origin) });
     }
 
-    // Build AWC URL
-    const awcUrl = AWC_BASE + path + url.search;
-
     try {
-      const resp = await fetch(awcUrl, {
+      const resp = await fetch(upstreamUrl, {
         headers: {
-          "User-Agent": "wx-dashboard-proxy/1.0",
+          "User-Agent": "Mozilla/5.0 wx-dashboard-proxy/1.0",
         },
       });
 

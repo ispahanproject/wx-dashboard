@@ -86,7 +86,10 @@ const POLLEN_LEVELS = {
 };
 
 async function fetchPollenForArea(jis) {
-  const url = `https://static.tenki.jp/static-api/history/pollen/${jis}.js`;
+  // CF Worker経由（tenki.jpは直接fetchで503を返すため）
+  const url = import.meta.env.DEV
+    ? `https://static.tenki.jp/static-api/history/pollen/${jis}.js`
+    : `${CF_WORKER}/tenki/static-api/history/pollen/${jis}.js`;
   try {
     const r = await fetch(url);
     if (!r.ok) return null;

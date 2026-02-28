@@ -76,13 +76,13 @@ async function fetchTafRaw(icao, signal) {
 const POLLEN_AREA_JIS = "13101"; // 千代田区（東京）
 
 const POLLEN_LEVELS = {
-  0: { text: "飛散前", color: "#475569", bar: 0 },
-  1: { text: "少ない", color: "#6ee7b7", bar: 1 },
-  2: { text: "やや多い", color: "#fbbf24", bar: 2 },
-  3: { text: "多い", color: "#f97316", bar: 3 },
-  4: { text: "非常に多い", color: "#ef4444", bar: 4 },
-  5: { text: "極めて多い", color: "#e879f9", bar: 5 },
-  99: { text: "欠測", color: "#334155", bar: 0 },
+  0: { text: "飛散前", face: "(-.-)zzZ", color: "#475569" },
+  1: { text: "少ない", face: "(^^)", color: "#6ee7b7" },
+  2: { text: "やや多い", face: "(^^;)", color: "#fbbf24" },
+  3: { text: "多い", face: "(>_<)", color: "#f97316" },
+  4: { text: "非常に多い", face: "(>_<)!!", color: "#ef4444" },
+  5: { text: "極めて多い", face: "(X_X)", color: "#e879f9" },
+  99: { text: "欠測", face: "(?_?)", color: "#334155" },
 };
 
 async function fetchPollenForArea(jis) {
@@ -563,40 +563,13 @@ function AstroDetail({ now }) {
           <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>
             <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", marginBottom: "8px" }}>花粉 POLLEN</div>
             {pollenData && info ? (
-              <>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                  <div style={{ fontSize: "9px", color: "#64748b", fontFamily: "'JetBrains Mono', monospace", minWidth: "32px" }}>東京</div>
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "6px" }}>
-                    <div style={{ display: "flex", gap: "2px" }}>
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <div key={n} style={{
-                          width: "14px", height: "10px", borderRadius: "2px",
-                          background: n <= info.bar ? info.color : "rgba(255,255,255,0.05)",
-                          border: `1px solid ${n <= info.bar ? info.color + "60" : "rgba(255,255,255,0.08)"}`,
-                        }} />
-                      ))}
-                    </div>
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: info.color, fontFamily: "'JetBrains Mono', monospace" }}>
-                      {info.text}
-                    </span>
-                  </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "18px", fontFamily: "'JetBrains Mono', monospace", color: info.color }}>{info.face}</span>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: info.color, fontFamily: "'JetBrains Mono', monospace" }}>{info.text}</div>
+                  <div style={{ fontSize: "8px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>東京 via tenki.jp</div>
                 </div>
-                {/* 花粉マップ画像 */}
-                <div style={{ borderRadius: "4px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <img
-                    src="https://static.tenki.jp/static-images/pollen/mesh/recent/pollen-japan-detail-small.jpg"
-                    alt="花粉飛散予測"
-                    style={{ width: "100%", display: "block", opacity: 0.85 }}
-                    loading="lazy"
-                  />
-                </div>
-                <div style={{ marginTop: "6px", textAlign: "right" }}>
-                  <a href="https://tenki.jp/pollen/3/16/" target="_blank" rel="noopener noreferrer"
-                    style={{ fontSize: "8px", color: "#334155", textDecoration: "none", fontFamily: "'JetBrains Mono', monospace" }}>
-                    tenki.jp &nearr;
-                  </a>
-                </div>
-              </>
+              </div>
             ) : (
               <div style={{ fontSize: "10px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>
                 データ取得中...

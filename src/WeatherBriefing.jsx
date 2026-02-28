@@ -76,13 +76,13 @@ async function fetchTafRaw(icao, signal) {
 const POLLEN_AREA_JIS = "13101"; // 千代田区（東京）
 
 const POLLEN_LEVELS = {
-  0: { text: "飛散前", face: "(-.-)zzZ", color: "#475569" },
-  1: { text: "少ない", face: "(^^)", color: "#6ee7b7" },
-  2: { text: "やや多い", face: "(^^;)", color: "#fbbf24" },
-  3: { text: "多い", face: "(>_<)", color: "#f97316" },
-  4: { text: "非常に多い", face: "(>_<)!!", color: "#ef4444" },
-  5: { text: "極めて多い", face: "(X_X)", color: "#e879f9" },
-  99: { text: "欠測", face: "(?_?)", color: "#334155" },
+  0: { text: "飛散前", emoji: "😴", color: "#475569" },
+  1: { text: "少ない", emoji: "😊", color: "#6ee7b7" },
+  2: { text: "やや多い", emoji: "😐", color: "#fbbf24" },
+  3: { text: "多い", emoji: "😷", color: "#f97316" },
+  4: { text: "非常に多い", emoji: "🤧", color: "#ef4444" },
+  5: { text: "極めて多い", emoji: "💀", color: "#e879f9" },
+  99: { text: "欠測", emoji: "❓", color: "#334155" },
 };
 
 async function fetchPollenForArea(jis) {
@@ -564,10 +564,10 @@ function AstroDetail({ now }) {
             <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", marginBottom: "8px" }}>花粉 POLLEN</div>
             {pollenData && info ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "18px", fontFamily: "'JetBrains Mono', monospace", color: info.color }}>{info.face}</span>
+                <span style={{ fontSize: "32px" }}>{info.emoji}</span>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: info.color, fontFamily: "'JetBrains Mono', monospace" }}>{info.text}</div>
-                  <div style={{ fontSize: "8px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>東京 via tenki.jp</div>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: info.color, fontFamily: "'JetBrains Mono', monospace" }}>{info.text}</div>
+                  <div style={{ fontSize: "9px", color: "#475569", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>東京 / tenki.jp</div>
                 </div>
               </div>
             ) : (

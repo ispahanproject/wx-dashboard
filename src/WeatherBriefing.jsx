@@ -66,8 +66,13 @@ async function fetchMetarRaw(icaos, signal) {
 }
 
 // TAF取得: AWC via proxy (多段フォールバック)
+// TAFデータがない空港（地方空港等）では空文字を返す
 async function fetchTafRaw(icao, signal) {
-  return fetchViaProxy(`/api/data/taf?ids=${icao}&format=raw`, signal, 12000);
+  try {
+    return await fetchViaProxy(`/api/data/taf?ids=${icao}&format=raw`, signal, 12000);
+  } catch {
+    return "";
+  }
 }
 
 /* ============================================================

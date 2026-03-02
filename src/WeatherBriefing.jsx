@@ -799,7 +799,7 @@ const AIRPORT_GROUPS = [
     { icao: "RJOS", name: "徳島" }, { icao: "RJOM", name: "松山" }, { icao: "RJOK", name: "高知" },
   ]},
   { region: "九州", airports: [
-    { icao: "RJFF", name: "福岡" }, { icao: "RJFO", name: "大分" }, { icao: "RJFU", name: "長崎" },
+    { icao: "RJFF", name: "福岡" }, { icao: "RJFR", name: "北九州" }, { icao: "RJFO", name: "大分" }, { icao: "RJFU", name: "長崎" },
     { icao: "RJFT", name: "熊本" }, { icao: "RJFM", name: "宮崎" }, { icao: "RJFK", name: "鹿児島" },
     { icao: "RJKA", name: "奄美大島" },
   ]},
@@ -843,6 +843,7 @@ const RUNWAY_DATA = {
   RJOK: [{ rwy: "14", hdg: 137 }, { rwy: "32", hdg: 317 }],
   // 九州
   RJFF: [{ rwy: "16L", hdg: 157 }, { rwy: "34R", hdg: 337 }],
+  RJFR: [{ rwy: "18", hdg: 170 }, { rwy: "36", hdg: 350 }],
   RJFO: [{ rwy: "01", hdg: 7 }, { rwy: "19", hdg: 187 }],
   RJFU: [{ rwy: "14", hdg: 145 }, { rwy: "32", hdg: 325 }],
   RJFT: [{ rwy: "07", hdg: 72 }, { rwy: "25", hdg: 252 }],

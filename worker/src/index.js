@@ -3,6 +3,7 @@
 
 const AWC_BASE = "https://aviationweather.gov";
 const TENKI_BASE = "https://static.tenki.jp";
+const NOAA_TAF_BASE = "https://tgftp.nws.noaa.gov/data/forecasts/taf/stations";
 
 // Allowed API paths (whitelist)
 const ALLOWED_PATHS = ["/api/data/taf", "/api/data/metar", "/api/data/isigmet", "/api/data/airsigmet", "/api/data/pirep"];
@@ -64,17 +65,39 @@ export default {
         },
       });
 
+      // TAF fallback: AWCが空の場合、NOAA TGFtpを試す
+      const isTafReq = path === "/api/data/taf";
+      let body = await resp.text();
+
+      if (isTafReq && !body.trim()) {
+        const icao = url.searchParams.get("ids");
+        if (icao && /^[A-Z]{4}$/.test(icao)) {
+          try {
+            const noaaResp = await fetch(`${NOAA_TAF_BASE}/${icao}.TXT`, {
+              headers: { "User-Agent": "Mozilla/5.0 wx-dashboard-proxy/1.0" },
+              redirect: "follow",
+            });
+            if (noaaResp.ok) {
+              const noaaText = await noaaResp.text();
+              // NOAA形式: 1行目=timestamp, 2行目以降=TAF本文
+              const tafMatch = noaaText.match(/^(TAF\s.+)/ms);
+              if (tafMatch) body = tafMatch[1].trim();
+            }
+          } catch { /* NOAA unavailable, return empty */ }
+        }
+      }
+
       // Clone response with CORS headers
-      const headers = new Headers(resp.headers);
+      const headers = new Headers();
+      headers.set("Content-Type", "text/plain; charset=utf-8");
       for (const [k, v] of Object.entries(corsHeaders(origin))) {
         headers.set(k, v);
       }
       // Cache for 3 minutes (matches AWC cache-control)
       headers.set("Cache-Control", "public, max-age=180");
 
-      return new Response(resp.body, {
-        status: resp.status,
-        statusText: resp.statusText,
+      return new Response(body, {
+        status: body.trim() ? 200 : 204,
         headers,
       });
     } catch (err) {

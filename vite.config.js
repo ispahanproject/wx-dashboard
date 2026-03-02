@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/awc-api': {
-        target: 'https://aviationweather.gov',
+        target: 'https://wx-awc-proxy.trinity-funkyboy.workers.dev',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/awc-api/, ''),
       },

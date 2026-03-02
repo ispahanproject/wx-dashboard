@@ -810,7 +810,7 @@ const AIRPORTS = AIRPORT_GROUPS.flatMap(g => g.airports);
 // Runway magnetic headings (SkyVector verified) — hdg = lower-numbered end true magnetic heading
 const RUNWAY_DATA = {
   // 北海道
-  RJCC: [{ rwy: "01L/19R", hdg: 2 }, { rwy: "01R/19L", hdg: 2 }],
+  RJCC: [{ rwy: "01L", hdg: 2 }, { rwy: "19R", hdg: 182 }],
   RJCB: [{ rwy: "17/35", hdg: 167 }],
   RJCK: [{ rwy: "17/35", hdg: 168 }],
   RJCM: [{ rwy: "18/36", hdg: 184 }],

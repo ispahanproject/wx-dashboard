@@ -789,7 +789,7 @@ const AIRPORT_GROUPS = [
     { icao: "RJOO", name: "伊丹" }, { icao: "RJBB", name: "関西" },
   ]},
   { region: "中国・四国", airports: [
-    { icao: "RJOB", name: "岡山" }, { icao: "RJDC", name: "山口宇部" },
+    { icao: "RJOB", name: "岡山" }, { icao: "RJOA", name: "広島" }, { icao: "RJDC", name: "山口宇部" },
     { icao: "RJOT", name: "高松" },
     { icao: "RJOS", name: "徳島" }, { icao: "RJOM", name: "松山" }, { icao: "RJOK", name: "高知" },
   ]},
@@ -823,18 +823,19 @@ const RUNWAY_DATA = {
          { rwy: "16R", hdg: 157 }, { rwy: "22", hdg: 222 }],
   RJAA: [{ rwy: "16R/34L", hdg: 157 }, { rwy: "16L/34R", hdg: 157 }],
   // 中部・北陸
-  RJGG: [{ rwy: "18/36", hdg: 176 }],
-  RJNK: [{ rwy: "06/24", hdg: 63 }],
+  RJGG: [{ rwy: "18", hdg: 176 }, { rwy: "36", hdg: 356 }],
+  RJNK: [{ rwy: "06", hdg: 63 }, { rwy: "24", hdg: 243 }],
   // 関西
   RJOO: [{ rwy: "14R/32L", hdg: 143 }, { rwy: "14L/32R", hdg: 143 }],
   RJBB: [{ rwy: "06L/24R", hdg: 58 }, { rwy: "06R/24L", hdg: 58 }],
   // 中国・四国
-  RJOB: [{ rwy: "07/25", hdg: 67 }],
-  RJDC: [{ rwy: "07/25", hdg: 69 }],
-  RJOT: [{ rwy: "08/26", hdg: 80 }],
-  RJOS: [{ rwy: "11/29", hdg: 110 }],
-  RJOM: [{ rwy: "14/32", hdg: 137 }],
-  RJOK: [{ rwy: "14/32", hdg: 137 }],
+  RJOB: [{ rwy: "07", hdg: 67 }, { rwy: "25", hdg: 247 }],
+  RJOA: [{ rwy: "10", hdg: 97 }, { rwy: "28", hdg: 277 }],
+  RJDC: [{ rwy: "07", hdg: 69 }, { rwy: "25", hdg: 249 }],
+  RJOT: [{ rwy: "08", hdg: 80 }, { rwy: "26", hdg: 260 }],
+  RJOS: [{ rwy: "11", hdg: 110 }, { rwy: "29", hdg: 290 }],
+  RJOM: [{ rwy: "14", hdg: 137 }, { rwy: "32", hdg: 317 }],
+  RJOK: [{ rwy: "14", hdg: 137 }, { rwy: "32", hdg: 317 }],
   // 九州
   RJFF: [{ rwy: "16L/34R", hdg: 157 }, { rwy: "16R/34L", hdg: 157 }],
   RJFO: [{ rwy: "01/19", hdg: 7 }],

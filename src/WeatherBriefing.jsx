@@ -811,12 +811,12 @@ const AIRPORTS = AIRPORT_GROUPS.flatMap(g => g.airports);
 const RUNWAY_DATA = {
   // 北海道
   RJCC: [{ rwy: "01L", hdg: 2 }, { rwy: "19R", hdg: 182 }],
-  RJCB: [{ rwy: "17/35", hdg: 167 }],
-  RJCK: [{ rwy: "17/35", hdg: 168 }],
-  RJCM: [{ rwy: "18/36", hdg: 184 }],
-  RJEC: [{ rwy: "16/34", hdg: 164 }],
+  RJCB: [{ rwy: "17", hdg: 167 }, { rwy: "35", hdg: 347 }],
+  RJCK: [{ rwy: "17", hdg: 168 }, { rwy: "35", hdg: 348 }],
+  RJCM: [{ rwy: "18", hdg: 184 }, { rwy: "36", hdg: 4 }],
+  RJEC: [{ rwy: "16", hdg: 164 }, { rwy: "34", hdg: 344 }],
   // 東北
-  RJSA: [{ rwy: "06/24", hdg: 60 }],
+  RJSA: [{ rwy: "06", hdg: 60 }, { rwy: "24", hdg: 240 }],
   RJSS: [{ rwy: "09/27", hdg: 91 }, { rwy: "12/30", hdg: 126 }],
   RJSN: [{ rwy: "10/28", hdg: 101 }, { rwy: "04/22", hdg: 39 }],
   // 関東

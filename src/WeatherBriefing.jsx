@@ -789,7 +789,7 @@ const AIRPORT_GROUPS = [
     { icao: "RJOO", name: "伊丹" }, { icao: "RJBB", name: "関西" },
   ]},
   { region: "中国・四国", airports: [
-    { icao: "RJOB", name: "広島" }, { icao: "RJDC", name: "山口宇部" }, { icao: "RJOE", name: "岡山" },
+    { icao: "RJOB", name: "岡山" }, { icao: "RJDC", name: "山口宇部" },
     { icao: "RJOT", name: "高松" },
     { icao: "RJOS", name: "徳島" }, { icao: "RJOM", name: "松山" }, { icao: "RJOK", name: "高知" },
   ]},
@@ -806,6 +806,124 @@ const AIRPORT_GROUPS = [
   ]},
 ];
 const AIRPORTS = AIRPORT_GROUPS.flatMap(g => g.airports);
+
+// Runway magnetic headings (SkyVector verified) — hdg = lower-numbered end true magnetic heading
+const RUNWAY_DATA = {
+  // 北海道
+  RJCC: [{ rwy: "01L/19R", hdg: 2 }, { rwy: "01R/19L", hdg: 2 }],
+  RJCB: [{ rwy: "17/35", hdg: 167 }],
+  RJCK: [{ rwy: "17/35", hdg: 168 }],
+  RJCM: [{ rwy: "18/36", hdg: 184 }],
+  RJEC: [{ rwy: "16/34", hdg: 164 }],
+  // 東北
+  RJSA: [{ rwy: "06/24", hdg: 60 }],
+  RJSS: [{ rwy: "09/27", hdg: 91 }, { rwy: "12/30", hdg: 126 }],
+  RJSN: [{ rwy: "10/28", hdg: 101 }, { rwy: "04/22", hdg: 39 }],
+  // 関東
+  RJTT: [{ rwy: "16L/34R", hdg: 157 }, { rwy: "16R/34L", hdg: 157 },
+         { rwy: "04/22", hdg: 42 }, { rwy: "05/23", hdg: 50 }],
+  RJAA: [{ rwy: "16R/34L", hdg: 157 }, { rwy: "16L/34R", hdg: 157 }],
+  // 中部・北陸
+  RJGG: [{ rwy: "18/36", hdg: 176 }],
+  RJNS: [{ rwy: "12/30", hdg: 119 }],
+  RJNK: [{ rwy: "06/24", hdg: 63 }],
+  // 関西
+  RJOO: [{ rwy: "14R/32L", hdg: 143 }, { rwy: "14L/32R", hdg: 143 }],
+  RJBB: [{ rwy: "06L/24R", hdg: 58 }, { rwy: "06R/24L", hdg: 58 }],
+  // 中国・四国
+  RJOB: [{ rwy: "07/25", hdg: 67 }],
+  RJDC: [{ rwy: "07/25", hdg: 69 }],
+  RJOT: [{ rwy: "08/26", hdg: 80 }],
+  RJOS: [{ rwy: "11/29", hdg: 110 }],
+  RJOM: [{ rwy: "14/32", hdg: 137 }],
+  RJOK: [{ rwy: "14/32", hdg: 137 }],
+  // 九州
+  RJFF: [{ rwy: "16L/34R", hdg: 157 }, { rwy: "16R/34L", hdg: 157 }],
+  RJFO: [{ rwy: "01/19", hdg: 7 }],
+  RJFU: [{ rwy: "14/32", hdg: 145 }],
+  RJFT: [{ rwy: "07/25", hdg: 72 }],
+  RJFM: [{ rwy: "09/27", hdg: 92 }],
+  RJFK: [{ rwy: "16/34", hdg: 157 }],
+  RJKA: [{ rwy: "03/21", hdg: 31 }],
+  // 沖縄
+  ROAH: [{ rwy: "18L/36R", hdg: 182 }, { rwy: "18R/36L", hdg: 183 }],
+  // 海外
+  RCTP: [{ rwy: "05L/23R", hdg: 54 }, { rwy: "05R/23L", hdg: 54 }],
+};
+
+// Parse METAR wind token → { dir, speed, gust, isCalm, isVrb }
+function parseMetarWind(metarRaw) {
+  if (!metarRaw) return null;
+  const m = metarRaw.match(/\b(\d{3}|VRB)(P?\d{2,3})(G(P?\d{2,3}))?KT\b/);
+  if (!m) return null;
+  const dirStr = m[1];
+  const speed = parseInt(m[2].replace("P", ""), 10);
+  const gust = m[4] ? parseInt(m[4].replace("P", ""), 10) : null;
+  if (dirStr === "VRB") return { dir: 0, speed, gust, isCalm: false, isVrb: true };
+  const dir = parseInt(dirStr, 10);
+  if (dir === 0 && speed === 0) return { dir: 0, speed: 0, gust: null, isCalm: true, isVrb: false };
+  return { dir, speed, gust, isCalm: false, isVrb: false };
+}
+
+// Calculate crosswind & tailwind components for each unique runway heading
+function calcWindComponents(windDir, windSpeed, gustSpeed, runways) {
+  const deg2rad = Math.PI / 180;
+  // Deduplicate by heading (parallel runways share same hdg)
+  const seen = new Map();
+  for (const r of runways) {
+    if (!seen.has(r.hdg)) seen.set(r.hdg, r);
+  }
+  const unique = [...seen.values()];
+
+  const results = unique.map(r => {
+    // Try both ends of the runway
+    const hdg1 = r.hdg;
+    const hdg2 = (r.hdg + 180) % 360;
+    const calc = (hdg, spd) => {
+      const diff = (windDir - hdg) * deg2rad;
+      return { xw: spd * Math.sin(diff), hw: spd * Math.cos(diff) };
+    };
+    // Pick the end with more headwind (less tailwind)
+    const c1 = calc(hdg1, windSpeed);
+    const c2 = calc(hdg2, windSpeed);
+    const useEnd2 = c2.hw > c1.hw;
+    const chosen = useEnd2 ? c2 : c1;
+    const chosenHdg = useEnd2 ? hdg2 : hdg1;
+
+    // Determine active runway name from the chosen end
+    const parts = r.rwy.split("/");
+    const rwyName = useEnd2 ? parts[1] : parts[0];
+
+    // Gust components
+    let gustXw = null;
+    if (gustSpeed) {
+      const gc = calc(chosenHdg, gustSpeed);
+      gustXw = gc.xw;
+    }
+
+    const tailwind = chosen.hw < 0 ? Math.abs(chosen.hw) : 0;
+    return {
+      rwyName,
+      hdg: chosenHdg,
+      xw: chosen.xw,           // positive = right, negative = left
+      tailwind,                 // 0 if headwind
+      gustXw,
+    };
+  });
+
+  // Sort by |crosswind| ascending → best runway first
+  results.sort((a, b) => Math.abs(a.xw) - Math.abs(b.xw));
+  return results;
+}
+
+// Crosswind severity color
+function crosswindSeverity(xwKt) {
+  const abs = Math.abs(xwKt);
+  if (abs < 10) return "#6ee7b7";
+  if (abs < 15) return "#60a5fa";
+  if (abs < 20) return "#fbbf24";
+  return "#f87171";
+}
 
 const IATA_TO_ICAO = {
   HND: "RJTT", NRT: "RJAA", CTS: "RJCC", OBO: "RJCB", AKJ: "RJEC",
@@ -1685,6 +1803,80 @@ function TodayDutyBar() {
   );
 }
 
+/* ========== WIND COMPONENT DISPLAY ========== */
+function CrosswindDisplay({ icao, metarRaw }) {
+  const runways = RUNWAY_DATA[icao];
+  if (!runways) return null;
+  const wind = parseMetarWind(metarRaw);
+  if (!wind) return null;
+
+  const mono = "'JetBrains Mono', monospace";
+  const boxStyle = {
+    marginBottom: "12px", padding: "8px 10px",
+    background: "rgba(0,0,0,0.25)", borderRadius: "6px",
+    borderLeft: "3px solid rgba(251, 191, 36, 0.4)",
+  };
+  const titleStyle = {
+    color: "#fbbf24", fontSize: "10px", fontWeight: 600,
+    letterSpacing: "2px", marginBottom: "4px", fontFamily: mono,
+  };
+
+  // CALM
+  if (wind.isCalm) {
+    return (
+      <div style={boxStyle}>
+        <div style={titleStyle}>WIND COMPONENT</div>
+        <div style={{ fontFamily: mono, fontSize: "12px", color: "#6ee7b7" }}>CALM</div>
+      </div>
+    );
+  }
+
+  // VRB
+  if (wind.isVrb) {
+    return (
+      <div style={boxStyle}>
+        <div style={titleStyle}>WIND COMPONENT</div>
+        <div style={{ fontFamily: mono, fontSize: "12px", color: "#94a3b8" }}>
+          VRB {wind.speed}kt <span style={{ color: "#64748b", fontSize: "10px" }}>(max XW any rwy)</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Normal wind — calculate components
+  const comps = calcWindComponents(wind.dir, wind.speed, wind.gust, runways);
+  const multipleHeadings = comps.length > 1;
+
+  return (
+    <div style={boxStyle}>
+      <div style={titleStyle}>WIND COMPONENT</div>
+      {comps.map((c, i) => {
+        const absXw = Math.round(Math.abs(c.xw));
+        const side = c.xw >= 0 ? "R" : "L";
+        const xwColor = crosswindSeverity(c.xw);
+        const tw = Math.round(c.tailwind);
+        const gustAbsXw = c.gustXw != null ? Math.round(Math.abs(c.gustXw)) : null;
+
+        return (
+          <div key={i} style={{ fontFamily: mono, fontSize: "11px", lineHeight: "1.6", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+            <span style={{ color: "#94a3b8", minWidth: "58px" }}>RWY {c.rwyName.padEnd(3)}</span>
+            <span style={{ color: xwColor, fontWeight: 600 }}>XW {String(absXw).padStart(2)}kt {side}</span>
+            {tw > 0 && (
+              <span style={{ color: "#f87171", fontWeight: 600 }}>TW {tw}kt</span>
+            )}
+            {gustAbsXw != null && (
+              <span style={{ color: "#64748b", fontSize: "10px" }}>(G: XW {gustAbsXw}kt)</span>
+            )}
+            {multipleHeadings && i === 0 && (
+              <span style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 700, border: "1px solid #fbbf24", borderRadius: "3px", padding: "0 4px" }}>BEST</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ========== METAR/TAF ========== */
 function MetarTafPanel() {
   const [selectedAirports, setSelectedAirports] = useState(() => {
@@ -1961,6 +2153,7 @@ function MetarTafPanel() {
                   </div>
                 </div>
               )}
+              <CrosswindDisplay icao={icao} metarRaw={metarData[icao]} />
               {tafData[icao] && (
                 <div>
                   <div style={{ color: "#c084fc", fontSize: "10px", fontWeight: 600, letterSpacing: "2px", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>TAF</div>

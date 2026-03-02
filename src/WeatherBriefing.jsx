@@ -821,13 +821,13 @@ const RUNWAY_DATA = {
   // 関東
   RJTT: [{ rwy: "05", hdg: 50 }, { rwy: "34R", hdg: 337 },
          { rwy: "16R", hdg: 157 }, { rwy: "22", hdg: 222 }],
-  RJAA: [{ rwy: "16R/34L", hdg: 157 }, { rwy: "16L/34R", hdg: 157 }],
+  RJAA: [{ rwy: "34L", hdg: 337 }, { rwy: "16R", hdg: 157 }],
   // 中部・北陸
   RJGG: [{ rwy: "18", hdg: 176 }, { rwy: "36", hdg: 356 }],
   RJNK: [{ rwy: "06", hdg: 63 }, { rwy: "24", hdg: 243 }],
   // 関西
-  RJOO: [{ rwy: "14R/32L", hdg: 143 }, { rwy: "14L/32R", hdg: 143 }],
-  RJBB: [{ rwy: "06L/24R", hdg: 58 }, { rwy: "06R/24L", hdg: 58 }],
+  RJOO: [{ rwy: "32L", hdg: 323 }, { rwy: "14R", hdg: 143 }],
+  RJBB: [{ rwy: "06R", hdg: 58 }, { rwy: "24L", hdg: 238 }],
   // 中国・四国
   RJOB: [{ rwy: "07", hdg: 67 }, { rwy: "25", hdg: 247 }],
   RJOA: [{ rwy: "10", hdg: 97 }, { rwy: "28", hdg: 277 }],
@@ -837,7 +837,7 @@ const RUNWAY_DATA = {
   RJOM: [{ rwy: "14", hdg: 137 }, { rwy: "32", hdg: 317 }],
   RJOK: [{ rwy: "14", hdg: 137 }, { rwy: "32", hdg: 317 }],
   // 九州
-  RJFF: [{ rwy: "16L/34R", hdg: 157 }, { rwy: "16R/34L", hdg: 157 }],
+  RJFF: [{ rwy: "16L", hdg: 157 }, { rwy: "34R", hdg: 337 }],
   RJFO: [{ rwy: "01", hdg: 7 }, { rwy: "19", hdg: 187 }],
   RJFU: [{ rwy: "14", hdg: 145 }, { rwy: "32", hdg: 325 }],
   RJFT: [{ rwy: "07", hdg: 72 }, { rwy: "25", hdg: 252 }],
@@ -845,7 +845,7 @@ const RUNWAY_DATA = {
   RJFK: [{ rwy: "16", hdg: 157 }, { rwy: "34", hdg: 337 }],
   RJKA: [{ rwy: "03", hdg: 31 }, { rwy: "21", hdg: 211 }],
   // 沖縄
-  ROAH: [{ rwy: "18L/36R", hdg: 182 }, { rwy: "18R/36L", hdg: 183 }],
+  ROAH: [{ rwy: "18R", hdg: 183 }, { rwy: "36L", hdg: 3 }],
   // 海外
   RCTP: [{ rwy: "05L/23R", hdg: 54 }, { rwy: "05R/23L", hdg: 54 }],
 };

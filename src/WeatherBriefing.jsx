@@ -777,13 +777,13 @@ const AIRPORT_GROUPS = [
   { region: "北海道・東北", airports: [
     { icao: "RJCC", name: "新千歳" }, { icao: "RJCB", name: "帯広" }, { icao: "RJCK", name: "釧路" },
     { icao: "RJCM", name: "女満別" }, { icao: "RJEC", name: "旭川" },
-    { icao: "RJSA", name: "青森" }, { icao: "RJSS", name: "仙台" }, { icao: "RJSN", name: "新潟" },
+    { icao: "RJSA", name: "青森" }, { icao: "RJSS", name: "仙台" },
   ]},
   { region: "関東", airports: [
     { icao: "RJTT", name: "東京/羽田" }, { icao: "RJAA", name: "成田" },
   ]},
   { region: "中部・北陸", airports: [
-    { icao: "RJGG", name: "中部" }, { icao: "RJNS", name: "静岡" }, { icao: "RJNK", name: "小松" },
+    { icao: "RJGG", name: "中部" }, { icao: "RJNK", name: "小松" },
   ]},
   { region: "関西", airports: [
     { icao: "RJOO", name: "伊丹" }, { icao: "RJBB", name: "関西" },
@@ -818,14 +818,12 @@ const RUNWAY_DATA = {
   // 東北
   RJSA: [{ rwy: "06", hdg: 60 }, { rwy: "24", hdg: 240 }],
   RJSS: [{ rwy: "09/27", hdg: 91 }, { rwy: "12/30", hdg: 126 }],
-  RJSN: [{ rwy: "10/28", hdg: 101 }, { rwy: "04/22", hdg: 39 }],
   // 関東
   RJTT: [{ rwy: "05", hdg: 50 }, { rwy: "34R", hdg: 337 },
          { rwy: "16R", hdg: 157 }, { rwy: "22", hdg: 222 }],
   RJAA: [{ rwy: "16R/34L", hdg: 157 }, { rwy: "16L/34R", hdg: 157 }],
   // 中部・北陸
   RJGG: [{ rwy: "18/36", hdg: 176 }],
-  RJNS: [{ rwy: "12/30", hdg: 119 }],
   RJNK: [{ rwy: "06/24", hdg: 63 }],
   // 関西
   RJOO: [{ rwy: "14R/32L", hdg: 143 }, { rwy: "14L/32R", hdg: 143 }],

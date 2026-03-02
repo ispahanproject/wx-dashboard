@@ -838,12 +838,12 @@ const RUNWAY_DATA = {
   RJOK: [{ rwy: "14", hdg: 137 }, { rwy: "32", hdg: 317 }],
   // 九州
   RJFF: [{ rwy: "16L/34R", hdg: 157 }, { rwy: "16R/34L", hdg: 157 }],
-  RJFO: [{ rwy: "01/19", hdg: 7 }],
-  RJFU: [{ rwy: "14/32", hdg: 145 }],
-  RJFT: [{ rwy: "07/25", hdg: 72 }],
-  RJFM: [{ rwy: "09/27", hdg: 92 }],
+  RJFO: [{ rwy: "01", hdg: 7 }, { rwy: "19", hdg: 187 }],
+  RJFU: [{ rwy: "14", hdg: 145 }, { rwy: "32", hdg: 325 }],
+  RJFT: [{ rwy: "07", hdg: 72 }, { rwy: "25", hdg: 252 }],
+  RJFM: [{ rwy: "09", hdg: 92 }, { rwy: "27", hdg: 272 }],
   RJFK: [{ rwy: "16/34", hdg: 157 }],
-  RJKA: [{ rwy: "03/21", hdg: 31 }],
+  RJKA: [{ rwy: "03", hdg: 31 }, { rwy: "21", hdg: 211 }],
   // 沖縄
   ROAH: [{ rwy: "18L/36R", hdg: 182 }, { rwy: "18R/36L", hdg: 183 }],
   // 海外

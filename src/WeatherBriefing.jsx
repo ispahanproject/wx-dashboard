@@ -775,7 +775,8 @@ function JmaWeatherOverview() {
 
 const AIRPORT_GROUPS = [
   { region: "北海道・東北", airports: [
-    { icao: "RJCC", name: "新千歳" }, { icao: "RJCB", name: "帯広" }, { icao: "RJEC", name: "旭川" },
+    { icao: "RJCC", name: "新千歳" }, { icao: "RJCB", name: "帯広" }, { icao: "RJCK", name: "釧路" },
+    { icao: "RJCM", name: "女満別" }, { icao: "RJEC", name: "旭川" },
     { icao: "RJSA", name: "青森" }, { icao: "RJSS", name: "仙台" }, { icao: "RJSN", name: "新潟" },
   ]},
   { region: "関東", airports: [
@@ -788,12 +789,14 @@ const AIRPORT_GROUPS = [
     { icao: "RJOO", name: "伊丹" }, { icao: "RJBB", name: "関西" },
   ]},
   { region: "中国・四国", airports: [
-    { icao: "RJOB", name: "広島" }, { icao: "RJOT", name: "高松" },
+    { icao: "RJOB", name: "広島" }, { icao: "RJDC", name: "山口宇部" }, { icao: "RJOE", name: "岡山" },
+    { icao: "RJOT", name: "高松" },
     { icao: "RJOS", name: "徳島" }, { icao: "RJOM", name: "松山" }, { icao: "RJOK", name: "高知" },
   ]},
   { region: "九州", airports: [
     { icao: "RJFF", name: "福岡" }, { icao: "RJFO", name: "大分" }, { icao: "RJFU", name: "長崎" },
     { icao: "RJFT", name: "熊本" }, { icao: "RJFM", name: "宮崎" }, { icao: "RJFK", name: "鹿児島" },
+    { icao: "RJKA", name: "奄美大島" },
   ]},
   { region: "沖縄", airports: [
     { icao: "ROAH", name: "那覇" },

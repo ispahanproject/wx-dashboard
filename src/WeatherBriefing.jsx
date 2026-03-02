@@ -820,8 +820,8 @@ const RUNWAY_DATA = {
   RJSS: [{ rwy: "09/27", hdg: 91 }, { rwy: "12/30", hdg: 126 }],
   RJSN: [{ rwy: "10/28", hdg: 101 }, { rwy: "04/22", hdg: 39 }],
   // 関東
-  RJTT: [{ rwy: "16L/34R", hdg: 157 }, { rwy: "16R/34L", hdg: 157 },
-         { rwy: "04/22", hdg: 42 }, { rwy: "05/23", hdg: 50 }],
+  RJTT: [{ rwy: "05", hdg: 50 }, { rwy: "34R", hdg: 337 },
+         { rwy: "16R", hdg: 157 }, { rwy: "22", hdg: 222 }],
   RJAA: [{ rwy: "16R/34L", hdg: 157 }, { rwy: "16L/34R", hdg: 157 }],
   // 中部・北陸
   RJGG: [{ rwy: "18/36", hdg: 176 }],
@@ -876,23 +876,30 @@ function calcWindComponents(windDir, windSpeed, gustSpeed, runways) {
   const unique = [...seen.values()];
 
   const results = unique.map(r => {
-    // Try both ends of the runway
-    const hdg1 = r.hdg;
-    const hdg2 = (r.hdg + 180) % 360;
     const calc = (hdg, spd) => {
       const diff = (windDir - hdg) * deg2rad;
       return { xw: spd * Math.sin(diff), hw: spd * Math.cos(diff) };
     };
-    // Pick the end with more headwind (less tailwind)
-    const c1 = calc(hdg1, windSpeed);
-    const c2 = calc(hdg2, windSpeed);
-    const useEnd2 = c2.hw > c1.hw;
-    const chosen = useEnd2 ? c2 : c1;
-    const chosenHdg = useEnd2 ? hdg2 : hdg1;
+    const isFixedEnd = !r.rwy.includes("/");
+    let chosen, chosenHdg, rwyName;
 
-    // Determine active runway name from the chosen end
-    const parts = r.rwy.split("/");
-    const rwyName = useEnd2 ? parts[1] : parts[0];
+    if (isFixedEnd) {
+      // Fixed runway end — use specified heading directly
+      chosenHdg = r.hdg;
+      chosen = calc(chosenHdg, windSpeed);
+      rwyName = r.rwy;
+    } else {
+      // Both ends — pick the one with more headwind
+      const hdg1 = r.hdg;
+      const hdg2 = (r.hdg + 180) % 360;
+      const c1 = calc(hdg1, windSpeed);
+      const c2 = calc(hdg2, windSpeed);
+      const useEnd2 = c2.hw > c1.hw;
+      chosen = useEnd2 ? c2 : c1;
+      chosenHdg = useEnd2 ? hdg2 : hdg1;
+      const parts = r.rwy.split("/");
+      rwyName = useEnd2 ? parts[1] : parts[0];
+    }
 
     // Gust components
     let gustXw = null;

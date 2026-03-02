@@ -1852,8 +1852,6 @@ function CrosswindDisplay({ icao, metarRaw }) {
 
   // Normal wind — calculate components
   const comps = calcWindComponents(wind.dir, wind.speed, wind.gust, runways);
-  const multipleHeadings = comps.length > 1;
-
   return (
     <div style={boxStyle}>
       <div style={titleStyle}>WIND COMPONENT</div>
@@ -1873,9 +1871,6 @@ function CrosswindDisplay({ icao, metarRaw }) {
             )}
             {gustAbsXw != null && (
               <span style={{ color: "#64748b", fontSize: "10px" }}>(G: XW {gustAbsXw}kt)</span>
-            )}
-            {multipleHeadings && i === 0 && (
-              <span style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 700, border: "1px solid #fbbf24", borderRadius: "3px", padding: "0 4px" }}>BEST</span>
             )}
           </div>
         );

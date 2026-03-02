@@ -842,7 +842,7 @@ const RUNWAY_DATA = {
   RJFU: [{ rwy: "14", hdg: 145 }, { rwy: "32", hdg: 325 }],
   RJFT: [{ rwy: "07", hdg: 72 }, { rwy: "25", hdg: 252 }],
   RJFM: [{ rwy: "09", hdg: 92 }, { rwy: "27", hdg: 272 }],
-  RJFK: [{ rwy: "16/34", hdg: 157 }],
+  RJFK: [{ rwy: "16", hdg: 157 }, { rwy: "34", hdg: 337 }],
   RJKA: [{ rwy: "03", hdg: 31 }, { rwy: "21", hdg: 211 }],
   // 沖縄
   ROAH: [{ rwy: "18L/36R", hdg: 182 }, { rwy: "18R/36L", hdg: 183 }],

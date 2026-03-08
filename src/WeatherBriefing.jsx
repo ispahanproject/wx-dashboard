@@ -791,7 +791,7 @@ const AIRPORT_GROUPS = [
     { icao: "RJGG", name: "中部" }, { icao: "RJNK", name: "小松" },
   ]},
   { region: "関西", airports: [
-    { icao: "RJOO", name: "伊丹" }, { icao: "RJBB", name: "関西" },
+    { icao: "RJOO", name: "伊丹" }, { icao: "RJBB", name: "関西" }, { icao: "RJBD", name: "南紀白浜" },
   ]},
   { region: "中国・四国", airports: [
     { icao: "RJOB", name: "岡山" }, { icao: "RJOA", name: "広島" }, { icao: "RJDC", name: "山口宇部" },
@@ -833,6 +833,7 @@ const RUNWAY_DATA = {
   // 関西
   RJOO: [{ rwy: "32L", hdg: 323 }, { rwy: "14R", hdg: 143 }],
   RJBB: [{ rwy: "06R", hdg: 58 }, { rwy: "24L", hdg: 238 }],
+  RJBD: [{ rwy: "15", hdg: 152 }, { rwy: "33", hdg: 332 }],
   // 中国・四国
   RJOB: [{ rwy: "07", hdg: 67 }, { rwy: "25", hdg: 247 }],
   RJOA: [{ rwy: "10", hdg: 97 }, { rwy: "28", hdg: 277 }],
@@ -854,6 +855,28 @@ const RUNWAY_DATA = {
   ROAH: [{ rwy: "18R", hdg: 183 }, { rwy: "36L", hdg: 3 }],
   // 海外
   RCTP: [{ rwy: "05L/23R", hdg: 54 }, { rwy: "05R/23L", hdg: 54 }],
+};
+
+// ── WX Summary: 空港ごとの気象サマリー（会社資料等から構造化）──
+// データ投入: ユーザーが資料を提供 → 構造化して追加
+const WX_SUMMARY = {
+  // サンプル: 資料提供後に各空港のデータを追加していく
+  RJTT: {
+    wind: [
+      { season: "5-9月", note: "南風運用 RWY16L/16R/22/23。海風卓越" },
+      { season: "10-4月", note: "北風運用 RWY34R/34L/04/05。北西風卓越、冬季G30kt超あり" },
+    ],
+    visibility: [
+      { period: "12-2月", note: "放射霧発生。早朝IFR→日の出後急速改善" },
+      { period: "6-7月", note: "梅雨前線通過時 VIS 3000m以下" },
+    ],
+    climate: [
+      { period: "6-7月", note: "梅雨。低層雲・霧雨多い" },
+      { period: "7-9月", note: "積乱雲多発（午後）。気温30-35℃" },
+      { period: "8-10月", note: "台風シーズン。接近時NOTAM確認" },
+    ],
+    remarks: "南風運用時はB RWY(16R/34L)到着多い。都心ルート運用あり",
+  },
 };
 
 // Parse METAR wind token → { dir, speed, gust, isCalm, isVrb }
@@ -2005,6 +2028,7 @@ function MetarTafPanel() {
   };
 
   const [activeRegion, setActiveRegion] = useState(null);
+  const [wxSummaryOpen, setWxSummaryOpen] = useState({});
 
   return (
     <div>
@@ -2147,11 +2171,87 @@ function MetarTafPanel() {
                     }}>UPDATED</span>
                   )}
                 </div>
-                <div style={{ display: "flex", gap: "6px" }}>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  {WX_SUMMARY[icao] && (
+                    <button onClick={() => setWxSummaryOpen(prev => ({ ...prev, [icao]: !prev[icao] }))} style={{
+                      background: wxSummaryOpen[icao] ? "rgba(251,191,36,0.15)" : "none",
+                      border: `1px solid ${wxSummaryOpen[icao] ? "rgba(251,191,36,0.5)" : "rgba(148,163,184,0.2)"}`,
+                      color: wxSummaryOpen[icao] ? "#fbbf24" : "#64748b",
+                      cursor: "pointer", fontSize: "9px", fontWeight: 700, padding: "2px 8px",
+                      borderRadius: "3px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
+                      transition: "all 0.2s ease",
+                    }}>Summary</button>
+                  )}
                   <ExtLink href={`https://aviationweather.gov/gfa/#obs=metar&region=other&extent=${icao}`}>AWC</ExtLink>
                   <button onClick={() => removeAirport(icao)} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "14px" }}>✕</button>
                 </div>
               </div>
+              {/* WX Summary モーダル */}
+              {wxSummaryOpen[icao] && WX_SUMMARY[icao] && (() => {
+                const wx = WX_SUMMARY[icao];
+                const apName = apInfo ? apInfo.name : icao;
+                const sectionStyle = { marginBottom: "10px" };
+                const labelStyle = { color: "#fbbf24", fontSize: "9px", fontWeight: 700, letterSpacing: "2px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" };
+                const itemStyle = { fontSize: "11px", lineHeight: "1.7", color: "#cbd5e1", paddingLeft: "8px", borderLeft: "2px solid rgba(251,191,36,0.2)" };
+                const periodStyle = { color: "#fbbf24", fontSize: "10px", fontWeight: 600 };
+                return (
+                  <div onClick={() => setWxSummaryOpen(prev => ({ ...prev, [icao]: false }))} style={{
+                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                    background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+                    zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <div onClick={(e) => e.stopPropagation()} style={{
+                      background: "linear-gradient(135deg, rgba(15,23,42,0.98), rgba(30,41,59,0.98))",
+                      border: "1px solid rgba(251,191,36,0.3)",
+                      borderRadius: "10px", padding: "20px 24px",
+                      maxWidth: "480px", width: "90%", maxHeight: "80vh", overflowY: "auto",
+                      boxShadow: "0 20px 60px rgba(0,0,0,0.5), 0 0 30px rgba(251,191,36,0.05)",
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ color: "#fbbf24", fontSize: "11px", fontWeight: 700, letterSpacing: "2px", fontFamily: "'JetBrains Mono', monospace" }}>WX SUMMARY</span>
+                          <span style={{ color: "#6ee7b7", fontSize: "13px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{icao}</span>
+                          <span style={{ color: "#64748b", fontSize: "11px" }}>{apName}</span>
+                        </div>
+                        <button onClick={() => setWxSummaryOpen(prev => ({ ...prev, [icao]: false }))} style={{
+                          background: "none", border: "1px solid rgba(148,163,184,0.2)", color: "#94a3b8",
+                          cursor: "pointer", fontSize: "12px", padding: "2px 8px", borderRadius: "3px",
+                          fontFamily: "'JetBrains Mono', monospace",
+                        }}>ESC</button>
+                      </div>
+                      {wx.wind && wx.wind.length > 0 && (
+                        <div style={sectionStyle}>
+                          <div style={labelStyle}>WIND</div>
+                          {wx.wind.map((w, i) => (
+                            <div key={i} style={itemStyle}><span style={periodStyle}>{w.season}</span>{" "}{w.note}</div>
+                          ))}
+                        </div>
+                      )}
+                      {wx.visibility && wx.visibility.length > 0 && (
+                        <div style={sectionStyle}>
+                          <div style={labelStyle}>VISIBILITY</div>
+                          {wx.visibility.map((v, i) => (
+                            <div key={i} style={itemStyle}><span style={periodStyle}>{v.period}</span>{" "}{v.note}</div>
+                          ))}
+                        </div>
+                      )}
+                      {wx.climate && wx.climate.length > 0 && (
+                        <div style={sectionStyle}>
+                          <div style={labelStyle}>CLIMATE</div>
+                          {wx.climate.map((c, i) => (
+                            <div key={i} style={itemStyle}><span style={periodStyle}>{c.period}</span>{" "}{c.note}</div>
+                          ))}
+                        </div>
+                      )}
+                      {wx.remarks && (
+                        <div style={{ fontSize: "11px", lineHeight: "1.7", color: "#94a3b8", fontStyle: "italic", marginTop: "8px", paddingTop: "8px", borderTop: "1px solid rgba(251,191,36,0.1)" }}>
+                          {wx.remarks}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
               {metarData[icao] && (
                 <div style={{ marginBottom: "12px" }}>
                   <div style={{ color: "#60a5fa", fontSize: "10px", fontWeight: 600, letterSpacing: "2px", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>METAR</div>

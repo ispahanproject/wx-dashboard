@@ -857,6 +857,52 @@ const RUNWAY_DATA = {
   RCTP: [{ rwy: "05L/23R", hdg: 54 }, { rwy: "05R/23L", hdg: 54 }],
 };
 
+// ── 空港運用時間 ──
+// 情報源: AIP Japan AD 2.3, 各空港公式サイト, MLIT資料, TravelTowns
+// https://aisjapan.mlit.go.jp/ / https://www.traveltowns.jp/airports/airport-operating-hours/
+// L=ローカル時刻(JST)  ※最新AIP AMDTで要確認
+const AIRPORT_OPS_HOURS = {
+  // 北海道・東北
+  RJCC: "24H（22-07深夜枠制限）",
+  RJCB: "07:30-21:00L",
+  RJCK: "07:30-21:30L",
+  RJCM: "08:00-21:00L",
+  RJEC: "08:00-21:00L",
+  RJSA: "07:30-22:00L",
+  RJSS: "07:30-21:00L",
+  // 関東
+  RJTT: "24H",
+  RJAA: "06:00-24:00L",
+  // 中部・北陸
+  RJGG: "24H",
+  RJNK: "07:30-21:30L",
+  // 関西
+  RJOO: "07:00-21:00L",
+  RJBB: "24H",
+  RJBD: "08:30-20:00L",
+  // 中国・四国
+  RJOB: "07:00-22:00L",
+  RJOA: "07:30-22:30L",
+  RJDC: "07:30-21:00L",
+  RJOT: "07:30-21:30L",
+  RJOS: "07:30-21:00L",
+  RJOM: "07:30-21:30L",
+  RJOK: "07:00-21:00L",
+  // 九州
+  RJFF: "24H（定期便07-22）",
+  RJFR: "24H",
+  RJFO: "07:30-22:30L",
+  RJFU: "07:30-21:30L",
+  RJFT: "07:30-21:30L",
+  RJFM: "07:30-21:30L",
+  RJFK: "07:00-22:00L",
+  RJKA: "08:00-19:30L",
+  // 沖縄
+  ROAH: "24H",
+  // 海外
+  RCTP: "24H",
+};
+
 // ── WX Summary: 空港ごとの気象サマリー（会社資料等から構造化）──
 // データ投入: ユーザーが資料を提供 → 構造化して追加
 const WX_SUMMARY = {
@@ -2160,6 +2206,11 @@ function MetarTafPanel() {
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={{ color: "#6ee7b7", fontSize: "16px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>{icao}</span>
                   {apInfo && <span style={{ color: "#64748b", fontSize: "12px" }}>{apInfo.name}</span>}
+                  {AIRPORT_OPS_HOURS[icao] && (
+                    <span style={{ color: "#94a3b8", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>
+                      {AIRPORT_OPS_HOURS[icao]}
+                    </span>
+                  )}
                   {loading[icao] && <span style={{ color: "#fbbf24", fontSize: "11px" }}>loading...</span>}
                   {hasChanged && (
                     <span style={{

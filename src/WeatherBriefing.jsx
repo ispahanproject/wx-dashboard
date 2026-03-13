@@ -892,7 +892,7 @@ const AIRPORT_OPS_HOURS = {
   RJFF: "24H（定期便07-22）",
   RJFR: "24H",
   RJFO: "07:30-22:30L",
-  RJFU: "07:30-21:30L",
+  RJFU: "07:00-22:00L",
   RJFT: "07:30-21:30L",
   RJFM: "07:30-21:30L",
   RJFK: "07:00-22:00L",

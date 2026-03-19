@@ -4,16 +4,19 @@
 const AWC_BASE = "https://aviationweather.gov";
 const TENKI_BASE = "https://static.tenki.jp";
 const NOAA_TAF_BASE = "https://tgftp.nws.noaa.gov/data/forecasts/taf/stations";
+const TT_SOUNDING_BASE = "https://www.tropicaltidbits.com/analysis/models/sounding/images";
 
 // Allowed API paths (whitelist)
 const ALLOWED_PATHS = ["/api/data/taf", "/api/data/metar", "/api/data/isigmet", "/api/data/airsigmet", "/api/data/pirep"];
 const TENKI_PREFIX = "/tenki/";
+const SOUNDING_PREFIX = "/sounding/";
 
 // Allowed origins (restrict to our dashboard)
 const ALLOWED_ORIGINS = [
   "https://ispahanproject.github.io",
   "http://localhost:5173",  // Vite dev
   "http://localhost:4173",  // Vite preview
+  "http://localhost:5175",  // Vite dev alt
 ];
 
 function corsHeaders(origin) {
@@ -45,7 +48,14 @@ export default {
     const path = url.pathname;
     let upstreamUrl;
 
-    if (path.startsWith(TENKI_PREFIX)) {
+    if (path.startsWith(SOUNDING_PREFIX)) {
+      // Tropical Tidbits sounding image proxy: /sounding/gfs_2026031906_fh12_sounding_RJTT.png
+      const filename = path.slice(SOUNDING_PREFIX.length);
+      if (!/^gfs_\d{10}_fh\d{2,3}_sounding_[A-Z]{4}\.png$/.test(filename)) {
+        return new Response("Invalid sounding request", { status: 400, headers: corsHeaders(origin) });
+      }
+      upstreamUrl = `${TT_SOUNDING_BASE}/${filename}`;
+    } else if (path.startsWith(TENKI_PREFIX)) {
       // tenki.jp pollen API: /tenki/static-api/history/pollen/13101.js
       const tenkiPath = "/" + path.slice(TENKI_PREFIX.length);
       if (!tenkiPath.startsWith("/static-api/history/pollen/")) {
@@ -58,12 +68,30 @@ export default {
       return new Response("Not found", { status: 404, headers: corsHeaders(origin) });
     }
 
+    const isSounding = path.startsWith(SOUNDING_PREFIX);
+
     try {
-      const resp = await fetch(upstreamUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 wx-dashboard-proxy/1.0",
-        },
-      });
+      const fetchHeaders = {
+        "User-Agent": "Mozilla/5.0 wx-dashboard-proxy/1.0",
+      };
+      if (isSounding) {
+        fetchHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+        fetchHeaders["Referer"] = "https://www.tropicaltidbits.com/analysis/models/sounding/";
+        fetchHeaders["Accept"] = "image/png,image/*";
+      }
+      const resp = await fetch(upstreamUrl, { headers: fetchHeaders });
+
+      // Sounding image: return binary with proper Content-Type
+      if (isSounding) {
+        if (!resp.ok) {
+          return new Response("Sounding not found", { status: resp.status, headers: corsHeaders(origin) });
+        }
+        const imgHeaders = new Headers();
+        imgHeaders.set("Content-Type", "image/png");
+        for (const [k, v] of Object.entries(corsHeaders(origin))) imgHeaders.set(k, v);
+        imgHeaders.set("Cache-Control", "public, max-age=900"); // 15 min cache
+        return new Response(resp.body, { status: 200, headers: imgHeaders });
+      }
 
       // TAF fallback: AWCが空の場合、NOAA TGFtpを試す
       const isTafReq = path === "/api/data/taf";

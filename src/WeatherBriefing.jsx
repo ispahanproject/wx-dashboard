@@ -2708,26 +2708,30 @@ function AnalysisPanel() {
   const [zoomImg, setZoomImg] = useState(null); // { src, label }
 
   // Skew-T (エマグラム) state
-  const [soundingIcao, setSoundingIcao] = useState("RJTT");
-  const [soundingIcaoInput, setSoundingIcaoInput] = useState("RJTT");
+  const SOUNDING_PRESETS = [
+    { icao: "RJCC", name: "新千歳", lat: 42.78, lon: 141.69 },
+    { icao: "RJSK", name: "秋田", lat: 39.62, lon: 140.22 },
+    { icao: "RJTT", name: "羽田", lat: 35.55, lon: 139.78 },
+    { icao: "RJGG", name: "中部", lat: 34.86, lon: 136.81 },
+    { icao: "RJOO", name: "伊丹", lat: 34.79, lon: 135.44 },
+    { icao: "RJOK", name: "高知", lat: 33.55, lon: 133.67 },
+    { icao: "RJOA", name: "広島", lat: 34.44, lon: 132.92 },
+    { icao: "RJFF", name: "福岡", lat: 33.59, lon: 130.45 },
+    { icao: "RJFK", name: "鹿児島", lat: 31.80, lon: 130.72 },
+    { icao: "ROAH", name: "那覇", lat: 26.20, lon: 127.65 },
+  ];
+  const [soundingIcao, setSoundingIcao] = useState("RJCC");
+  const [soundingIcaoInput, setSoundingIcaoInput] = useState("RJCC");
   const [soundingFh, setSoundingFh] = useState("12");
   const [soundingImgError, setSoundingImgError] = useState(false);
-  const [soundingFallback, setSoundingFallback] = useState(false);
 
-  // 最新のGFS初期値時刻を算出 (約5時間遅れで利用可能)
-  const getLatestGfsInit = (offset = 0) => {
-    const now = new Date();
-    now.setUTCHours(now.getUTCHours() - 5 - offset * 6);
-    const cycle = Math.floor(now.getUTCHours() / 6) * 6;
-    const d = new Date(now);
-    d.setUTCHours(cycle, 0, 0, 0);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}`;
-  };
-
-  const soundingUrl = (icao, fh, fallback = false) => {
-    const init = getLatestGfsInit(fallback ? 1 : 0);
-    return `${CF_WORKER}/sounding/gfs_${init}_fh${String(fh).padStart(2, "0")}_sounding_${icao}.png`;
+  // CF Worker が Tropical Tidbits ページから画像を取得して返す
+  const soundingUrl = (icao, fh) => {
+    const preset = SOUNDING_PRESETS.find((p) => p.icao === icao);
+    if (preset) {
+      return `${CF_WORKER}/sounding/?lat=${preset.lat}&lon=${preset.lon}&fh=${fh}`;
+    }
+    return `${CF_WORKER}/sounding/?icao=${icao}&fh=${fh}`;
   };
 
   // JMAの断面図コード: 経度→内部コード (functions_maiji.jsより)
@@ -2979,22 +2983,22 @@ function AnalysisPanel() {
 
             {/* ICAO プリセット + 入力 */}
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "10px", alignItems: "center" }}>
-              {["RJTT", "RJAA", "RJBB", "RJOO", "RJFF", "RJCC", "ROAH"].map((code) => (
-                <button key={code} onClick={() => { setSoundingIcao(code); setSoundingIcaoInput(code); }} style={{
+              {SOUNDING_PRESETS.map(({ icao }) => (
+                <button key={icao} onClick={() => { setSoundingIcao(icao); setSoundingIcaoInput(icao); setSoundingImgError(false);}} style={{
                   padding: "4px 10px",
-                  background: soundingIcao === code ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
-                  border: `1px solid ${soundingIcao === code ? "rgba(110, 231, 183, 0.5)" : "rgba(148, 163, 184, 0.15)"}`,
-                  borderRadius: "6px", color: soundingIcao === code ? "#6ee7b7" : "#94a3b8",
+                  background: soundingIcao === icao ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
+                  border: `1px solid ${soundingIcao === icao ? "rgba(110, 231, 183, 0.5)" : "rgba(148, 163, 184, 0.15)"}`,
+                  borderRadius: "6px", color: soundingIcao === icao ? "#6ee7b7" : "#94a3b8",
                   fontSize: "11px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
                   transition: "all 0.15s ease",
-                }}>{code}</button>
+                }}>{icao}</button>
               ))}
               <div style={{ display: "flex", gap: "4px", alignItems: "center", marginLeft: "8px" }}>
                 <input
                   type="text"
                   value={soundingIcaoInput}
                   onChange={(e) => setSoundingIcaoInput(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4))}
-                  onKeyDown={(e) => { if (e.key === "Enter" && soundingIcaoInput.length === 4) setSoundingIcao(soundingIcaoInput); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && soundingIcaoInput.length === 4) { setSoundingIcao(soundingIcaoInput); setSoundingImgError(false);} }}
                   placeholder="ICAO"
                   style={{
                     width: "60px", padding: "4px 8px",
@@ -3003,7 +3007,7 @@ function AnalysisPanel() {
                     fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", outline: "none",
                   }}
                 />
-                <button onClick={() => { if (soundingIcaoInput.length === 4) setSoundingIcao(soundingIcaoInput); }} style={{
+                <button onClick={() => { if (soundingIcaoInput.length === 4) { setSoundingIcao(soundingIcaoInput); setSoundingImgError(false);} }} style={{
                   padding: "4px 10px",
                   background: "rgba(96, 165, 250, 0.15)", border: "1px solid rgba(96, 165, 250, 0.4)",
                   borderRadius: "6px", color: "#60a5fa", fontSize: "11px", cursor: "pointer",
@@ -3016,7 +3020,7 @@ function AnalysisPanel() {
             <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "14px" }}>
               <span style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", alignSelf: "center", marginRight: "4px" }}>FCST:</span>
               {["0", "6", "12", "18", "24", "30", "36"].map((h) => (
-                <button key={h} onClick={() => setSoundingFh(h)} style={{
+                <button key={h} onClick={() => { setSoundingFh(h); setSoundingImgError(false);}} style={{
                   padding: "4px 10px",
                   background: soundingFh === h ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
                   border: `1px solid ${soundingFh === h ? "rgba(110, 231, 183, 0.5)" : "rgba(148, 163, 184, 0.15)"}`,
@@ -3029,25 +3033,19 @@ function AnalysisPanel() {
 
             {/* Skew-T 画像 (CF Worker プロキシ経由) */}
             <div style={{ background: "#ffffff", borderRadius: "8px", padding: "4px", position: "relative", minHeight: "200px" }}>
-              {soundingImgError && soundingFallback ? (
+              {soundingImgError ? (
                 <div style={{ padding: "40px", textAlign: "center", color: "#ef4444", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
                   Sounding data not available for {soundingIcao}
                   <br /><span style={{ color: "#64748b", fontSize: "10px" }}>ICAOコードを確認するか、別の空港/予報時間を選択してください</span>
                 </div>
               ) : (
                 <img
-                  key={`${soundingIcao}-${soundingFh}-${soundingFallback}`}
-                  src={soundingUrl(soundingIcao, soundingFh, soundingFallback)}
+                  key={`${soundingIcao}-${soundingFh}`}
+                  src={soundingUrl(soundingIcao, soundingFh)}
                   alt={`GFS Skew-T ${soundingIcao} +${soundingFh}h`}
-                  onError={() => {
-                    if (!soundingFallback) {
-                      setSoundingFallback(true);
-                    } else {
-                      setSoundingImgError(true);
-                    }
-                  }}
+                  onError={() => setSoundingImgError(true)}
                   onLoad={() => setSoundingImgError(false)}
-                  onClick={() => setZoomImg({ src: soundingUrl(soundingIcao, soundingFh, soundingFallback), label: `GFS Skew-T  ${soundingIcao}  +${soundingFh}h  (Init: ${getLatestGfsInit(soundingFallback ? 1 : 0)}Z)` })}
+                  onClick={() => setZoomImg({ src: soundingUrl(soundingIcao, soundingFh), label: `GFS Skew-T  ${soundingIcao}  +${soundingFh}h` })}
                   style={{ width: "100%", display: "block", cursor: "pointer", borderRadius: "4px" }}
                 />
               )}

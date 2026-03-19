@@ -49,12 +49,50 @@ export default {
     let upstreamUrl;
 
     if (path.startsWith(SOUNDING_PREFIX)) {
-      // Tropical Tidbits sounding image proxy: /sounding/gfs_2026031906_fh12_sounding_RJTT.png
-      const filename = path.slice(SOUNDING_PREFIX.length);
-      if (!/^gfs_\d{10}_fh\d{2,3}_sounding_[A-Z]{4}\.png$/.test(filename)) {
-        return new Response("Invalid sounding request", { status: 400, headers: corsHeaders(origin) });
+      // Tropical Tidbits sounding proxy: /sounding/?lat=33.58&lon=130.45&fh=12
+      // Fetches the page, extracts the image URL, then fetches and returns the image
+      const lat = url.searchParams.get("lat");
+      const lon = url.searchParams.get("lon");
+      const fh = url.searchParams.get("fh") || "12";
+      const icao = url.searchParams.get("icao");
+      if (!lat && !icao) {
+        return new Response("Missing lat/lon or icao param", { status: 400, headers: corsHeaders(origin) });
       }
-      upstreamUrl = `${TT_SOUNDING_BASE}/${filename}`;
+      // Build Tropical Tidbits page URL
+      const ttParams = new URLSearchParams({ fh, model: "gfs" });
+      if (icao) ttParams.set("stationID", icao);
+      else { ttParams.set("lat", lat); ttParams.set("lon", lon); }
+      const pageUrl = `https://www.tropicaltidbits.com/analysis/models/sounding/?${ttParams}`;
+      try {
+        const pageResp = await fetch(pageUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/html",
+          },
+        });
+        const html = await pageResp.text();
+        const imgMatch = html.match(/src="(images\/gfs_[^"]+\.png)"/) || html.match(/(images\/gfs_[^"'\s]+\.png)/);
+        if (!imgMatch) {
+          return new Response(`Sounding not available (page status: ${pageResp.status}, len: ${html.length})`, { status: 404, headers: corsHeaders(origin) });
+        }
+        const imgUrl = `https://www.tropicaltidbits.com/analysis/models/sounding/${imgMatch[1]}`;
+        const imgResp = await fetch(imgUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Referer": pageUrl,
+          },
+        });
+        if (!imgResp.ok) {
+          return new Response("Sounding image fetch failed", { status: imgResp.status, headers: corsHeaders(origin) });
+        }
+        const imgHeaders = new Headers();
+        imgHeaders.set("Content-Type", "image/png");
+        for (const [k, v] of Object.entries(corsHeaders(origin))) imgHeaders.set(k, v);
+        imgHeaders.set("Cache-Control", "public, max-age=900");
+        return new Response(imgResp.body, { status: 200, headers: imgHeaders });
+      } catch (err) {
+        return new Response(`Sounding error: ${err.message}`, { status: 502, headers: corsHeaders(origin) });
+      }
     } else if (path.startsWith(TENKI_PREFIX)) {
       // tenki.jp pollen API: /tenki/static-api/history/pollen/13101.js
       const tenkiPath = "/" + path.slice(TENKI_PREFIX.length);
@@ -68,30 +106,10 @@ export default {
       return new Response("Not found", { status: 404, headers: corsHeaders(origin) });
     }
 
-    const isSounding = path.startsWith(SOUNDING_PREFIX);
-
     try {
-      const fetchHeaders = {
-        "User-Agent": "Mozilla/5.0 wx-dashboard-proxy/1.0",
-      };
-      if (isSounding) {
-        fetchHeaders["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-        fetchHeaders["Referer"] = "https://www.tropicaltidbits.com/analysis/models/sounding/";
-        fetchHeaders["Accept"] = "image/png,image/*";
-      }
-      const resp = await fetch(upstreamUrl, { headers: fetchHeaders });
-
-      // Sounding image: return binary with proper Content-Type
-      if (isSounding) {
-        if (!resp.ok) {
-          return new Response("Sounding not found", { status: resp.status, headers: corsHeaders(origin) });
-        }
-        const imgHeaders = new Headers();
-        imgHeaders.set("Content-Type", "image/png");
-        for (const [k, v] of Object.entries(corsHeaders(origin))) imgHeaders.set(k, v);
-        imgHeaders.set("Cache-Control", "public, max-age=900"); // 15 min cache
-        return new Response(resp.body, { status: 200, headers: imgHeaders });
-      }
+      const resp = await fetch(upstreamUrl, {
+        headers: { "User-Agent": "Mozilla/5.0 wx-dashboard-proxy/1.0" },
+      });
 
       // TAF fallback: AWCが空の場合、NOAA TGFtpを試す
       const isTafReq = path === "/api/data/taf";

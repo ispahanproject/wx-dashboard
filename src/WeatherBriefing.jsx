@@ -3031,25 +3031,75 @@ function AnalysisPanel() {
               ))}
             </div>
 
-            {/* Skew-T 画像 (CF Worker プロキシ経由) */}
-            <div style={{ background: "#ffffff", borderRadius: "8px", padding: "4px", position: "relative", minHeight: "200px" }}>
-              {soundingImgError ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#ef4444", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
-                  Sounding data not available for {soundingIcao}
-                  <br /><span style={{ color: "#64748b", fontSize: "10px" }}>ICAOコードを確認するか、別の空港/予報時間を選択してください</span>
+            {/* Skew-T 画像 + FL スケール */}
+            {(() => {
+              // Tropical Tidbits 画像 (1100x700) の圧力軸ピクセル位置 → パーセンテージ
+              // chart top (100hPa) ≈ 2.6%, chart bottom (1000hPa) ≈ 90.3%
+              const pTop = 2.6, pBot = 90.3;
+              const pctForHpa = (hpa) => pTop + (Math.log10(hpa) - 2) * (pBot - pTop);
+              // ICAO標準大気: hPa → FL
+              const flScale = [
+                { hpa: 1000, fl: "SFC" },
+                { hpa: 850,  fl: "050" },
+                { hpa: 700,  fl: "100" },
+                { hpa: 500,  fl: "185" },
+                { hpa: 400,  fl: "240" },
+                { hpa: 300,  fl: "300" },
+                { hpa: 250,  fl: "340" },
+                { hpa: 200,  fl: "390" },
+                { hpa: 150,  fl: "450" },
+                { hpa: 100,  fl: "530" },
+              ];
+              return (
+                <div style={{ display: "flex", gap: "0", borderRadius: "8px", overflow: "hidden" }}>
+                  {/* 画像 */}
+                  <div style={{ flex: 1, background: "#ffffff", position: "relative", minHeight: "200px" }}>
+                    {soundingImgError ? (
+                      <div style={{ padding: "40px", textAlign: "center", color: "#ef4444", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
+                        Sounding data not available for {soundingIcao}
+                        <br /><span style={{ color: "#64748b", fontSize: "10px" }}>ICAOコードを確認するか、別の空港/予報時間を選択してください</span>
+                      </div>
+                    ) : (
+                      <img
+                        key={`${soundingIcao}-${soundingFh}`}
+                        src={soundingUrl(soundingIcao, soundingFh)}
+                        alt={`GFS Skew-T ${soundingIcao} +${soundingFh}h`}
+                        onError={() => setSoundingImgError(true)}
+                        onLoad={() => setSoundingImgError(false)}
+                        onClick={() => setZoomImg({ src: soundingUrl(soundingIcao, soundingFh), label: `GFS Skew-T  ${soundingIcao}  +${soundingFh}h` })}
+                        style={{ width: "100%", display: "block", cursor: "pointer" }}
+                      />
+                    )}
+                  </div>
+                  {/* FL スケールバー */}
+                  {!soundingImgError && (
+                    <div style={{
+                      width: "48px", background: "rgba(15, 23, 42, 0.95)", position: "relative",
+                      borderLeft: "1px solid rgba(110, 231, 183, 0.3)", flexShrink: 0,
+                    }}>
+                      <div style={{
+                        position: "absolute", top: "0", left: "50%", transform: "translateX(-50%)",
+                        color: "#6ee7b7", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace",
+                        fontWeight: 700, letterSpacing: "0.5px", whiteSpace: "nowrap", paddingTop: "2px",
+                      }}>FL</div>
+                      {flScale.map(({ hpa, fl }) => (
+                        <div key={hpa} style={{
+                          position: "absolute", top: `${pctForHpa(hpa)}%`, left: 0, right: 0,
+                          display: "flex", alignItems: "center", transform: "translateY(-50%)",
+                        }}>
+                          <div style={{ width: "4px", height: "1px", background: "rgba(110, 231, 183, 0.5)" }} />
+                          <span style={{
+                            color: fl === "SFC" ? "#94a3b8" : "#6ee7b7",
+                            fontSize: "8px", fontFamily: "'JetBrains Mono', monospace",
+                            fontWeight: 600, marginLeft: "2px", lineHeight: 1,
+                          }}>{fl}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <img
-                  key={`${soundingIcao}-${soundingFh}`}
-                  src={soundingUrl(soundingIcao, soundingFh)}
-                  alt={`GFS Skew-T ${soundingIcao} +${soundingFh}h`}
-                  onError={() => setSoundingImgError(true)}
-                  onLoad={() => setSoundingImgError(false)}
-                  onClick={() => setZoomImg({ src: soundingUrl(soundingIcao, soundingFh), label: `GFS Skew-T  ${soundingIcao}  +${soundingFh}h` })}
-                  style={{ width: "100%", display: "block", cursor: "pointer", borderRadius: "4px" }}
-                />
-              )}
-            </div>
+              );
+            })()}
 
             {/* リンク */}
             <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>

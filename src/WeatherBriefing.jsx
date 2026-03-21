@@ -3053,7 +3053,7 @@ function AnalysisPanel() {
               return (
                 <div style={{ display: "flex", gap: "0", borderRadius: "8px", overflow: "hidden" }}>
                   {/* 画像 */}
-                  <div style={{ flex: 1, background: "#ffffff", position: "relative", minHeight: "200px" }}>
+                  <div style={{ flex: 1, minWidth: 0, background: "#ffffff", position: "relative", minHeight: "200px" }}>
                     {soundingImgError ? (
                       <div style={{ padding: "40px", textAlign: "center", color: "#ef4444", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
                         Sounding data not available for {soundingIcao}

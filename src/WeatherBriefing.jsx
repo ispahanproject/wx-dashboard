@@ -3065,20 +3065,20 @@ function AnalysisPanel() {
                   gridTemplateColumns: `auto repeat(${items.length}, 1fr)`,
                   marginTop: "6px", borderRadius: "6px", overflow: "hidden",
                   border: "1px solid rgba(110, 231, 183, 0.15)",
-                  fontSize: "11px", fontFamily: mono,
+                  fontSize: "13px", fontFamily: mono,
                 }}>
                   {/* ヘッダー列 */}
-                  <div style={{ background: "rgba(110, 231, 183, 0.1)", padding: "3px 8px", color: "#64748b", fontSize: "9px", display: "flex", alignItems: "center" }}>hPa</div>
+                  <div style={{ background: "rgba(110, 231, 183, 0.1)", padding: "6px 10px", color: "#64748b", fontSize: "11px", fontWeight: 700, display: "flex", alignItems: "center" }}>hPa</div>
                   {items.map(({ hpa }) => (
                     <div key={`h-${hpa}`} style={{
-                      background: "rgba(15, 23, 42, 0.7)", padding: "3px 0", textAlign: "center",
+                      background: "rgba(15, 23, 42, 0.7)", padding: "6px 0", textAlign: "center",
                       color: "#e2e8f0", fontWeight: 600, borderLeft: "1px solid rgba(148, 163, 184, 0.08)",
                     }}>{hpa}</div>
                   ))}
-                  <div style={{ background: "rgba(110, 231, 183, 0.15)", padding: "3px 8px", color: "#6ee7b7", fontWeight: 700, fontSize: "9px", display: "flex", alignItems: "center" }}>FL</div>
+                  <div style={{ background: "rgba(110, 231, 183, 0.15)", padding: "6px 10px", color: "#6ee7b7", fontWeight: 700, fontSize: "11px", display: "flex", alignItems: "center" }}>FL</div>
                   {items.map(({ hpa, fl }) => (
                     <div key={`f-${hpa}`} style={{
-                      background: "rgba(110, 231, 183, 0.05)", padding: "3px 0", textAlign: "center",
+                      background: "rgba(110, 231, 183, 0.05)", padding: "6px 0", textAlign: "center",
                       color: fl === "SFC" ? "#94a3b8" : "#6ee7b7", fontWeight: 700,
                       borderLeft: "1px solid rgba(148, 163, 184, 0.08)", borderTop: "1px solid rgba(110, 231, 183, 0.1)",
                     }}>{fl}</div>

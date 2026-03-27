@@ -2234,6 +2234,7 @@ function MetarTafPanel() {
                     }}>Summary</button>
                   )}
                   <ExtLink href={`https://aviationweather.gov/gfa/#obs=metar&region=other&extent=${icao}`}>AWC</ExtLink>
+                  <ExtLink href={`https://atis.guru/atis/${icao}`}>ATIS</ExtLink>
                   <button onClick={() => removeAirport(icao)} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "14px" }}>✕</button>
                 </div>
               </div>

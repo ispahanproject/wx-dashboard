@@ -3051,30 +3051,41 @@ function AnalysisPanel() {
               )}
             </div>
             {/* hPa → FL 対応表 (ICAO標準大気) */}
-            {!soundingImgError && (
-              <div style={{
-                display: "flex", flexWrap: "wrap", gap: "0", marginTop: "6px",
-                background: "rgba(15, 23, 42, 0.6)", borderRadius: "6px", border: "1px solid rgba(148, 163, 184, 0.1)",
-                padding: "4px 8px", alignItems: "center",
-              }}>
-                <span style={{ color: "#6ee7b7", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, marginRight: "8px" }}>hPa→FL</span>
-                {[
-                  { hpa: "1000", fl: "SFC" }, { hpa: "850", fl: "050" }, { hpa: "700", fl: "100" },
-                  { hpa: "500", fl: "185" }, { hpa: "400", fl: "240" }, { hpa: "300", fl: "300" },
-                  { hpa: "250", fl: "340" }, { hpa: "200", fl: "390" }, { hpa: "150", fl: "450" },
-                  { hpa: "100", fl: "530" },
-                ].map(({ hpa, fl }) => (
-                  <span key={hpa} style={{
-                    color: "#94a3b8", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace",
-                    padding: "1px 5px", borderRight: "1px solid rgba(148, 163, 184, 0.1)",
-                  }}>
-                    <span style={{ color: "#e2e8f0" }}>{hpa}</span>
-                    <span style={{ color: "#475569", margin: "0 2px" }}>=</span>
-                    <span style={{ color: fl === "SFC" ? "#94a3b8" : "#6ee7b7" }}>{fl}</span>
-                  </span>
-                ))}
-              </div>
-            )}
+            {!soundingImgError && (() => {
+              const mono = "'JetBrains Mono', monospace";
+              const items = [
+                { hpa: "1000", fl: "SFC" }, { hpa: "850", fl: "050" }, { hpa: "700", fl: "100" },
+                { hpa: "500", fl: "185" }, { hpa: "400", fl: "240" }, { hpa: "300", fl: "300" },
+                { hpa: "250", fl: "340" }, { hpa: "200", fl: "390" }, { hpa: "150", fl: "450" },
+                { hpa: "100", fl: "530" },
+              ];
+              return (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: `auto repeat(${items.length}, 1fr)`,
+                  marginTop: "6px", borderRadius: "6px", overflow: "hidden",
+                  border: "1px solid rgba(110, 231, 183, 0.15)",
+                  fontSize: "11px", fontFamily: mono,
+                }}>
+                  {/* ヘッダー列 */}
+                  <div style={{ background: "rgba(110, 231, 183, 0.1)", padding: "3px 8px", color: "#64748b", fontSize: "9px", display: "flex", alignItems: "center" }}>hPa</div>
+                  {items.map(({ hpa }) => (
+                    <div key={`h-${hpa}`} style={{
+                      background: "rgba(15, 23, 42, 0.7)", padding: "3px 0", textAlign: "center",
+                      color: "#e2e8f0", fontWeight: 600, borderLeft: "1px solid rgba(148, 163, 184, 0.08)",
+                    }}>{hpa}</div>
+                  ))}
+                  <div style={{ background: "rgba(110, 231, 183, 0.15)", padding: "3px 8px", color: "#6ee7b7", fontWeight: 700, fontSize: "9px", display: "flex", alignItems: "center" }}>FL</div>
+                  {items.map(({ hpa, fl }) => (
+                    <div key={`f-${hpa}`} style={{
+                      background: "rgba(110, 231, 183, 0.05)", padding: "3px 0", textAlign: "center",
+                      color: fl === "SFC" ? "#94a3b8" : "#6ee7b7", fontWeight: 700,
+                      borderLeft: "1px solid rgba(148, 163, 184, 0.08)", borderTop: "1px solid rgba(110, 231, 183, 0.1)",
+                    }}>{fl}</div>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* リンク */}
             <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>

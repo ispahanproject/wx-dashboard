@@ -1250,13 +1250,14 @@ function TabBtn({ active, onClick, children, icon, shortcut }) {
   );
 }
 
-function ExtLink({ href, children, accent }) {
+function ExtLink({ href, children, accent, amber }) {
+  const c = amber ? { bg: "rgba(245, 158, 11, 0.12)", border: "rgba(245, 158, 11, 0.4)", color: "#f59e0b" }
+    : accent ? { bg: "rgba(110, 231, 183, 0.07)", border: "rgba(110, 231, 183, 0.3)", color: "#6ee7b7" }
+    : { bg: "rgba(15, 23, 42, 0.6)", border: "rgba(110, 231, 183, 0.08)", color: "#94a3b8" };
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" style={{
       display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px",
-      background: accent ? "rgba(110, 231, 183, 0.07)" : "rgba(15, 23, 42, 0.6)",
-      border: `1px solid ${accent ? "rgba(110, 231, 183, 0.3)" : "rgba(110, 231, 183, 0.08)"}`,
-      borderRadius: "2px", color: accent ? "#6ee7b7" : "#94a3b8",
+      background: c.bg, border: `1px solid ${c.border}`, borderRadius: "2px", color: c.color,
       fontSize: "11px", textDecoration: "none", fontFamily: "'JetBrains Mono', monospace",
       transition: "all 0.15s ease", cursor: "pointer", letterSpacing: "0.5px",
     }}>
@@ -2234,7 +2235,7 @@ function MetarTafPanel() {
                     }}>Summary</button>
                   )}
                   <ExtLink href={`https://aviationweather.gov/gfa/#obs=metar&region=other&extent=${icao}`}>AWC</ExtLink>
-                  <ExtLink href={`https://atis.guru/atis/${icao}`}>ATIS</ExtLink>
+                  <ExtLink href={`https://atis.guru/atis/${icao}`} amber>ATIS</ExtLink>
                   <button onClick={() => removeAirport(icao)} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "14px" }}>✕</button>
                 </div>
               </div>

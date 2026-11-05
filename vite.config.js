@@ -1,9 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
+import { cloudflare } from "@cloudflare/vite-plugin";
+
+export default defineConfig(({ command }) => ({
   base: '/wx-dashboard/',
-  plugins: [react()],
+  // Cloudflare プラグインはビルド時のみ（dev では /wx-dashboard/ が 404 になるため）
+  plugins: [react(), ...(command === 'build' ? [cloudflare()] : [])],
   server: {
     proxy: {
       '/awc-api': {
@@ -13,4 +16,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

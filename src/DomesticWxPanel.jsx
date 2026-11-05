@@ -489,8 +489,10 @@ const lat2px = (lat, z) => {
   return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 256 * 2 ** z;
 };
 
-function TileMap({ region, overlay }) {
-  const { w, e, n, s, z } = region;
+// layers: [{ id, url:(z,x,y)=>string, opacity?, hideMissing? }]（下から順に重ねる）
+function TileMap({ region, layers, zoom, bg = "#cfd8dc" }) {
+  const { w, e, n, s } = region;
+  const z = zoom ?? region.z;
   const x0 = lon2px(w, z), x1 = lon2px(e, z), y0 = lat2px(n, z), y1 = lat2px(s, z);
   const W = x1 - x0, H = y1 - y0;
   const tiles = [];
@@ -503,13 +505,11 @@ function TileMap({ region, overlay }) {
     width: `${(256 / W) * 100}%`, height: `${(256 / H) * 100}%`,
   });
   return (
-    <div style={{ position: "relative", width: "100%", aspectRatio: `${W} / ${H}`, overflow: "hidden", background: "#cfd8dc" }}>
-      {tiles.map(([tx, ty]) => (
-        <img key={`b${tx}-${ty}`} src={BASEMAP(z, tx, ty)} alt="" style={pos(tx, ty)} draggable={false} />
-      ))}
-      {overlay && tiles.map(([tx, ty]) => (
-        <OverlayTile key={`o${tx}-${ty}`} src={overlay(z, tx, ty)} style={{ ...pos(tx, ty), opacity: 0.85 }} />
-      ))}
+    <div style={{ position: "relative", width: "100%", aspectRatio: `${W} / ${H}`, overflow: "hidden", background: bg }}>
+      {layers.filter(Boolean).map((L) => tiles.map(([tx, ty]) => (
+        <OverlayTile key={`${L.id}-${tx}-${ty}`} src={L.url(z, tx, ty)}
+          style={{ ...pos(tx, ty), opacity: L.opacity ?? 1, imageRendering: L.pixelated ? "pixelated" : "auto" }} />
+      )))}
     </div>
   );
 }
@@ -609,7 +609,10 @@ function NowcastSection({ mode, refresh }) {
         )}
       </Toolbar>
       {err ? <Placeholder minHeight={360} text="ナウキャスト時刻リストを取得できません" />
-        : <TileMap region={region} overlay={overlay} />}
+        : <TileMap region={region} layers={[
+          { id: "base", url: BASEMAP },
+          overlay && { id: "nowc", url: overlay, opacity: 0.85 },
+        ]} />}
       <StepBar index={idx} count={frames.length} setIndex={setIdx} playing={playing} setPlaying={setPlaying}
         label={vt ? fmtJst(vt) : "—"} sub={vt ? `${fmtUtc(vt)} · ${f.fc ? "予想" : "実況"}` : ""} />
       <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap", padding: "8px 12px", background: "rgba(0,0,0,0.45)", borderTop: "1px solid rgba(110,231,183,0.06)" }}>
@@ -634,6 +637,169 @@ function NowcastSection({ mode, refresh }) {
         </ExtLink>
         <ExtLink href={`${JMA}/bosai/amedas/`}>アメダス</ExtLink>
       </Links>
+    </PanelFrame>
+  );
+}
+
+/* ============================================================
+   V. 悪天監視
+   積乱雲情報（気象衛星センター）/ SIGMET図 / 国内航空路予想断面図 / 全国航空気象解説報
+   ============================================================ */
+const SATPROD = `${JMA_DATA}/tile/satprod`;
+const CCI_TIMES = `${SATPROD}/targetTimes_cbi_jp.json`;
+const COASTLINE = (z, x, y) => `${JMA_DATA}/omaad/const/COASTLINE/${z}/${x}/${y}.png`;
+const sigmetUrl = (code) => `${JMA_DATA}/airinfo/data/pict/sigmet/${code}.png`;
+const fxjp106Url = (hh) => `${JMA_DATA}/airinfo/data/pict/nwp/fxjp106_${hh}.png`;
+const cmntUrl = (code) => `${JMA_DATA}/airinfo/data/pict/ajpn_cmnt/${code}.png`;
+
+const SIGMET_AREAS = [
+  { key: "QGMA98", label: "福岡FIR 全体" },
+  { key: "QGOA98", label: "本州付近" },
+  { key: "QGPA98", label: "南西諸島" },
+];
+const CMNT_AREAS = [
+  { key: "qyya82", label: "国内空域" },
+  { key: "qyya83", label: "福岡FIR" },
+];
+const CCI_LEGEND = [
+  ["rgba(255,0,0,0.75)", "積乱雲域"],
+  ["rgba(0,255,0,0.75)", "積雲急発達域"],
+  ["rgba(0,128,128,0.75)", "中下層雲不明域"],
+];
+const SEVERE_VIEWS = [
+  { key: "cci", label: "積乱雲情報" },
+  { key: "sigmet", label: "SIGMET" },
+  { key: "fxjp106", label: "航空路予想断面 FXJP106" },
+  { key: "cmnt", label: "航空気象解説報" },
+];
+
+// FXJP106: 3時間毎の初期値、約2時間15分後に掲載
+const fxjp106Bases = () => {
+  const now = new Date(Date.now() - 135 * 60e3);
+  const latest = Math.floor(now.getUTCHours() / 3) * 3;
+  return Array.from({ length: 8 }, (_, i) => (latest - (7 - i) * 3 + 24) % 24);
+};
+
+function CciView({ refresh }) {
+  const [regionKey, setRegionKey] = useState("honshu");
+  const [bgMode, setBgMode] = useState("tbb");
+  const [times, setTimes] = useState([]);
+  const [err, setErr] = useState(false);
+  const [idx, setIdx] = useState(0);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setErr(false);
+    fetch(CCI_TIMES, { cache: "no-cache" })
+      .then((r) => r.json())
+      .then((list) => {
+        if (!alive) return;
+        // 10分毎・直近3時間
+        const t = list
+          .filter((x) => x.validtime.slice(10, 12) % 10 === 0)
+          .sort((a, b) => a.validtime.localeCompare(b.validtime))
+          .slice(-19);
+        setTimes(t);
+        setIdx(Math.max(0, t.length - 1));
+      })
+      .catch(() => alive && setErr(true));
+    return () => { alive = false; };
+  }, [refresh]);
+  usePlayer(times.length, playing, setIdx, 700);
+
+  const region = REGIONS.find((r) => r.key === regionKey);
+  const t = times[idx];
+  const d = t ? parseTs(t.validtime) : null;
+  const sat = (prod) => (z, x, y) => `${SATPROD}/${t.basetime}/JP/${t.validtime}/${prod}/${z}/${x}/${y}.png`;
+  const layers = t ? [
+    bgMode === "tbb" ? { id: "tbb", url: sat("B13/TBB"), pixelated: true } : { id: "base", url: BASEMAP },
+    { id: "coast", url: COASTLINE, pixelated: true },
+    { id: "cci", url: sat("CCI/CCI"), opacity: 0.8, pixelated: true },
+  ] : [];
+
+  return (
+    <>
+      <Toolbar>
+        <Seg options={REGIONS} value={regionKey} onChange={setRegionKey} />
+        <Seg small value={bgMode} onChange={setBgMode}
+          options={[{ key: "tbb", label: "背景: 赤外(雲頂温度)" }, { key: "map", label: "背景: 地図" }]} />
+      </Toolbar>
+      {err ? <Placeholder minHeight={360} text="積乱雲情報の時刻リストを取得できません" />
+        : t ? <TileMap region={region} zoom={Math.min(region.z, 6)} layers={layers} bg="#000" />
+        : <Placeholder minHeight={360} text="LOADING..." />}
+      <StepBar index={idx} count={times.length} setIndex={setIdx} playing={playing} setPlaying={setPlaying}
+        label={d ? fmtJst(d) : "—"} sub={d ? `${fmtUtc(d)} · 実況（10分毎・過去3時間）` : ""} />
+      <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap", padding: "8px 12px", background: "rgba(0,0,0,0.45)", borderTop: "1px solid rgba(110,231,183,0.06)" }}>
+        {CCI_LEGEND.map(([c, label]) => (
+          <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: "4px", marginRight: "10px" }}>
+            <span style={{ width: "18px", height: "10px", background: c, border: "1px solid #000", display: "inline-block" }} />
+            <span style={{ color: "#94a3b8", fontSize: "9px", fontFamily: MONO }}>{label}</span>
+          </span>
+        ))}
+      </div>
+      <Caption>
+        ひまわりの観測から解析した積乱雲域（赤）と、積雲が急に発達している域（緑：これから積乱雲になる可能性）。
+        背景の赤外画像は白いほど雲頂温度が低い＝雲頂が高い。
+      </Caption>
+      <Links>
+        <ExtLink href={`${JMA_DATA}/omaad/aviation/jp/cci/`} accent>気象庁 積乱雲情報</ExtLink>
+      </Links>
+    </>
+  );
+}
+
+function SevereSection({ refresh }) {
+  const [view, setView] = useState("cci");
+  const [sigmet, setSigmet] = useState("QGMA98");
+  const [cmnt, setCmnt] = useState("qyya82");
+  const bases = fxjp106Bases();
+  const [fxIdx, setFxIdx] = useState(bases.length - 1);
+  const fxBase = bases[fxIdx];
+
+  return (
+    <PanelFrame title="V. SEVERE WX MONITOR / 悪天監視" code="DOM-05" style={{ padding: 0 }}>
+      <Toolbar>
+        <Seg options={SEVERE_VIEWS} value={view} onChange={setView} color="#f59e0b" />
+      </Toolbar>
+
+      {view === "cci" && <CciView refresh={refresh} />}
+
+      {view === "sigmet" && (
+        <>
+          <Toolbar><Seg options={SIGMET_AREAS} value={sigmet} onChange={setSigmet} /></Toolbar>
+          <ChartImg src={sigmetUrl(sigmet)} label={`SIGMET ${SIGMET_AREAS.find((a) => a.key === sigmet).label}`} minHeight={420} />
+          <Caption>福岡FIRで有効なSIGMET（乱気流・着氷・積乱雲・火山灰など）の領域図。文字情報は METAR/TAF タブ等で確認してください。</Caption>
+          <Links>
+            <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_sigmet.html`} accent>気象庁 SIGMET</ExtLink>
+          </Links>
+        </>
+      )}
+
+      {view === "fxjp106" && (
+        <>
+          <ChartImg src={fxjp106Url(pad(fxBase))} label={`FXJP106 ${pad(fxBase)}Z`} minHeight={420} />
+          <StepBar index={fxIdx} count={bases.length} setIndex={setFxIdx}
+            label={`初期値 ${pad(fxBase)}Z`} sub="3時間毎・直近8回分" />
+          <Caption>国内主要航空路に沿った6・12時間予想断面図（風・気温・湿数・乱気流の目安となる鉛直シアなど）。</Caption>
+          <Links>
+            <ExtLink href={`${JMA_DATA}/airinfo/awfo_fxjp106/awfo_fxjp106.html`} accent>気象庁 国内航空路予想断面図</ExtLink>
+          </Links>
+        </>
+      )}
+
+      {view === "cmnt" && (
+        <>
+          <Toolbar><Seg options={CMNT_AREAS} value={cmnt} onChange={setCmnt} /></Toolbar>
+          <ChartImg src={cmntUrl(cmnt)} label={`全国航空気象解説報 ${CMNT_AREAS.find((a) => a.key === cmnt).label}`} minHeight={420} />
+          <Caption>予報官による悪天の解説図（注目すべき悪天域とその見通し）。</Caption>
+          <Links>
+            <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_ajpn_cmnt_airspace.html`} accent>解説報（国内空域）</ExtLink>
+            <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_ajpn_cmnt_fukuokafir.html`}>解説報（福岡FIR）</ExtLink>
+            <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_ajpn_cmnt_aerodrome.html`}>解説報（飛行場）</ExtLink>
+          </Links>
+        </>
+      )}
     </PanelFrame>
   );
 }
@@ -771,6 +937,10 @@ async function collectOfflineUrls() {
     const d = new Date(base.getTime() - i * 3600e3);
     urls.push(himaUrl("b13", `${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}`));
   }
+  // 悪天監視: SIGMET図・解説報・FXJP106最新
+  SIGMET_AREAS.forEach((a) => urls.push(sigmetUrl(a.key)));
+  CMNT_AREAS.forEach((a) => urls.push(cmntUrl(a.key)));
+  urls.push(fxjp106Url(pad(fxjp106Bases().slice(-1)[0])));
   // 低高度悪天 全地域×全FT
   for (const a of LL_AREAS) for (const f of LL_FTS) urls.push(lowLevelUrl(a.key, f.key));
   // 毎時大気解析 最新の全断面・全FL
@@ -791,6 +961,7 @@ const SECTIONS = [
   { key: "charts", label: "天気図", icon: "🗺️" },
   { key: "himawari", label: "ひまわり", icon: "🛰️" },
   { key: "maiji", label: "断面・平面", icon: "📐" },
+  { key: "severe", label: "悪天監視", icon: "⛈️" },
   { key: "radar", label: "レーダー", icon: "🌧️" },
   { key: "thunder", label: "雷", icon: "⚡" },
   { key: "lowlevel", label: "低高度", icon: "🛩️" },
@@ -871,6 +1042,7 @@ export default function DomesticWxPanel() {
       {section === "charts" && <ChartsSection refresh={refresh} />}
       {section === "himawari" && <HimawariSection refresh={refresh} />}
       {section === "maiji" && <MaijiSection refresh={refresh} />}
+      {section === "severe" && <SevereSection refresh={refresh} />}
       {section === "radar" && <NowcastSection key="radar" mode="radar" refresh={refresh} />}
       {section === "thunder" && <NowcastSection key="thunder" mode="thunder" refresh={refresh} />}
       {section === "lowlevel" && <LowLevelSection />}

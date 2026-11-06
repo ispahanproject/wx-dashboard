@@ -1069,8 +1069,9 @@ function WindBarb({ x, y, dir, kt }) {
 
 const EMA = { W: 760, H: 640, x0: 56, x1: 640, y0: 14, y1: 600, pTop: 100, pBot: 1050, tMin: -80, tMax: 40 };
 const ex = (t) => EMA.x0 + ((t - EMA.tMin) / (EMA.tMax - EMA.tMin)) * (EMA.x1 - EMA.x0);
-const ey = (p) => EMA.y0 + ((Math.log(EMA.pBot) - Math.log(p)) / (Math.log(EMA.pBot) - Math.log(EMA.pTop))) * (EMA.y1 - EMA.y0);
-const pFromY = (y) => Math.exp(Math.log(EMA.pBot) - ((y - EMA.y0) / (EMA.y1 - EMA.y0)) * (Math.log(EMA.pBot) - Math.log(EMA.pTop)));
+// 気圧軸：上が低気圧（pTop）、下が高気圧（pBot）
+const ey = (p) => EMA.y0 + ((Math.log(p) - Math.log(EMA.pTop)) / (Math.log(EMA.pBot) - Math.log(EMA.pTop))) * (EMA.y1 - EMA.y0);
+const pFromY = (y) => Math.exp(Math.log(EMA.pTop) + ((y - EMA.y0) / (EMA.y1 - EMA.y0)) * (Math.log(EMA.pBot) - Math.log(EMA.pTop)));
 const path = (pts) => pts.filter((p) => isFinite(p[0]) && isFinite(p[1])).map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("");
 const clipT = (t) => Math.max(EMA.tMin - 5, Math.min(EMA.tMax + 5, t));
 
@@ -1103,10 +1104,10 @@ function Emagram({ rows, idx }) {
   const isobars = [1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100];
   // 風：約25hPa毎に間引き
   const barbs = [];
-  let lastY = -99;
+  let lastY = -999;
   rows.forEach((r) => {
     const y = ey(r.p);
-    if (r.p >= EMA.pTop && !isNaN(r.wd) && y - lastY >= 18) { barbs.push({ y, r }); lastY = y; }
+    if (r.p >= EMA.pTop && r.p <= EMA.pBot && !isNaN(r.wd) && Math.abs(y - lastY) >= 18) { barbs.push({ y, r }); lastY = y; }
   });
   const ice = icingLayers(rows);
 
@@ -1129,7 +1130,7 @@ function Emagram({ rows, idx }) {
       <g clipPath="url(#emaClip)">
         {/* 着氷注意層 */}
         {ice.map((l, i) => (
-          <rect key={i} x={EMA.x0} y={ey(l.pBot)} width={EMA.x1 - EMA.x0} height={Math.max(2, ey(l.pTop) - ey(l.pBot))} fill="rgba(56,189,248,0.10)" />
+          <rect key={i} x={EMA.x0} y={ey(l.pTop)} width={EMA.x1 - EMA.x0} height={Math.max(2, ey(l.pBot) - ey(l.pTop))} fill="rgba(56,189,248,0.10)" />
         ))}
         {EMA_BG.dry.map((d, i) => <path key={`d${i}`} d={d} stroke="#7c2d12" strokeWidth="0.8" fill="none" opacity="0.7" />)}
         {EMA_BG.moist.map((d, i) => <path key={`m${i}`} d={d} stroke="#166534" strokeWidth="0.8" fill="none" strokeDasharray="5 3" opacity="0.8" />)}
@@ -1170,8 +1171,8 @@ function Emagram({ rows, idx }) {
       {hover && (
         <g pointerEvents="none">
           <line x1={EMA.x0} x2={EMA.x1} y1={hover.y} y2={hover.y} stroke="#e2e8f0" strokeWidth="0.6" strokeDasharray="3 3" />
-          <rect x={EMA.x0 + 6} y={hover.y + 6} width="300" height="20" rx="2" fill="rgba(0,0,0,0.8)" />
-          <text x={EMA.x0 + 12} y={hover.y + 20} fill="#e2e8f0" fontSize="11">
+          <rect x={EMA.x0 + 6} y={hover.y > EMA.y1 - 40 ? hover.y - 26 : hover.y + 6} width="300" height="20" rx="2" fill="rgba(0,0,0,0.8)" />
+          <text x={EMA.x0 + 12} y={hover.y > EMA.y1 - 40 ? hover.y - 12 : hover.y + 20} fill="#e2e8f0" fontSize="11">
             {`${Math.round(hover.p)}hPa ${isNaN(hover.z) ? "" : Math.round(m2ft(hover.z) / 100) * 100 + "ft"} T${isNaN(hover.t) ? "—" : hover.t.toFixed(1)} Td${isNaN(hover.td) ? "—" : hover.td.toFixed(1)} ${isNaN(hover.wd) ? "" : `${Math.round(hover.wd)}°/${Math.round(hover.ws)}kt`}`}
           </text>
         </g>

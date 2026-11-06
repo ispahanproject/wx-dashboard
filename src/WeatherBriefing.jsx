@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { PanelFrame, ExtLink } from "./ui.jsx";
-import DomesticWxPanel, { JmaAirportCharts, jmaTafChartUrl, jmaCommentUrl } from "./DomesticWxPanel.jsx";
+import DomesticWxPanel, { EmagramSection, JmaAirportCharts, jmaTafChartUrl, jmaCommentUrl } from "./DomesticWxPanel.jsx";
 
 /* ============================================================
    AWC API BASE URL
@@ -2651,33 +2651,6 @@ function AnalysisPanel() {
   const [imgError, setImgError] = useState({});
   const [zoomImg, setZoomImg] = useState(null); // { src, label }
 
-  // Skew-T (エマグラム) state
-  const SOUNDING_PRESETS = [
-    { icao: "RJCC", name: "新千歳", lat: 42.78, lon: 141.69 },
-    { icao: "RJSK", name: "秋田", lat: 39.62, lon: 140.22 },
-    { icao: "RJTT", name: "羽田", lat: 35.55, lon: 139.78 },
-    { icao: "RJGG", name: "中部", lat: 34.86, lon: 136.81 },
-    { icao: "RJOO", name: "伊丹", lat: 34.79, lon: 135.44 },
-    { icao: "RJOK", name: "高知", lat: 33.55, lon: 133.67 },
-    { icao: "RJOA", name: "広島", lat: 34.44, lon: 132.92 },
-    { icao: "RJFF", name: "福岡", lat: 33.59, lon: 130.45 },
-    { icao: "RJFK", name: "鹿児島", lat: 31.80, lon: 130.72 },
-    { icao: "ROAH", name: "那覇", lat: 26.20, lon: 127.65 },
-  ];
-  const [soundingIcao, setSoundingIcao] = useState("RJCC");
-  const [soundingIcaoInput, setSoundingIcaoInput] = useState("RJCC");
-  const [soundingFh, setSoundingFh] = useState("12");
-  const [soundingImgError, setSoundingImgError] = useState(false);
-
-  // CF Worker が Tropical Tidbits ページから画像を取得して返す
-  const soundingUrl = (icao, fh) => {
-    const preset = SOUNDING_PRESETS.find((p) => p.icao === icao);
-    if (preset) {
-      return `${CF_WORKER}/sounding/?lat=${preset.lat}&lon=${preset.lon}&fh=${fh}`;
-    }
-    return `${CF_WORKER}/sounding/?icao=${icao}&fh=${fh}`;
-  };
-
   // JMAの断面図コード: 経度→内部コード (functions_maiji.jsより)
   const LONS = [
     { label: "E145°", code: "50" },
@@ -2783,7 +2756,7 @@ function AnalysisPanel() {
           </div>
           {/* ビューモード切り替え */}
           <div style={{ display: "flex", gap: "6px" }}>
-            {[{ key: "cross", label: "断面図 (経度別)" }, { key: "plane", label: "平面図 (FL別)" }, { key: "sounding", label: "エマグラム (Skew-T)" }].map((m) => (
+            {[{ key: "cross", label: "断面図 (経度別)" }, { key: "plane", label: "平面図 (FL別)" }, { key: "sounding", label: "エマグラム (観測)" }].map((m) => (
               <button key={m.key} onClick={() => setViewMode(m.key)} style={{
                 padding: "5px 14px",
                 background: viewMode === m.key ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
@@ -2912,133 +2885,8 @@ function AnalysisPanel() {
           </div>
         )}
 
-        {/* エマグラム (Skew-T) */}
-        {viewMode === "sounding" && (
-          <div>
-            {/* ヘッダー */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
-              <div>
-                <div style={headerLabel}>◈ GFS FORECAST SOUNDING / エマグラム (Skew-T)</div>
-                <div style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", marginTop: "3px" }}>
-                  SOURCE: tropicaltidbits.com — GFS MODEL SOUNDING
-                </div>
-              </div>
-            </div>
-
-            {/* ICAO プリセット + 入力 */}
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "10px", alignItems: "center" }}>
-              {SOUNDING_PRESETS.map(({ icao }) => (
-                <button key={icao} onClick={() => { setSoundingIcao(icao); setSoundingIcaoInput(icao); setSoundingImgError(false);}} style={{
-                  padding: "4px 10px",
-                  background: soundingIcao === icao ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
-                  border: `1px solid ${soundingIcao === icao ? "rgba(110, 231, 183, 0.5)" : "rgba(148, 163, 184, 0.15)"}`,
-                  borderRadius: "6px", color: soundingIcao === icao ? "#6ee7b7" : "#94a3b8",
-                  fontSize: "11px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
-                  transition: "all 0.15s ease",
-                }}>{icao}</button>
-              ))}
-              <div style={{ display: "flex", gap: "4px", alignItems: "center", marginLeft: "8px" }}>
-                <input
-                  type="text"
-                  value={soundingIcaoInput}
-                  onChange={(e) => setSoundingIcaoInput(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4))}
-                  onKeyDown={(e) => { if (e.key === "Enter" && soundingIcaoInput.length === 4) { setSoundingIcao(soundingIcaoInput); setSoundingImgError(false);} }}
-                  placeholder="ICAO"
-                  style={{
-                    width: "60px", padding: "4px 8px",
-                    background: "rgba(15, 23, 42, 0.8)", border: "1px solid rgba(148, 163, 184, 0.2)",
-                    borderRadius: "6px", color: "#e2e8f0", fontSize: "11px",
-                    fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", outline: "none",
-                  }}
-                />
-                <button onClick={() => { if (soundingIcaoInput.length === 4) { setSoundingIcao(soundingIcaoInput); setSoundingImgError(false);} }} style={{
-                  padding: "4px 10px",
-                  background: "rgba(96, 165, 250, 0.15)", border: "1px solid rgba(96, 165, 250, 0.4)",
-                  borderRadius: "6px", color: "#60a5fa", fontSize: "11px", cursor: "pointer",
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}>GO</button>
-              </div>
-            </div>
-
-            {/* 予報時間セレクター */}
-            <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "14px" }}>
-              <span style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", alignSelf: "center", marginRight: "4px" }}>FCST:</span>
-              {["0", "6", "12", "18", "24", "30", "36"].map((h) => (
-                <button key={h} onClick={() => { setSoundingFh(h); setSoundingImgError(false);}} style={{
-                  padding: "4px 10px",
-                  background: soundingFh === h ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
-                  border: `1px solid ${soundingFh === h ? "rgba(110, 231, 183, 0.5)" : "rgba(148, 163, 184, 0.15)"}`,
-                  borderRadius: "6px", color: soundingFh === h ? "#6ee7b7" : "#94a3b8",
-                  fontSize: "11px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
-                  transition: "all 0.15s ease",
-                }}>+{h}h</button>
-              ))}
-            </div>
-
-            {/* Skew-T 画像 */}
-            <div style={{ background: "#ffffff", borderRadius: "8px", padding: "4px", position: "relative", minHeight: "200px" }}>
-              {soundingImgError ? (
-                <div style={{ padding: "40px", textAlign: "center", color: "#ef4444", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>
-                  Sounding data not available for {soundingIcao}
-                  <br /><span style={{ color: "#64748b", fontSize: "10px" }}>ICAOコードを確認するか、別の空港/予報時間を選択してください</span>
-                </div>
-              ) : (
-                <img
-                  key={`${soundingIcao}-${soundingFh}`}
-                  src={soundingUrl(soundingIcao, soundingFh)}
-                  alt={`GFS Skew-T ${soundingIcao} +${soundingFh}h`}
-                  onError={() => setSoundingImgError(true)}
-                  onLoad={() => setSoundingImgError(false)}
-                  onClick={() => setZoomImg({ src: soundingUrl(soundingIcao, soundingFh), label: `GFS Skew-T  ${soundingIcao}  +${soundingFh}h` })}
-                  style={{ width: "100%", display: "block", cursor: "pointer", borderRadius: "4px" }}
-                />
-              )}
-            </div>
-            {/* hPa → FL 対応表 (ICAO標準大気) */}
-            {!soundingImgError && (() => {
-              const mono = "'JetBrains Mono', monospace";
-              const items = [
-                { hpa: "1000", fl: "SFC" }, { hpa: "850", fl: "050" }, { hpa: "700", fl: "100" },
-                { hpa: "500", fl: "185" }, { hpa: "400", fl: "240" }, { hpa: "300", fl: "300" },
-                { hpa: "250", fl: "340" }, { hpa: "200", fl: "390" }, { hpa: "150", fl: "450" },
-                { hpa: "100", fl: "530" },
-              ];
-              return (
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: `auto repeat(${items.length}, 1fr)`,
-                  marginTop: "6px", borderRadius: "6px", overflow: "hidden",
-                  border: "1px solid rgba(110, 231, 183, 0.15)",
-                  fontSize: "13px", fontFamily: mono,
-                }}>
-                  {/* ヘッダー列 */}
-                  <div style={{ background: "rgba(110, 231, 183, 0.1)", padding: "6px 10px", color: "#64748b", fontSize: "11px", fontWeight: 700, display: "flex", alignItems: "center" }}>hPa</div>
-                  {items.map(({ hpa }) => (
-                    <div key={`h-${hpa}`} style={{
-                      background: "rgba(15, 23, 42, 0.7)", padding: "6px 0", textAlign: "center",
-                      color: "#e2e8f0", fontWeight: 600, borderLeft: "1px solid rgba(148, 163, 184, 0.08)",
-                    }}>{hpa}</div>
-                  ))}
-                  <div style={{ background: "rgba(110, 231, 183, 0.15)", padding: "6px 10px", color: "#6ee7b7", fontWeight: 700, fontSize: "11px", display: "flex", alignItems: "center" }}>FL</div>
-                  {items.map(({ hpa, fl }) => (
-                    <div key={`f-${hpa}`} style={{
-                      background: "rgba(110, 231, 183, 0.05)", padding: "6px 0", textAlign: "center",
-                      color: fl === "SFC" ? "#94a3b8" : "#6ee7b7", fontWeight: 700,
-                      borderLeft: "1px solid rgba(148, 163, 184, 0.08)", borderTop: "1px solid rgba(110, 231, 183, 0.1)",
-                    }}>{fl}</div>
-                  ))}
-                </div>
-              );
-            })()}
-
-            {/* リンク */}
-            <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
-              <ExtLink href={`https://www.tropicaltidbits.com/analysis/models/sounding/?stationID=${soundingIcao}&fh=${soundingFh}&model=gfs`} accent>🌡️ Tropical Tidbits で開く</ExtLink>
-              <ExtLink href="https://weather.uwyo.edu/upperair/seasia.html" accent>📊 Wyoming 実況ゾンデ</ExtLink>
-              <ExtLink href="https://www.tono2.net/skew/" accent>✈️ フライトお天気 Skew-T</ExtLink>
-            </div>
-          </div>
-        )}
+        {/* エマグラム（気象庁ラジオゾンデ観測） */}
+        {viewMode === "sounding" && <EmagramSection />}
 
         {/* リンク */}
         <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>

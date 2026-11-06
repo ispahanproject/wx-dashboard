@@ -1191,7 +1191,7 @@ const sondeCycles = (n = 8) => {
 const cycleKey = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}`;
 const sondeCache = new Map();
 
-function EmagramSection({ refresh }) {
+export function EmagramSection({ refresh = 0 }) {
   const [station, setStationState] = useState(() => {
     try { return localStorage.getItem(SONDE_STORE) || "47646"; } catch { return "47646"; }
   });

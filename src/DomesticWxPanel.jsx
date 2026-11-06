@@ -917,6 +917,394 @@ function MaijiSection({ refresh }) {
 }
 
 /* ============================================================
+   エマグラム（気象庁ラジオゾンデ観測 / University of Wyoming 経由）
+   ============================================================ */
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || "https://wx-awc-proxy.trinity-funkyboy.workers.dev";
+const SONDE_STATIONS = [
+  { id: "47401", name: "稚内" }, { id: "47412", name: "札幌" }, { id: "47418", name: "釧路" },
+  { id: "47582", name: "秋田" }, { id: "47600", name: "輪島" }, { id: "47646", name: "館野" },
+  { id: "47678", name: "八丈島" }, { id: "47741", name: "松江" }, { id: "47778", name: "潮岬" },
+  { id: "47807", name: "福岡" }, { id: "47827", name: "鹿児島" }, { id: "47909", name: "名瀬" },
+  { id: "47945", name: "南大東島" }, { id: "47918", name: "石垣島" }, { id: "47971", name: "父島" },
+  { id: "47991", name: "南鳥島" },
+];
+const SONDE_STORE = "domwx_sonde";
+
+// 熱力学
+const RD = 287.04, CP = 1005.7, LV = 2.501e6, EPS = 0.622, KAPPA = RD / CP;
+const K0 = 273.15;
+const esat = (tc) => 6.112 * Math.exp((17.67 * tc) / (tc + 243.5)); // hPa
+const mixr = (tc, p) => { const e = esat(tc); return (EPS * e) / (p - e); }; // kg/kg
+const tdFromMix = (w, p) => { // w: g/kg → 露点(℃)
+  const e = ((w / 1000) * p) / (EPS + w / 1000);
+  const l = Math.log(e / 6.112);
+  return (243.5 * l) / (17.67 - l);
+};
+const dryT = (thetaK, p) => thetaK * Math.pow(p / 1000, KAPPA) - K0;
+// 湿潤断熱減率 dT/dp（K/hPa）
+const moistLapse = (tK, p) => {
+  const rs = mixr(tK - K0, p);
+  return ((RD * tK + LV * rs) / (CP + (LV * LV * rs * EPS) / (RD * tK * tK))) / p;
+};
+// p0 から p1 まで湿潤断熱で持ち上げた気温（℃）
+const moistLift = (tc, p0, p1, step = 5) => {
+  let t = tc + K0, p = p0;
+  const dir = p1 < p0 ? -1 : 1;
+  while ((dir < 0 && p > p1) || (dir > 0 && p < p1)) {
+    const dp = dir * Math.min(step, Math.abs(p1 - p));
+    const k1 = moistLapse(t, p);
+    const k2 = moistLapse(t + k1 * dp, p + dp);
+    t += ((k1 + k2) / 2) * dp;
+    p += dp;
+  }
+  return t - K0;
+};
+// 持ち上げ凝結高度（Bolton 1980）
+const lclOf = (tc, tdc, p) => {
+  const T = tc + K0, Td = tdc + K0;
+  const tl = 1 / (1 / (Td - 56) + Math.log(T / Td) / 800) + 56;
+  return { p: p * Math.pow(tl / T, 1 / KAPPA), t: tl - K0 };
+};
+// 気塊温度（p0 から p へ：LCL までは乾燥断熱、以降は湿潤断熱）
+const parcelT = (tc, tdc, p0, p) => {
+  const lcl = lclOf(tc, tdc, p0);
+  if (p >= lcl.p) return dryT((tc + K0) * Math.pow(1000 / p0, KAPPA), p);
+  return moistLift(lcl.t, lcl.p, p);
+};
+
+function parseSondeCsv(text) {
+  const lines = text.trim().split("\n");
+  const head = lines[0].split(",");
+  const col = (name) => head.findIndex((h) => h.startsWith(name));
+  const ip = col("pressure"), iz = col("geopotential"), it = col("temperature"), itd = col("dew point"),
+    iwd = col("wind direction"), iws = col("wind speed");
+  const num = (s) => (s === undefined || s.trim() === "" ? NaN : +s);
+  const rows = lines.slice(1).map((l) => {
+    const c = l.split(",");
+    return { p: num(c[ip]), z: num(c[iz]), t: num(c[it]), td: num(c[itd]), wd: num(c[iwd]), ws: num(c[iws]) * 1.94384 };
+  }).filter((r) => r.p > 0 && !isNaN(r.z));
+  rows.sort((a, b) => b.p - a.p);
+  return rows;
+}
+
+// ln p で線形補間
+function interpAtP(rows, p, key) {
+  for (let i = 0; i < rows.length - 1; i++) {
+    const a = rows[i], b = rows[i + 1];
+    if (a.p >= p && b.p <= p && !isNaN(a[key]) && !isNaN(b[key])) {
+      const f = (Math.log(a.p) - Math.log(p)) / (Math.log(a.p) - Math.log(b.p));
+      return a[key] + (b[key] - a[key]) * f;
+    }
+  }
+  return NaN;
+}
+// 気温が target を下回る最初の高度（m）
+function heightOfIsotherm(rows, target) {
+  const r = rows.filter((x) => !isNaN(x.t));
+  for (let i = 0; i < r.length - 1; i++) {
+    const a = r[i], b = r[i + 1];
+    if (a.t >= target && b.t < target) return a.z + ((b.z - a.z) * (a.t - target)) / (a.t - b.t);
+  }
+  return NaN;
+}
+const m2ft = (m) => m * 3.28084;
+const ftLabel = (m) => (isNaN(m) ? "—" : `${Math.round(m2ft(m) / 100) * 100}ft (FL${String(Math.round(m2ft(m) / 100)).padStart(3, "0")})`);
+
+function sondeIndices(rows) {
+  const sfc = rows.find((r) => !isNaN(r.t) && !isNaN(r.td));
+  if (!sfc) return null;
+  const at = (p, k) => interpAtP(rows, p, k);
+  const lcl = lclOf(sfc.t, sfc.td, sfc.p);
+  const lclZ = interpAtP(rows, lcl.p, "z");
+  const t850 = at(850, "t"), td850 = at(850, "td"), t700 = at(700, "t"), td700 = at(700, "td"), t500 = at(500, "t");
+  const ssi = t500 - parcelT(t850, td850, 850, 500);
+  const ki = t850 - t500 + td850 - (t700 - td700);
+  // 地上気塊の CAPE / CIN（仮温度補正なしの概算）
+  // CIN は LFC（浮力が初めて正になる高さ）より下の負の部分のみ。CAPE が無ければ CIN は定義しない
+  let cape = 0, below = 0, cin = NaN, above = false;
+  const levels = rows.filter((r) => !isNaN(r.t) && r.p <= sfc.p && r.p >= 100);
+  for (let i = 0; i < levels.length - 1; i++) {
+    const a = levels[i], b = levels[i + 1];
+    const ba = parcelT(sfc.t, sfc.td, sfc.p, a.p) - a.t, bb = parcelT(sfc.t, sfc.td, sfc.p, b.p) - b.t;
+    const e = RD * ((ba + bb) / 2) * Math.log(a.p / b.p);
+    if (e > 0) { if (!above) { above = true; cin = below; } cape += e; }
+    else if (!above) below += e;
+  }
+  return {
+    sfc, lcl, lclZ, ssi, ki, cape, cin,
+    z0: heightOfIsotherm(rows, 0), z10: heightOfIsotherm(rows, -10), z20: heightOfIsotherm(rows, -20),
+  };
+}
+
+// 着氷に注意する層（0〜-20℃ かつ 湿数 3℃以下）
+function icingLayers(rows) {
+  const out = [];
+  let cur = null;
+  rows.forEach((r) => {
+    const hit = !isNaN(r.t) && !isNaN(r.td) && r.t <= 0 && r.t >= -20 && r.t - r.td <= 3;
+    if (hit) { if (!cur) cur = { pBot: r.p, zBot: r.z }; cur.pTop = r.p; cur.zTop = r.z; }
+    else if (cur) { out.push(cur); cur = null; }
+  });
+  if (cur) out.push(cur);
+  return out;
+}
+
+function WindBarb({ x, y, dir, kt }) {
+  if (isNaN(dir) || isNaN(kt)) return null;
+  const L = 22;
+  let rest = Math.round(kt / 5) * 5;
+  const parts = [];
+  let pos = L;
+  while (rest >= 50) { parts.push(<polygon key={`p${pos}`} points={`0,${-pos} 9,${-pos + 3} 0,${-pos + 6}`} fill="#cbd5e1" />); pos -= 7; rest -= 50; }
+  while (rest >= 10) { parts.push(<line key={`l${pos}`} x1="0" y1={-pos} x2="10" y2={-pos - 4} stroke="#cbd5e1" strokeWidth="1.3" />); pos -= 4; rest -= 10; }
+  if (rest >= 5) { if (pos === L) pos -= 4; parts.push(<line key={`h${pos}`} x1="0" y1={-pos} x2="5" y2={-pos - 2} stroke="#cbd5e1" strokeWidth="1.3" />); }
+  if (kt < 2.5) return <circle cx={x} cy={y} r="3" fill="none" stroke="#cbd5e1" />;
+  return (
+    <g transform={`translate(${x},${y}) rotate(${dir})`}>
+      <line x1="0" y1="0" x2="0" y2={-L} stroke="#cbd5e1" strokeWidth="1.3" />
+      {parts}
+    </g>
+  );
+}
+
+const EMA = { W: 760, H: 640, x0: 56, x1: 640, y0: 14, y1: 600, pTop: 100, pBot: 1050, tMin: -80, tMax: 40 };
+const ex = (t) => EMA.x0 + ((t - EMA.tMin) / (EMA.tMax - EMA.tMin)) * (EMA.x1 - EMA.x0);
+const ey = (p) => EMA.y0 + ((Math.log(EMA.pBot) - Math.log(p)) / (Math.log(EMA.pBot) - Math.log(EMA.pTop))) * (EMA.y1 - EMA.y0);
+const pFromY = (y) => Math.exp(Math.log(EMA.pBot) - ((y - EMA.y0) / (EMA.y1 - EMA.y0)) * (Math.log(EMA.pBot) - Math.log(EMA.pTop)));
+const path = (pts) => pts.filter((p) => isFinite(p[0]) && isFinite(p[1])).map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("");
+const clipT = (t) => Math.max(EMA.tMin - 5, Math.min(EMA.tMax + 5, t));
+
+// 背景（断熱線・等混合比線など）は観測に依存しないので一度だけ計算
+const EMA_BG = (() => {
+  const ps = []; for (let p = EMA.pBot; p >= EMA.pTop; p -= 10) ps.push(p);
+  const dry = []; for (let th = 240; th <= 460; th += 10) dry.push(path(ps.map((p) => [ex(clipT(dryT(th, p))), ey(p)])));
+  const moist = [];
+  for (let t0 = -16; t0 <= 36; t0 += 4) {
+    const pts = []; let t = t0;
+    for (let p = 1050; p >= 200; p -= 10) { pts.push([ex(clipT(t)), ey(p)]); t = moistLift(t, p, p - 10, 5); }
+    moist.push(path(pts));
+  }
+  const mix = [0.4, 1, 2, 4, 7, 10, 16, 24].map((w) => ({
+    w, d: path([1050, 1000, 900, 800, 700, 600].map((p) => [ex(tdFromMix(w, p)), ey(p)])),
+  }));
+  return { dry, moist, mix };
+})();
+
+function Emagram({ rows, idx }) {
+  const [hover, setHover] = useState(null);
+  const svgRef = useRef(null);
+  const tPts = rows.filter((r) => !isNaN(r.t) && r.p >= EMA.pTop).map((r) => [ex(r.t), ey(r.p)]);
+  const tdPts = rows.filter((r) => !isNaN(r.td) && r.p >= EMA.pTop).map((r) => [ex(Math.max(EMA.tMin, r.td)), ey(r.p)]);
+  const parcel = idx ? (() => {
+    const pts = [];
+    for (let p = idx.sfc.p; p >= 200; p -= 10) pts.push([ex(clipT(parcelT(idx.sfc.t, idx.sfc.td, idx.sfc.p, p))), ey(p)]);
+    return path(pts);
+  })() : "";
+  const isobars = [1000, 925, 850, 700, 600, 500, 400, 300, 250, 200, 150, 100];
+  // 風：約25hPa毎に間引き
+  const barbs = [];
+  let lastY = -99;
+  rows.forEach((r) => {
+    const y = ey(r.p);
+    if (r.p >= EMA.pTop && !isNaN(r.wd) && y - lastY >= 18) { barbs.push({ y, r }); lastY = y; }
+  });
+  const ice = icingLayers(rows);
+
+  const onMove = (e) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    if (loc.y < EMA.y0 || loc.y > EMA.y1) { setHover(null); return; }
+    const p = pFromY(loc.y);
+    setHover({ y: loc.y, p, z: interpAtP(rows, p, "z"), t: interpAtP(rows, p, "t"), td: interpAtP(rows, p, "td"), wd: interpAtP(rows, p, "wd"), ws: interpAtP(rows, p, "ws") });
+  };
+
+  return (
+    <svg ref={svgRef} viewBox={`0 0 ${EMA.W} ${EMA.H}`} style={{ width: "100%", display: "block", background: "#050a14", touchAction: "pan-y" }}
+      onPointerMove={onMove} onPointerLeave={() => setHover(null)} fontFamily="JetBrains Mono, monospace">
+      <defs><clipPath id="emaClip"><rect x={EMA.x0} y={EMA.y0} width={EMA.x1 - EMA.x0} height={EMA.y1 - EMA.y0} /></clipPath></defs>
+      <rect x={EMA.x0} y={EMA.y0} width={EMA.x1 - EMA.x0} height={EMA.y1 - EMA.y0} fill="#070d1a" stroke="#1e293b" />
+      <g clipPath="url(#emaClip)">
+        {/* 着氷注意層 */}
+        {ice.map((l, i) => (
+          <rect key={i} x={EMA.x0} y={ey(l.pBot)} width={EMA.x1 - EMA.x0} height={Math.max(2, ey(l.pTop) - ey(l.pBot))} fill="rgba(56,189,248,0.10)" />
+        ))}
+        {EMA_BG.dry.map((d, i) => <path key={`d${i}`} d={d} stroke="#7c2d12" strokeWidth="0.8" fill="none" opacity="0.7" />)}
+        {EMA_BG.moist.map((d, i) => <path key={`m${i}`} d={d} stroke="#166534" strokeWidth="0.8" fill="none" strokeDasharray="5 3" opacity="0.8" />)}
+        {EMA_BG.mix.map((m) => <path key={`w${m.w}`} d={m.d} stroke="#7e22ce" strokeWidth="0.8" fill="none" strokeDasharray="2 3" opacity="0.8" />)}
+        {Array.from({ length: 13 }, (_, i) => EMA.tMin + i * 10).map((t) => (
+          <line key={`t${t}`} x1={ex(t)} x2={ex(t)} y1={EMA.y0} y2={EMA.y1}
+            stroke={t === 0 ? "#38bdf8" : t === -20 ? "#0ea5e9" : "#1e293b"} strokeWidth={t === 0 ? 1.4 : 1} strokeDasharray={t === -20 ? "6 4" : undefined} />
+        ))}
+        {isobars.map((p) => <line key={`p${p}`} x1={EMA.x0} x2={EMA.x1} y1={ey(p)} y2={ey(p)} stroke="#334155" strokeWidth="0.8" />)}
+        {parcel && <path d={parcel} stroke="#fbbf24" strokeWidth="1.4" fill="none" strokeDasharray="6 4" />}
+        <path d={path(tdPts)} stroke="#34d399" strokeWidth="2.2" fill="none" />
+        <path d={path(tPts)} stroke="#f87171" strokeWidth="2.4" fill="none" />
+        {idx && <line x1={EMA.x0} x2={EMA.x1} y1={ey(idx.lcl.p)} y2={ey(idx.lcl.p)} stroke="#fbbf24" strokeWidth="0.8" strokeDasharray="2 2" />}
+      </g>
+      {/* 混合比ラベル */}
+      {EMA_BG.mix.map((m) => (
+        <text key={`wl${m.w}`} x={ex(tdFromMix(m.w, 1050))} y={EMA.y1 - 4} fill="#a855f7" fontSize="9" textAnchor="middle">{m.w}</text>
+      ))}
+      {/* 軸ラベル */}
+      {isobars.map((p) => {
+        const z = interpAtP(rows, p, "z");
+        return (
+          <g key={`pl${p}`}>
+            <text x={EMA.x0 - 4} y={ey(p) + 3} fill="#94a3b8" fontSize="10" textAnchor="end">{p}</text>
+            {!isNaN(z) && <text x={EMA.x0 + 3} y={ey(p) - 3} fill="#64748b" fontSize="9">{Math.round(m2ft(z) / 100) * 100}ft</text>}
+          </g>
+        );
+      })}
+      {Array.from({ length: 13 }, (_, i) => EMA.tMin + i * 10).map((t) => (
+        <text key={`tl${t}`} x={ex(t)} y={EMA.y1 + 14} fill={t === 0 ? "#38bdf8" : "#64748b"} fontSize="10" textAnchor="middle">{t}</text>
+      ))}
+      <text x={EMA.x1} y={EMA.y1 + 30} fill="#64748b" fontSize="10" textAnchor="end">気温 ℃</text>
+      <text x={8} y={EMA.y0 + 8} fill="#64748b" fontSize="10">hPa</text>
+      {/* 風 */}
+      <text x={(EMA.x1 + EMA.W) / 2} y={EMA.y0 + 8} fill="#64748b" fontSize="10" textAnchor="middle">風 kt</text>
+      {barbs.map(({ y, r }, i) => <WindBarb key={i} x={(EMA.x1 + EMA.W) / 2 + 6} y={y} dir={r.wd} kt={r.ws} />)}
+      {/* ホバー読み取り */}
+      {hover && (
+        <g pointerEvents="none">
+          <line x1={EMA.x0} x2={EMA.x1} y1={hover.y} y2={hover.y} stroke="#e2e8f0" strokeWidth="0.6" strokeDasharray="3 3" />
+          <rect x={EMA.x0 + 6} y={hover.y + 6} width="300" height="20" rx="2" fill="rgba(0,0,0,0.8)" />
+          <text x={EMA.x0 + 12} y={hover.y + 20} fill="#e2e8f0" fontSize="11">
+            {`${Math.round(hover.p)}hPa ${isNaN(hover.z) ? "" : Math.round(m2ft(hover.z) / 100) * 100 + "ft"} T${isNaN(hover.t) ? "—" : hover.t.toFixed(1)} Td${isNaN(hover.td) ? "—" : hover.td.toFixed(1)} ${isNaN(hover.wd) ? "" : `${Math.round(hover.wd)}°/${Math.round(hover.ws)}kt`}`}
+          </text>
+        </g>
+      )}
+    </svg>
+  );
+}
+
+// 直近の観測時刻（00Z/12Z、観測後2時間で利用可能とみなす）から遡って n 回分
+const sondeCycles = (n = 8) => {
+  const d = new Date(Date.now() - 2 * 3600e3);
+  d.setUTCMinutes(0, 0, 0);
+  d.setUTCHours(d.getUTCHours() >= 12 ? 12 : 0);
+  return Array.from({ length: n }, (_, i) => new Date(d.getTime() - (n - 1 - i) * 12 * 3600e3));
+};
+const cycleKey = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}`;
+const sondeCache = new Map();
+
+function EmagramSection({ refresh }) {
+  const [station, setStationState] = useState(() => {
+    try { return localStorage.getItem(SONDE_STORE) || "47646"; } catch { return "47646"; }
+  });
+  const setStation = (s) => { setStationState(s); try { localStorage.setItem(SONDE_STORE, s); } catch { /* ignore */ } };
+  const cycles = sondeCycles();
+  const [idx, setIdx] = useState(cycles.length - 1);
+  const [state, setState] = useState({ status: "loading" });
+  const fellBack = useRef(false);
+  const cyc = cycles[idx];
+  const key = `${station}|${cycleKey(cyc)}`;
+
+  useEffect(() => { fellBack.current = false; setIdx(cycles.length - 1); }, [station, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let alive = true;
+    setState({ status: "loading" });
+    if (!sondeCache.has(key)) {
+      sondeCache.set(key, fetch(`${WORKER_URL}/upper-air/?id=${station}&dt=${cycleKey(cyc)}`)
+        .then(async (r) => {
+          if (!r.ok) throw new Error(r.status === 503 ? "データ提供元が混雑中です。少し待って再試行してください" : "観測データがありません（未入電・欠測）");
+          const rows = parseSondeCsv(await r.text());
+          if (rows.length < 5) throw new Error("観測データが不十分です");
+          return rows;
+        }));
+    }
+    sondeCache.get(key)
+      .then((rows) => alive && setState({ status: "ok", rows }))
+      .catch((e) => {
+        sondeCache.delete(key);
+        if (!alive) return;
+        // 最新回がまだ無ければ1回前へ自動で戻る
+        if (idx === cycles.length - 1 && !fellBack.current) { fellBack.current = true; setIdx(idx - 1); return; }
+        setState({ status: "error", msg: e.message });
+      });
+    return () => { alive = false; };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const rows = state.rows;
+  const ind = rows ? sondeIndices(rows) : null;
+  const ice = rows ? icingLayers(rows) : [];
+  const stName = SONDE_STATIONS.find((s) => s.id === station)?.name;
+  const stdLevels = [1000, 925, 850, 700, 500, 400, 300, 250, 200];
+  const cell = { padding: "3px 8px", textAlign: "right", fontFamily: MONO, fontSize: "11px", color: "#cbd5e1", borderBottom: "1px solid rgba(148,163,184,0.08)" };
+
+  return (
+    <PanelFrame title="EMAGRAM / エマグラム（高層観測）" code="DOM-04" style={{ padding: 0 }}>
+      <Toolbar>
+        <Seg options={SONDE_STATIONS.map((s) => ({ key: s.id, label: s.name }))} value={station} onChange={setStation} small />
+      </Toolbar>
+      {state.status === "ok" ? <Emagram rows={rows} idx={ind} />
+        : <Placeholder minHeight={420} text={state.status === "error" ? state.msg : "LOADING SOUNDING..."} />}
+      <StepBar index={idx} count={cycles.length} setIndex={(i) => { fellBack.current = true; setIdx(typeof i === "function" ? i(idx) : i); }}
+        label={`${stName} ${pad(cyc.getUTCDate())}日 ${pad(cyc.getUTCHours())}Z`} sub={`${fmtJst(cyc)} 観測 · 12時間毎`} />
+      {ind && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1px", background: "rgba(110,231,183,0.08)", borderTop: "1px solid rgba(110,231,183,0.08)" }}>
+          {[
+            ["0℃高度", ftLabel(ind.z0), "#38bdf8"],
+            ["-10℃高度", ftLabel(ind.z10), "#38bdf8"],
+            ["-20℃高度", ftLabel(ind.z20), "#38bdf8"],
+            ["持ち上げ凝結高度 LCL（地上気塊）",`${Math.round(ind.lcl.p)}hPa / ${isNaN(ind.lclZ) ? "—" : Math.round(m2ft(ind.lclZ) / 100) * 100 + "ft"}`, "#fbbf24"],
+            ["SSI（ショワルター）", isNaN(ind.ssi) ? "—" : `${ind.ssi.toFixed(1)}${ind.ssi <= 0 ? "  雷雨の可能性" : ind.ssi <= 3 ? "  やや不安定" : ""}`, ind.ssi <= 0 ? "#f87171" : ind.ssi <= 3 ? "#fbbf24" : "#6ee7b7"],
+            ["K指数", isNaN(ind.ki) ? "—" : `${ind.ki.toFixed(0)}${ind.ki >= 30 ? "  雷雨の可能性大" : ind.ki >= 20 ? "  雷雨の可能性" : ""}`, ind.ki >= 30 ? "#f87171" : ind.ki >= 20 ? "#fbbf24" : "#6ee7b7"],
+            ["CAPE / CIN（地上・概算）", `${Math.round(ind.cape)} / ${isNaN(ind.cin) ? "—" : Math.round(ind.cin)} J/kg`,ind.cape >= 1000 ? "#f87171" : ind.cape >= 250 ? "#fbbf24" : "#6ee7b7"],
+            ["着氷注意層（0〜-20℃・湿数≦3）", ice.length ? ice.map((l) => `${Math.round(m2ft(l.zBot) / 100)}-${Math.round(m2ft(l.zTop) / 100)}`).join(", ") + " (×100ft)" : "なし", ice.length ? "#38bdf8" : "#6ee7b7"],
+          ].map(([k, v, c]) => (
+            <div key={k} style={{ padding: "8px 12px", background: "#050a14" }}>
+              <div style={{ color: "#475569", fontSize: "9px", fontFamily: MONO }}>{k}</div>
+              <div style={{ color: c, fontSize: "12px", fontFamily: MONO, fontWeight: 700, marginTop: "2px" }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {rows && (
+        <div style={{ overflowX: "auto", background: "rgba(0,0,0,0.35)", borderTop: "1px solid rgba(110,231,183,0.06)" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "460px" }}>
+            <thead>
+              <tr>{["気圧", "高度", "気温", "露点", "湿数", "風"].map((h) => <th key={h} style={{ ...cell, color: "#64748b", fontWeight: 500 }}>{h}</th>)}</tr>
+            </thead>
+            <tbody>
+              {stdLevels.map((p) => {
+                const z = interpAtP(rows, p, "z"), t = interpAtP(rows, p, "t"), td = interpAtP(rows, p, "td");
+                const wd = interpAtP(rows, p, "wd"), ws = interpAtP(rows, p, "ws");
+                if (isNaN(z)) return null;
+                const dep = t - td;
+                return (
+                  <tr key={p}>
+                    <td style={cell}>{p}hPa</td>
+                    <td style={cell}>{Math.round(m2ft(z) / 100) * 100}ft</td>
+                    <td style={{ ...cell, color: "#f87171" }}>{isNaN(t) ? "—" : t.toFixed(1)}</td>
+                    <td style={{ ...cell, color: "#34d399" }}>{isNaN(td) ? "—" : td.toFixed(1)}</td>
+                    <td style={{ ...cell, color: dep <= 3 ? "#38bdf8" : "#cbd5e1" }}>{isNaN(dep) ? "—" : dep.toFixed(1)}</td>
+                    <td style={cell}>{isNaN(wd) ? "—" : `${String(Math.round(wd / 10) * 10).padStart(3, "0")}°/${Math.round(ws)}kt`}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <Caption>
+        赤＝気温、緑＝露点、黄破線＝地上気塊の上昇経路（LCLで乾燥→湿潤断熱）。茶線＝乾燥断熱線、緑破線＝湿潤断熱線、紫点線＝等飽和混合比線(g/kg)。
+        青の帯＝着氷に注意する層。図をなぞるとその高さの値を表示します。指標は簡易計算のため目安です。
+      </Caption>
+      <Links>
+        <ExtLink href={`https://weather.uwyo.edu/wsgi/sounding?datetime=${encodeURIComponent(`${cyc.toISOString().slice(0, 10)} ${pad(cyc.getUTCHours())}:00:00`)}&id=${station}&type=TEXT:LIST&src=UNKNOWN`} accent>
+          元データ（Univ. of Wyoming）
+        </ExtLink>
+        <ExtLink href="https://www.data.jma.go.jp/stats/etrn/upper/index.php">気象庁 高層観測データ</ExtLink>
+      </Links>
+    </PanelFrame>
+  );
+}
+
+/* ============================================================
    空港別：飛行場時系列予報/情報・飛行場気象解説情報（METAR/TAF タブ用）
    ============================================================ */
 const AIRINFO = `${JMA_DATA}/airinfo/data`;
@@ -1059,6 +1447,7 @@ const SECTIONS = [
   { key: "charts", label: "天気図", icon: "🗺️" },
   { key: "himawari", label: "ひまわり", icon: "🛰️" },
   { key: "maiji", label: "断面・平面", icon: "📐" },
+  { key: "emagram", label: "エマグラム", icon: "🎈" },
   { key: "severe", label: "悪天監視", icon: "⛈️" },
   { key: "radar", label: "レーダー", icon: "🌧️" },
   { key: "thunder", label: "雷", icon: "⚡" },
@@ -1140,6 +1529,7 @@ export default function DomesticWxPanel() {
       {section === "charts" && <ChartsSection refresh={refresh} />}
       {section === "himawari" && <HimawariSection refresh={refresh} />}
       {section === "maiji" && <MaijiSection refresh={refresh} />}
+      {section === "emagram" && <EmagramSection refresh={refresh} />}
       {section === "severe" && <SevereSection refresh={refresh} />}
       {section === "radar" && <NowcastSection key="radar" mode="radar" refresh={refresh} />}
       {section === "thunder" && <NowcastSection key="thunder" mode="thunder" refresh={refresh} />}

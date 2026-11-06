@@ -10,6 +10,9 @@ const TT_SOUNDING_BASE = "https://www.tropicaltidbits.com/analysis/models/soundi
 const ALLOWED_PATHS = ["/api/data/taf", "/api/data/metar", "/api/data/isigmet", "/api/data/airsigmet", "/api/data/pirep"];
 const TENKI_PREFIX = "/tenki/";
 const SOUNDING_PREFIX = "/sounding/";
+// 高層観測（ラジオゾンデ実測）: University of Wyoming CSV を中継
+const UPPER_AIR_PREFIX = "/upper-air/";
+const UWYO_SOUNDING = "https://weather.uwyo.edu/wsgi/sounding";
 
 // Allowed origins (restrict to our dashboard)
 const ALLOWED_ORIGINS = [
@@ -27,6 +30,43 @@ function corsHeaders(origin) {
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
   };
+}
+
+async function handleUpperAir(url, origin) {
+  const id = url.searchParams.get("id") || "";
+  const dt = url.searchParams.get("dt") || "";
+  if (!/^\d{5}$/.test(id) || !/^\d{8}(00|12)$/.test(dt)) {
+    return new Response("Bad id/dt", { status: 400, headers: corsHeaders(origin) });
+  }
+  // キャッシュキーは Origin に依存しない形にする
+  const cacheKey = new Request(`https://upper-air.cache/${id}/${dt}`);
+  const cache = caches.default;
+  let cached = await cache.match(cacheKey);
+  if (!cached) {
+    const datetime = `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)} ${dt.slice(8, 10)}:00:00`;
+    const upstream = `${UWYO_SOUNDING}?datetime=${encodeURIComponent(datetime)}&id=${id}&src=UNKNOWN&type=TEXT:CSV`;
+    let resp, body = "";
+    // 混雑時 (503) は少し待って再試行
+    for (let i = 0; i < 3; i++) {
+      resp = await fetch(upstream, { headers: { "User-Agent": "wx-dashboard-proxy/1.0" } });
+      body = await resp.text();
+      if (resp.status !== 503) break;
+      await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
+    const ok = resp.ok && body.startsWith("time,");
+    // 観測から6時間以上経過したデータは確定扱いで長めにキャッシュ
+    const obsTime = Date.UTC(+dt.slice(0, 4), +dt.slice(4, 6) - 1, +dt.slice(6, 8), +dt.slice(8, 10));
+    const settled = Date.now() - obsTime > 6 * 3600e3;
+    const ttl = ok ? (settled ? 86400 : 1800) : 300;
+    cached = new Response(ok ? body : (body || "No data"), {
+      status: ok ? 200 : (resp.status === 503 ? 503 : 404),
+      headers: { "Content-Type": "text/csv; charset=utf-8", "Cache-Control": `public, max-age=${ttl}` },
+    });
+    if (resp.status !== 503) await cache.put(cacheKey, cached.clone());
+  }
+  const headers = new Headers(cached.headers);
+  for (const [k, v] of Object.entries(corsHeaders(origin))) headers.set(k, v);
+  return new Response(cached.body, { status: cached.status, headers });
 }
 
 export default {
@@ -47,6 +87,11 @@ export default {
     // Validate path & route
     const path = url.pathname;
     let upstreamUrl;
+
+    if (path.startsWith(UPPER_AIR_PREFIX)) {
+      // /upper-air/?id=47646&dt=2026110512  (dt = YYYYMMDDHH, HH は 00 or 12)
+      return handleUpperAir(url, origin);
+    }
 
     if (path.startsWith(SOUNDING_PREFIX)) {
       // Tropical Tidbits sounding proxy: /sounding/?lat=33.58&lon=130.45&fh=12

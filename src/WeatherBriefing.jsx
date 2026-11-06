@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { PanelFrame, ExtLink } from "./ui.jsx";
-import DomesticWxPanel from "./DomesticWxPanel.jsx";
+import DomesticWxPanel, { JmaAirportCharts, jmaTafChartUrl, jmaCommentUrl } from "./DomesticWxPanel.jsx";
 
 /* ============================================================
    AWC API BASE URL
@@ -2266,6 +2266,7 @@ function MetarTafPanel() {
               {!metarData[icao] && !loading[icao] && (
                 <div style={{ color: "#64748b", fontSize: "12px", fontStyle: "italic" }}>REFRESHで取得</div>
               )}
+              <JmaAirportCharts icao={icao} />
             </div>
           );
         })}
@@ -5422,6 +5423,10 @@ export default function WeatherBriefing() {
     const metarIds = metarAirports.join(",");
     urls.push(vatsimMetarUrl(metarIds));
     urls.push(...awcProxyUrls(`/api/data/taf?ids=${metarIds}&format=raw`));
+    // JMA 飛行場時系列予報・解説情報（存在しない空港は SW 側で失敗扱いになるだけ）
+    for (const icao of metarAirports) {
+      urls.push(jmaTafChartUrl(icao, 1), jmaTafChartUrl(icao, 2), jmaCommentUrl(icao, false));
+    }
 
     // Atmospheric analysis images — all 4 cross sections + 4 plane levels × latest timestamp
     try {

@@ -917,6 +917,104 @@ function MaijiSection({ refresh }) {
 }
 
 /* ============================================================
+   空港別：飛行場時系列予報/情報・飛行場気象解説情報（METAR/TAF タブ用）
+   ============================================================ */
+const AIRINFO = `${JMA_DATA}/airinfo/data`;
+export const jmaTafChartUrl = (icao, part) => `${AIRINFO}/pict/taf/${part === 2 ? "QMCJ98" : "QMCD98"}_${icao}.png`;
+export const jmaCommentUrl = (icao, rinji) => `${AIRINFO}/pict/comment/${rinji ? "ADJH02" : "ADJH01"}_${icao}.png`;
+
+let jmaAirportsPromise = null;
+// 気象庁の対象空港一覧 { ICAO: { type: "fcst"|"info", name } }
+export function getJmaAirports() {
+  if (!jmaAirportsPromise) {
+    jmaAirportsPromise = fetch(`${AIRINFO}/conf/airport_options.txt`)
+      .then((r) => r.text())
+      .then((text) => {
+        const map = {};
+        text.split("\n").forEach((line) => {
+          const [type, , icao, name] = line.split(",").map((s) => s.trim());
+          if (icao && /^[A-Z]{4}$/.test(icao)) map[icao] = { type, name };
+        });
+        return map;
+      })
+      .catch(() => { jmaAirportsPromise = null; return {}; });
+  }
+  return jmaAirportsPromise;
+}
+
+// 画像が存在するか（404なら false）
+function useImageExists(src) {
+  const [exists, setExists] = useState(false);
+  useEffect(() => {
+    if (!src) return;
+    let alive = true;
+    setExists(false);
+    const img = new Image();
+    img.onload = () => alive && setExists(true);
+    img.onerror = () => alive && setExists(false);
+    img.src = src;
+    return () => { alive = false; };
+  }, [src]);
+  return exists;
+}
+
+export function JmaAirportCharts({ icao }) {
+  const [info, setInfo] = useState(null);
+  const [view, setView] = useState(null); // null | "p1" | "p2" | "c1" | "c2"
+  useEffect(() => {
+    let alive = true;
+    getJmaAirports().then((m) => alive && setInfo(m[icao] || null));
+    return () => { alive = false; };
+  }, [icao]);
+  const hasComment = useImageExists(info ? jmaCommentUrl(icao, false) : null);
+  const hasRinji = useImageExists(info ? jmaCommentUrl(icao, true) : null);
+  if (!info) return null;
+
+  const isFcst = info.type === "fcst";
+  const views = [
+    { key: "p1", label: "Part1", src: jmaTafChartUrl(icao, 1) },
+    { key: "p2", label: "Part2", src: jmaTafChartUrl(icao, 2) },
+    hasComment && { key: "c1", label: "解説情報", src: jmaCommentUrl(icao, false) },
+    hasRinji && { key: "c2", label: "⚠ 臨時解説", src: jmaCommentUrl(icao, true), alert: true },
+  ].filter(Boolean);
+  const cur = views.find((v) => v.key === view);
+
+  return (
+    <div style={{ marginTop: "12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+        <span style={{ color: "#f59e0b", fontSize: "10px", fontWeight: 600, letterSpacing: "2px", fontFamily: MONO, marginRight: "4px" }}>
+          JMA {isFcst ? "時系列予報" : "時系列情報"}
+        </span>
+        {views.map((v) => {
+          const on = v.key === view;
+          const c = v.alert ? "#f87171" : "#f59e0b";
+          return (
+            <button key={v.key} onClick={() => setView(on ? null : v.key)} style={{
+              padding: "3px 10px", borderRadius: "3px", cursor: "pointer", fontFamily: MONO, fontSize: "10px",
+              background: on ? (v.alert ? "rgba(248,113,113,0.15)" : "rgba(245,158,11,0.15)") : "transparent",
+              border: `1px solid ${on || v.alert ? c : "rgba(148,163,184,0.2)"}`,
+              color: on || v.alert ? c : "#94a3b8",
+            }}>{v.label}</button>
+          );
+        })}
+        <span style={{ color: "#475569", fontSize: "9px", fontFamily: MONO }}>
+          {isFcst ? "1時間毎の風・横風・視程・シーリング・天気・TS確率" : "1時間毎の風・視程・シーリング等"}
+        </span>
+      </div>
+      {cur && (
+        <div style={{ marginTop: "8px", borderRadius: "6px", overflow: "hidden", border: "1px solid rgba(245,158,11,0.25)" }}>
+          <ChartImg src={cur.src} label={`${icao} ${cur.label}`} minHeight={240} />
+          <div style={{ display: "flex", gap: "4px", padding: "6px 10px", flexWrap: "wrap", background: "rgba(0,0,0,0.4)" }}>
+            <ExtLink href={`${AIRINFO}/awfo_taf.html?${icao}#contents_area2`}>気象庁 時系列予報</ExtLink>
+            {hasComment && <ExtLink href={`${AIRINFO}/awfo_comment.html?${icao}#contents_area2`}>気象庁 解説情報</ExtLink>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
    オフライン用まとめ取得（Service Worker の PREFLIGHT_CACHE を利用）
    ============================================================ */
 async function collectOfflineUrls() {

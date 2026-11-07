@@ -5082,126 +5082,89 @@ function EventLog() {
 }
 
 /* ========== BOOT SEQUENCE — 起動シーケンス ========== */
-function BootSequence({ onComplete }) {
-  const [lines, setLines] = useState([]);
-  const [phase, setPhase] = useState(0); // 0=typing, 1=done
+// 起動演出：1セッション1回・約0.9秒・タップ/キーで即スキップ。接続状態は実際の確認結果を表示
+const BOOT_SESSION_KEY = "wx_booted";
+const BOOT_MS = 900;
+function bootAlreadyShown() {
+  try { return sessionStorage.getItem(BOOT_SESSION_KEY) === "1"; } catch { return false; }
+}
 
-  const bootMessages = [
-    { text: "WEATHER INTELLIGENCE DASHBOARD v2.4.1", delay: 0, color: "#6ee7b7" },
-    { text: "────────────────────────────────────────", delay: 150, color: "#1e293b" },
-    { text: "INITIALIZING CORE SYSTEMS...", delay: 300, color: "#94a3b8" },
-    { text: "[OK] Display subsystem loaded", delay: 600, color: "#6ee7b7" },
-    { text: "[OK] JetBrains Mono font verified", delay: 800, color: "#6ee7b7" },
-    { text: "CONNECTING DATA FEEDS...", delay: 1100, color: "#94a3b8" },
-    { text: "[OK] JMA Forecast API ── ONLINE", delay: 1400, color: "#6ee7b7" },
-    { text: "[OK] AWC METAR/TAF ── CONNECTED", delay: 1700, color: "#6ee7b7" },
-    { text: "[OK] HIMAWARI-9 Imagery ── LINKED", delay: 2000, color: "#6ee7b7" },
-    { text: "[OK] Windy Embed API ── READY", delay: 2200, color: "#6ee7b7" },
-    { text: "LOADING MODULES...", delay: 2500, color: "#94a3b8" },
-    { text: "[OK] METAR/TAF Parser ── ACTIVE", delay: 2700, color: "#6ee7b7" },
-    { text: "[OK] Satellite Band Selector ── ACTIVE", delay: 2900, color: "#6ee7b7" },
-    { text: "[OK] Almanac Engine ── COMPUTED", delay: 3100, color: "#6ee7b7" },
-    { text: "[OK] Alert Monitor ── SCANNING", delay: 3300, color: "#6ee7b7" },
-    { text: "[OK] Event Logger ── RECORDING", delay: 3500, color: "#6ee7b7" },
-    { text: "────────────────────────────────────────", delay: 3700, color: "#1e293b" },
-    { text: "ALL SYSTEMS NOMINAL ── DASHBOARD READY", delay: 3900, color: "#6ee7b7", bold: true },
-    { text: "KEYBOARD: [1-9] TAB  [M] MULTI  [F] FULLSCREEN  [R] REFRESH", delay: 4100, color: "#334155" },
-  ];
+function BootSequence({ onComplete, sysStatus }) {
+  const [leaving, setLeaving] = useState(false);
+  const doneRef = useRef(false);
+  const online = typeof navigator === "undefined" ? true : navigator.onLine !== false;
+  const reduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  const finish = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    try { sessionStorage.setItem(BOOT_SESSION_KEY, "1"); } catch { /* ignore */ }
+    if (reduceMotion) { onComplete(); return; }
+    setLeaving(true);
+    setTimeout(onComplete, 250);
+  }, [onComplete, reduceMotion]);
 
   useEffect(() => {
-    const timers = bootMessages.map((msg, i) =>
-      setTimeout(() => {
-        setLines(prev => [...prev, msg]);
-      }, msg.delay)
-    );
-    // 起動完了
-    const doneTimer = setTimeout(() => {
-      setPhase(1);
-    }, 4500);
-    const completeTimer = setTimeout(() => {
-      onComplete();
-    }, 5200);
-    return () => { timers.forEach(clearTimeout); clearTimeout(doneTimer); clearTimeout(completeTimer); };
-  }, []); // eslint-disable-line
+    const t = setTimeout(finish, BOOT_MS);
+    // capture で先に受け取り、スキップ用のキーがタブ切替などに流れないようにする
+    const onKey = (e) => {
+      if (doneRef.current) return; // フェード中以降のキーは通常操作へ流す
+      e.preventDefault(); e.stopImmediatePropagation(); finish();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => { clearTimeout(t); window.removeEventListener("keydown", onKey, true); };
+  }, [finish]);
+
+  const { status } = sysStatus;
+  const rows = [
+    { label: "JMA API", ...status.jma },
+    { label: "METAR/AWC", ...status.metar },
+    { label: "HIMAWARI", ...status.himawari },
+  ];
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 99999,
-      background: "#030810",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      opacity: phase === 1 ? 0 : 1,
-      transition: "opacity 0.7s ease",
-      pointerEvents: phase === 1 ? "none" : "auto",
-    }}>
-      {/* Scanline */}
-      <div style={{
-        position: "absolute", inset: 0, pointerEvents: "none",
-        backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px)",
-      }} />
-      {/* Vignette */}
-      <div style={{
-        position: "absolute", inset: 0, pointerEvents: "none",
-        background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%)",
-      }} />
-
-      <div style={{ maxWidth: "640px", width: "100%", padding: "40px" }}>
-        {/* タイトルロゴ */}
-        <div style={{ textAlign: "center", marginBottom: "30px" }}>
-          <div style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: "60px", height: "60px",
-            border: "2px solid #6ee7b7",
-            borderRadius: "4px",
-            fontSize: "32px",
-            boxShadow: "0 0 30px rgba(110,231,183,0.4), inset 0 0 20px rgba(110,231,183,0.08)",
-            marginBottom: "16px",
-          }}>✈</div>
-          <div style={{
-            fontSize: "22px", fontWeight: 700,
-            letterSpacing: "6px", color: "#e2e8f0",
-            textShadow: "0 0 30px rgba(226,232,240,0.4)",
-            fontFamily: "'JetBrains Mono', monospace",
-          }}>PRE-FLIGHT WX BRIEFING</div>
-          <div style={{
-            fontSize: "9px", color: "#334155",
-            letterSpacing: "4px", fontFamily: "'JetBrains Mono', monospace",
-            marginTop: "6px",
-          }}>◈ WEATHER INTELLIGENCE DASHBOARD</div>
-        </div>
-
-        {/* ターミナル出力 */}
+    <div
+      onPointerDown={finish}
+      role="button"
+      aria-label="起動画面を閉じる"
+      style={{
+        position: "fixed", inset: 0, zIndex: 99999,
+        background: "#030810",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        opacity: leaving ? 0 : 1,
+        transition: reduceMotion ? "none" : "opacity 0.25s ease",
+        pointerEvents: leaving ? "none" : "auto",
+        cursor: "pointer",
+        fontFamily: "'JetBrains Mono', monospace",
+      }}>
+      <div style={{ maxWidth: "420px", width: "100%", padding: "32px 24px", textAlign: "center" }}>
         <div style={{
-          background: "rgba(0,0,0,0.5)",
-          border: "1px solid rgba(110,231,183,0.15)",
-          borderRadius: "4px",
-          padding: "16px 20px",
-          minHeight: "280px",
-          fontFamily: "'JetBrains Mono', monospace",
-        }}>
-          {lines.map((line, i) => (
-            <div key={i} style={{
-              fontSize: "11px",
-              color: line.color,
-              fontWeight: line.bold ? 700 : 400,
-              lineHeight: "1.8",
-              textShadow: line.bold ? `0 0 12px ${line.color}` : "none",
-              letterSpacing: line.bold ? "2px" : "0.5px",
-            }}>
-              {line.text}
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: "52px", height: "52px", border: "2px solid #6ee7b7", borderRadius: "4px",
+          fontSize: "28px", boxShadow: "0 0 24px rgba(110,231,183,0.35)", marginBottom: "14px",
+        }}>✈</div>
+        <div style={{ fontSize: "20px", fontWeight: 700, letterSpacing: "5px", color: "#e2e8f0" }}>PRE-FLIGHT WX BRIEFING</div>
+
+        <div style={{ marginTop: "22px", display: "grid", gap: "6px", textAlign: "left" }}>
+          {rows.map((r) => (
+            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+              <span style={{ color: "#94a3b8" }}>{r.label}</span>
+              <span style={{ color: r.color, fontWeight: 700 }}>{r.state === "CHECKING" ? "CHECKING…" : r.state}</span>
             </div>
           ))}
-          {/* 点滅カーソル */}
-          {phase === 0 && (
-            <span style={{
-              display: "inline-block",
-              width: "8px", height: "14px",
-              background: "#6ee7b7",
-              animation: "statusBlink 0.8s ease infinite",
-              verticalAlign: "middle",
-              marginTop: "4px",
-            }} />
-          )}
         </div>
+
+        {!online && (
+          <div style={{
+            marginTop: "16px", padding: "8px 10px", borderRadius: "4px",
+            border: "1px solid rgba(245,158,11,0.5)", background: "rgba(245,158,11,0.1)",
+            color: "#f59e0b", fontSize: "12px", fontWeight: 700, letterSpacing: "1px",
+          }}>
+            CACHED DATA MODE — オフラインのため保存済みデータを表示します
+          </div>
+        )}
+
+        <div style={{ marginTop: "18px", color: "#94a3b8", fontSize: "11px" }}>タップまたは任意のキーでスキップ</div>
       </div>
     </div>
   );
@@ -5209,7 +5172,7 @@ function BootSequence({ onComplete }) {
 
 /* ========== MAIN APP ========== */
 export default function WeatherBriefing() {
-  const [booted, setBooted] = useState(false);
+  const [booted, setBooted] = useState(bootAlreadyShown);
   const [activeTab, setActiveTab] = useState("metar");
   const [displayMode, setDisplayMode] = useState("single"); // "single" | "multi"
   const [multiPanels, setMultiPanels] = useState(["metar", "satellite", "radar", "analysis"]);
@@ -5417,7 +5380,7 @@ export default function WeatherBriefing() {
       position: "relative",
     }}>
       {/* 起動シーケンス */}
-      {!booted && <BootSequence onComplete={() => setBooted(true)} />}
+      {!booted && <BootSequence onComplete={() => setBooted(true)} sysStatus={sysStatus} />}
 
       {/* キーボードショートカット ヘルプ */}
       {showShortcuts && (

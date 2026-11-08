@@ -19,22 +19,22 @@ const NWP_PDF = `${JMA}/bosai/numericmap/data/nwpmap/`;
 const FBJP_URL = `${JMA_DATA}/airinfo/data/pict/fbjp/fbjp.png`;
 const fbjp112Url = (hh) => `${JMA_DATA}/airinfo/data/pict/nwp/fbjp112_${hh}.png`;
 const himaUrl = (band, hhmm) => `${JMA_DATA}/mscweb/data/himawari/img/jpn/jpn_${band}_${hhmm}.jpg`;
-const NOWC = `${JMA}/bosai/jmatile/data/nowc`;
-const BASEMAP = (z, x, y) => `${JMA}/tile/gsi/pale/${z}/${x}/${y}.png`;
+export const NOWC = `${JMA}/bosai/jmatile/data/nowc`;
+export const BASEMAP = (z, x, y) => `${JMA}/tile/gsi/pale/${z}/${x}/${y}.png`;
 const lowLevelUrl = (area, ft) => `${JMA_DATA}/airinfo/data/pict/low-level_sigwx/${area}${ft}.png`;
 const MAIJI_LIST = `${JMA_DATA}/airinfo/data/conf/list_maiji.js`;
 const maijiCrossUrl = (code, ts) => `${JMA_DATA}/airinfo/data/pict/maiji/WANLC1${code}_RJTD_${ts}.PNG`;
 const maijiPlaneUrl = (fl, ts) => `${JMA_DATA}/airinfo/data/pict/maiji/WANLF1${fl}_RJTD_${ts}.PNG`;
 
 /* ---------- 時刻ユーティリティ ---------- */
-const pad = (n) => String(n).padStart(2, "0");
+export const pad = (n) => String(n).padStart(2, "0");
 // "YYYYMMDDHHmmss"(UTC) → Date
-const parseTs = (s) => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12)));
-const fmtJst = (d) => {
+export const parseTs = (s) => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12)));
+export const fmtJst = (d) => {
   const j = new Date(d.getTime() + 9 * 3600e3);
   return `${pad(j.getUTCMonth() + 1)}/${pad(j.getUTCDate())} ${pad(j.getUTCHours())}:${pad(j.getUTCMinutes())} JST`;
 };
-const fmtUtc = (d) => `${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z`;
+export const fmtUtc = (d) => `${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z`;
 const fmtHttpDate = (s) => (s ? fmtJst(new Date(s)) : "");
 
 /* ---------- 汎用UI ---------- */
@@ -100,7 +100,7 @@ function StepBar({ index, count, setIndex, label, sub, playing, setPlaying }) {
 }
 
 // 再生用フック：playing中は index を進め、最後で先頭に戻る
-function usePlayer(count, playing, setIndex, ms = 600) {
+export function usePlayer(count, playing, setIndex, ms = 600) {
   useEffect(() => {
     if (!playing || count < 2) return;
     const id = setInterval(() => setIndex((i) => (i + 1) % count), ms);
@@ -485,20 +485,20 @@ function HimawariSection({ refresh }) {
 /* ============================================================
    VI/VII. レーダー・雷 ナウキャスト（気象庁タイルを地図に重ねる）
    ============================================================ */
-const REGIONS = [
+export const REGIONS = [
   { key: "honshu", label: "本州域", w: 128, e: 146, n: 46, s: 30, z: 6 },
   { key: "south", label: "南日本域", w: 122, e: 134, n: 34, s: 23.5, z: 6 },
   { key: "north", label: "北日本域", w: 137, e: 147, n: 46, s: 37.5, z: 7 },
 ];
 
-const lon2px = (lon, z) => ((lon + 180) / 360) * 256 * 2 ** z;
-const lat2px = (lat, z) => {
+export const lon2px = (lon, z) => ((lon + 180) / 360) * 256 * 2 ** z;
+export const lat2px = (lat, z) => {
   const r = (lat * Math.PI) / 180;
   return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 256 * 2 ** z;
 };
 
 // layers: [{ id, url:(z,x,y)=>string, opacity?, hideMissing? }]（下から順に重ねる）
-function TileMap({ region, layers, zoom, bg = "#cfd8dc" }) {
+export function TileMap({ region, layers, zoom, bg = "#cfd8dc", children }) {
   const { w, e, n, s } = region;
   const z = zoom ?? region.z;
   const x0 = lon2px(w, z), x1 = lon2px(e, z), y0 = lat2px(n, z), y1 = lat2px(s, z);
@@ -518,9 +518,17 @@ function TileMap({ region, layers, zoom, bg = "#cfd8dc" }) {
         <OverlayTile key={`${L.id}-${tx}-${ty}`} src={L.url(z, tx, ty)}
           style={{ ...pos(tx, ty), opacity: L.opacity ?? 1, imageRendering: L.pixelated ? "pixelated" : "auto" }} />
       )))}
+      {children}
     </div>
   );
 }
+
+// 地域内での経緯度 → 位置（%）。TileMap の上に印などを重ねるときに使う
+export const projectPct = (region, zoom, lon, lat) => {
+  const z = zoom ?? region.z;
+  const x0 = lon2px(region.w, z), x1 = lon2px(region.e, z), y0 = lat2px(region.n, z), y1 = lat2px(region.s, z);
+  return { x: ((lon2px(lon, z) - x0) / (x1 - x0)) * 100, y: ((lat2px(lat, z) - y0) / (y1 - y0)) * 100 };
+};
 
 // データの無いタイルは404になるので非表示にする
 function OverlayTile({ src, style }) {
@@ -528,15 +536,15 @@ function OverlayTile({ src, style }) {
   return <img src={src} alt="" style={{ ...style, visibility: src === badSrc ? "hidden" : "visible" }} onError={() => setBadSrc(src)} draggable={false} />;
 }
 
-const RADAR_LEGEND = [
+export const RADAR_LEGEND = [
   ["#F2F2FF", "<1"], ["#A0D2FF", "1"], ["#218CFF", "5"], ["#0041FF", "10"],
   ["#FAF500", "20"], ["#FF9900", "30"], ["#FF2800", "50"], ["#B40068", "80"],
 ];
-const THUNDER_LEGEND = [
+export const THUNDER_LEGEND = [
   ["#F7F55A", "1 雷可能性"], ["#FFAA00", "2 雷あり"], ["#FF2800", "3 やや激しい"], ["#C800FF", "4 激しい"],
 ];
 
-function buildNowcFrames(mode, n1, n2, n3) {
+export function buildNowcFrames(mode, n1, n2, n3) {
   const tenMin = (t) => t.slice(10, 12) % 10 === 0;
   const latestAnalysis = (arr) => arr.filter((x) => x.basetime === x.validtime);
   let past, fcst, element;
@@ -653,9 +661,9 @@ function NowcastSection({ mode, refresh }) {
    V. 悪天監視
    積乱雲情報（気象衛星センター）/ SIGMET図 / 国内航空路予想断面図 / 全国航空気象解説報
    ============================================================ */
-const SATPROD = `${JMA_DATA}/tile/satprod`;
-const CCI_TIMES = `${SATPROD}/targetTimes_cbi_jp.json`;
-const COASTLINE = (z, x, y) => `${JMA_DATA}/omaad/const/COASTLINE/${z}/${x}/${y}.png`;
+export const SATPROD = `${JMA_DATA}/tile/satprod`;
+export const CCI_TIMES = `${SATPROD}/targetTimes_cbi_jp.json`;
+export const COASTLINE = (z, x, y) => `${JMA_DATA}/omaad/const/COASTLINE/${z}/${x}/${y}.png`;
 const sigmetUrl = (code) => `${JMA_DATA}/airinfo/data/pict/sigmet/${code}.png`;
 const fxjp106Url = (hh) => `${JMA_DATA}/airinfo/data/pict/nwp/fxjp106_${hh}.png`;
 const cmntUrl = (code) => `${JMA_DATA}/airinfo/data/pict/ajpn_cmnt/${code}.png`;
@@ -669,7 +677,7 @@ const CMNT_AREAS = [
   { key: "qyya82", label: "国内空域" },
   { key: "qyya83", label: "福岡FIR" },
 ];
-const CCI_LEGEND = [
+export const CCI_LEGEND = [
   ["rgba(255,0,0,0.75)", "積乱雲域"],
   ["rgba(0,255,0,0.75)", "積雲急発達域"],
   ["rgba(0,128,128,0.75)", "中下層雲不明域"],

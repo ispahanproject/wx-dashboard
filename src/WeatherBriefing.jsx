@@ -3,6 +3,7 @@ import { PanelFrame, ExtLink } from "./ui.jsx";
 import { C, FS } from "./theme.js";
 import DomesticWxPanel, { EmagramSection, JmaAirportCharts, jmaTafChartUrl, jmaCommentUrl } from "./DomesticWxPanel.jsx";
 import WxChartsGallery from "./ChartsGallery.jsx";
+import ImageryViewer from "./ImageryViewer.jsx";
 
 /* ============================================================
    AWC API BASE URL
@@ -2414,245 +2415,6 @@ function MetarTafPanel() {
             </div>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-/* ========== HIMAWARI DIRECT IMAGE VIEW ========== */
-// mscweb直接JPG方式 — CORS不要、<img>タグで直接表示
-// URL: https://www.data.jma.go.jp/mscweb/data/himawari/img/jpn/jpn_{band}_{HHMM}.jpg
-// 10分毎更新 (2分30秒遅延あり)
-function HimawariTileView({ band }) {
-  // バンドキーをURLキーにマッピング
-  const bandKey = {
-    B13: "b13", B03: "b03", B08: "b08", B07: "b07", TrueColor: "tre",
-  }[band] ?? "b13";
-
-  // 現在UTC時刻から最新10分刻みのHHMMを生成（5分遅延を見込む）
-  const getLatestHhmm = (offset = 0) => {
-    const now = new Date(Date.now() - (offset * 10 + 5) * 60000);
-    const h = now.getUTCHours().toString().padStart(2, "0");
-    const m = (Math.floor(now.getUTCMinutes() / 10) * 10).toString().padStart(2, "0");
-    return h + m;
-  };
-
-  const [hhmm, setHhmm] = useState(getLatestHhmm(0));
-  const [imgKey, setImgKey] = useState(0);
-  const [retryCount, setRetryCount] = useState(0);
-  const [imgLoaded, setImgLoaded] = useState(false);
-
-  // バンド変更時にリセット
-  useEffect(() => {
-    setHhmm(getLatestHhmm(0));
-    setRetryCount(0);
-    setImgLoaded(false);
-    setImgKey(k => k + 1);
-  }, [band]);
-
-  const imgUrl = `https://www.data.jma.go.jp/mscweb/data/himawari/img/jpn/jpn_${bandKey}_${hhmm}.jpg`;
-
-  const handleError = () => {
-    // 最大6回（60分）遡ってリトライ
-    if (retryCount < 6) {
-      const next = retryCount + 1;
-      setRetryCount(next);
-      setHhmm(getLatestHhmm(next));
-      setImgKey(k => k + 1);
-    }
-  };
-
-  const displayTime = `${hhmm.slice(0, 2)}:${hhmm.slice(2, 4)} UTC`;
-
-  return (
-    <div style={{ position: "relative", background: "#010408", minHeight: "420px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <img
-        key={`${band}-${imgKey}`}
-        src={imgUrl}
-        alt={`HIMAWARI-9 ${band}`}
-        onLoad={() => setImgLoaded(true)}
-        onError={handleError}
-        style={{
-          width: "100%", display: "block",
-          maxHeight: "520px", objectFit: "contain",
-          imageRendering: "crisp-edges",
-          opacity: imgLoaded ? 1 : 0,
-          transition: "opacity 0.4s ease",
-        }}
-      />
-      {!imgLoaded && (
-        <div style={{
-          position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-          color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
-        }}>
-          {retryCount >= 6 ? "IMAGE NOT AVAILABLE" : "LOADING SATELLITE DATA..."}
-        </div>
-      )}
-      {/* HUDオーバーレイ */}
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", }} />
-      {/* タイムスタンプ */}
-      <div style={{
-        position: "absolute", bottom: "8px", right: "10px", pointerEvents: "none",
-        background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: "2px",
-        color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
-      }}>
-        {new Date().toISOString().slice(0, 10)} {displayTime}
-      </div>
-      {/* 外部リンク */}
-      <a
-        href={imgUrl} target="_blank" rel="noopener noreferrer"
-        style={{
-          position: "absolute", bottom: "8px", left: "10px", pointerEvents: "auto",
-          background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: "2px",
-          color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace",
-          textDecoration: "none", letterSpacing: "1px",
-        }}
-      >
-        ↗ JMA mscweb
-      </a>
-    </div>
-  );
-}
-
-
-
-/* ========== SATELLITE ========== */
-
-function SatellitePanel() {
-  const [band, setBand] = useState("B13");
-
-  const bands = [
-    {
-      key: "B13", label: "赤外 (IR/B13)", emoji: "🌡️", color: "#60a5fa",
-      desc: "雲頂温度。白＝高く冷たい雲（Cb等）、黒＝晴天または低い暖かい雲。上層雲の把握に最適。"
-    },
-    {
-      key: "B03", label: "可視 (VIS/B03)", emoji: "☀️", color: "#fbbf24",
-      desc: "太陽光反射。厚い雲＝白輝、薄い雲・晴天＝暗い。日中のみ有効。霧・層雲の識別に有効。"
-    },
-    {
-      key: "B08", label: "水蒸気 (WV/B08)", emoji: "💧", color: "#a78bfa",
-      desc: "上中層の水蒸気量。白＝湿潤、暗＝乾燥。ジェット気流・トラフの位置把握に有効。"
-    },
-    {
-      key: "B07", label: "中赤外 (B07)", emoji: "🔥", color: "#f97316",
-      desc: "低層雲・霧と高層雲の識別。夜間の低層雲検出に特に有効。海面温度推定にも使用。"
-    },
-    {
-      key: "TrueColor", label: "疑似カラー (RGB)", emoji: "🌍", color: "#6ee7b7",
-      desc: "自然色。雲の種類（水雲 vs 氷雲）・砂塵・火山灰・海色の識別に有効。"
-    },
-  ];
-
-  const current = bands.find(b => b.key === band) ?? bands[0];
-
-  // バンドカラーのrgb値マップ（インライン三項を排除）
-  const rgbMap = {
-    "#60a5fa": "96,165,250",
-    "#fbbf24": "251,191,36",
-    "#a78bfa": "167,139,250",
-    "#f97316": "249,115,22",
-    "#6ee7b7": "110,231,183",
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      <PanelFrame title="HIMAWARI-9 IMAGERY" code="SECT-02" style={{ padding: "0" }}>
-        {/* Control bar */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "10px 14px", flexWrap: "wrap", gap: "8px",
-          borderBottom: "1px solid rgba(110, 231, 183, 0.08)",
-          background: "rgba(0,0,0,0.4)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", }} />
-            <span style={{ color: C.textSub, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", }}>SATELLITE / HIMAWARI-9</span>
-          </div>
-          <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-            {bands.map(b => (
-              <button key={b.key} onClick={() => setBand(b.key)} style={{
-                padding: "4px 10px",
-                background: band === b.key ? `rgba(${rgbMap[b.color]}, 0.15)` : "transparent",
-                border: band === b.key ? `1px solid ${b.color}` : "1px solid rgba(110, 231, 183, 0.06)",
-                borderRadius: "2px",
-                color: band === b.key ? b.color : C.textMuted,
-                fontSize: FS.xs, cursor: "pointer",
-                fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.5px",
-                transition: "all 0.15s ease",
-              }}>
-                {b.emoji} {b.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* JMA Himawari tile image grid */}
-        <HimawariTileView band={band} />
-
-
-        {/* Band description */}
-        <div style={{
-          padding: "10px 14px", background: "rgba(0,0,0,0.5)",
-          borderTop: "1px solid rgba(110, 231, 183, 0.08)",
-          display: "flex", alignItems: "flex-start", gap: "10px",
-        }}>
-          <span style={{ fontSize: FS.lg }}>{current.emoji}</span>
-          <div>
-            <span style={{ color: current.color, fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{current.label}</span>
-            <p style={{ margin: "3px 0 0", color: C.textMuted, fontSize: FS.xs, lineHeight: "1.6", fontFamily: "'JetBrains Mono', monospace" }}>{current.desc}</p>
-          </div>
-        </div>
-
-        {/* Links */}
-        <div style={{
-          display: "flex", gap: "4px", padding: "8px 14px", flexWrap: "wrap",
-          borderTop: "1px solid rgba(110, 231, 183, 0.06)",
-          background: "rgba(0,0,0,0.4)",
-        }}>
-          <ExtLink href="https://www.jma.go.jp/bosai/himawari/" accent>気象庁 ひまわりビューア</ExtLink>
-          <ExtLink href="https://himawari.asia/">ひまわりリアルタイムWeb</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/satellite/">気象庁 衛星画像</ExtLink>
-        </div>
-      </PanelFrame>
-
-      {/* バンド説明カード — クリックでバンド切り替え可能 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "8px" }}>
-        {bands.map(b => (
-          <div
-            key={b.key}
-            onClick={() => setBand(b.key)}
-            style={{
-              padding: "10px 12px",
-              background: band === b.key ? `rgba(${rgbMap[b.color]}, 0.08)` : "rgba(5,10,20,0.8)",
-              border: `1px solid ${band === b.key ? b.color : "rgba(110,231,183,0.08)"}`,
-              borderRadius: "4px", cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
-              <span style={{ fontSize: FS.md }}>{b.emoji}</span>
-              <span style={{ color: b.color, fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{b.label}</span>
-            </div>
-            <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.5" }}>{b.desc}</div>
-          </div>
-        ))}
-        {/* 読み方ガイド */}
-        {[
-          { icon: "❄️", label: "高層雲 / Cb", value: "赤外 白輝点", hint: "雲頂温度が低い（-60°C以下）" },
-          { icon: "🌫️", label: "低層雲 / 霧", value: "VIS白 / B07差", hint: "夜間は中赤外差分で識別" },
-          { icon: "💨", label: "ジェット気流", value: "WV 輝度境界", hint: "水蒸気バンドの明暗境界部" },
-          { icon: "🌪️", label: "台風眼", value: "IR 円形暖色域", hint: "雲がなく地表温度が見える" },
-        ].map(c => (
-          <div key={c.label} style={{ padding: "10px 12px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.08)", borderRadius: "4px" }}>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
-              <span style={{ fontSize: FS.md }}>{c.icon}</span>
-              <span style={{ color: "#e2e8f0", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{c.label}</span>
-            </div>
-            <div style={{ color: "#6ee7b7", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", marginBottom: "2px" }}>{c.value}</div>
-            <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>{c.hint}</div>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -5208,7 +4970,7 @@ export default function WeatherBriefing() {
 
   const tabs = [
     { key: "metar", label: "METAR / TAF", icon: "📡" },
-    { key: "satellite", label: "衛星画像", icon: "🛰️" },
+    { key: "satellite", label: "画像", icon: "🛰️" },
     { key: "radar", label: "レーダー", icon: "🌧️" },
     { key: "analysis", label: "大気解析", icon: "📊" },
     { key: "charts", label: "WX CHARTS", icon: "📈" },
@@ -5221,7 +4983,7 @@ export default function WeatherBriefing() {
 
   const panelMap = {
     metar: <MetarTafPanel />,
-    satellite: <SatellitePanel />,
+    satellite: <ImageryViewer />,
     radar: <RadarPanel />,
     analysis: <AnalysisPanel />,
     charts: <WxChartsGallery />,

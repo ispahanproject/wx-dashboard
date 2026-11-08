@@ -2557,6 +2557,15 @@ function AnalysisPanel() {
   const [planeLevel, setPlaneLevel] = useState("35"); // FL350
   const [imgError, setImgError] = useState({});
   const [zoomImg, setZoomImg] = useState(null); // { src, label }
+  // 図の減光（夜間用）。WX CHARTS と設定を共有し、元の図は白地のまま表示する
+  const [dimCharts, setDimChartsState] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("wxcharts_dim") || "false") === true; } catch { return false; }
+  });
+  const setDimCharts = (v) => {
+    setDimChartsState(v);
+    try { localStorage.setItem("wxcharts_dim", JSON.stringify(v)); } catch { /* ignore */ }
+  };
+  const chartFilter = dimCharts ? "brightness(0.68) contrast(1.05)" : "none";
 
   // JMAの断面図コード: 経度→内部コード (functions_maiji.jsより)
   const LONS = [
@@ -2643,14 +2652,6 @@ function AnalysisPanel() {
   return (
     <div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      {/* SVGフィルター定義（エッジ強調・シャープネス） */}
-      <svg style={{ position: "absolute", width: 0, height: 0 }} xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <filter id="sharpen-lines">
-            <feConvolveMatrix order="3" kernelMatrix="0 -0.6 0 -0.6 3.4 -0.6 0 -0.6 0" preserveAlpha="true" />
-          </filter>
-        </defs>
-      </svg>
 
       {/* ヘッダー */}
       <div style={panelStyle}>
@@ -2707,6 +2708,12 @@ function AnalysisPanel() {
               {lastRefresh.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </div>
           )}
+          {viewMode !== "sounding" && (
+            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "36px", fontSize: FS.xs, color: C.textSub, fontFamily: "'JetBrains Mono', monospace", cursor: "pointer" }}>
+              <input type="checkbox" checked={dimCharts} onChange={(e) => setDimCharts(e.target.checked)} style={{ width: "18px", height: "18px", accentColor: "#6ee7b7" }} />
+              図を減光（夜間用）
+            </label>
+          )}
           {/* FL切り替え（平面図時のみ） */}
           {viewMode === "plane" && (
             <div style={{ display: "flex", gap: "6px", marginLeft: "auto" }}>
@@ -2742,14 +2749,14 @@ function AnalysisPanel() {
                   </div>
                 ) : (
                   <div
-                    style={{ background: "#3d4044", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
+                    style={{ background: "#ffffff", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
                     onClick={() => setZoomImg({ src: imageUrl(lon.code), label: `${lon.label} — ${tsLabel}` })}
                   >
                     <img
                       src={imageUrl(lon.code)}
                       alt={`大気解析 ${lon.label} ${tsLabel}`}
                       onError={() => setImgError((prev) => ({ ...prev, [lon.code]: true }))}
-                      style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.88) hue-rotate(180deg) contrast(1.3) saturate(1.3) url(#sharpen-lines)" }}
+                      style={{ width: "100%", display: "block", filter: chartFilter }}
                     />
                   </div>
                 )}
@@ -2778,14 +2785,14 @@ function AnalysisPanel() {
               </div>
             ) : (
               <div
-                style={{ background: "#3d4044", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
+                style={{ background: "#ffffff", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
                 onClick={() => setZoomImg({ src: planeUrl(planeLevel), label: `${PLANE_LEVELS.find(l => l.code === planeLevel)?.label} PLANE — ${tsLabel}` })}
               >
                 <img
                   src={planeUrl(planeLevel)}
                   alt={`平面図 FL${planeLevel}0 ${tsLabel}`}
                   onError={() => setImgError((prev) => ({ ...prev, plane: true }))}
-                  style={{ width: "100%", display: "block", imageRendering: "crisp-edges", filter: "invert(0.88) hue-rotate(180deg) contrast(1.3) saturate(1.3) url(#sharpen-lines)" }}
+                  style={{ width: "100%", display: "block", filter: chartFilter }}
                 />
               </div>
             )}
@@ -2887,9 +2894,9 @@ function AnalysisPanel() {
               alt={zoomImg.label}
               style={{
                 maxWidth: "100%", maxHeight: "85vh", objectFit: "contain",
-                imageRendering: "crisp-edges",
                 borderRadius: "4px",
                 background: "#ffffff",
+                filter: chartFilter,
               }}
               onClick={(e) => e.stopPropagation()}
             />

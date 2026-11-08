@@ -1,5 +1,5 @@
 /* ============================================================
-   ENROUTE — 毎時大気解析（断面図・平面図）
+   ENROUTE — 三十分大気解析（断面図・平面図）
    経度4断面・4高度の一覧と、1枚ずつ（全経度・主要航空路・全FL）の表示を切り替える。
    時刻は1時間毎（気象庁 list_maiji.js）。図はタップで全画面、減光の設定は他の図と共有
    ============================================================ */
@@ -90,7 +90,7 @@ export function MaijiView() {
   const grid = sel === "grid";
 
   return (
-    <PanelFrame title="毎時大気解析" style={{ padding: 0 }}>
+    <PanelFrame title="三十分大気解析" style={{ padding: 0 }}>
       {/* 種類・断面/高度の選択 */}
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", padding: "16px 16px 10px" }}>
         <Segmented
@@ -154,7 +154,7 @@ export function MaijiView() {
                 <span style={{ fontSize: FS.sm, fontWeight: 700, color: C.text }}>{labelOf(it.key)}</span>
               )}
               <ChartFigure
-                src={it.src} alt={`毎時大気解析 ${it.title}${d ? ` ${fmtZ(d)}` : ""}`} dim={dim} aspect={aspect}
+                src={it.src} alt={`三十分大気解析 ${it.title}${d ? ` ${fmtZ(d)}` : ""}`} dim={dim} aspect={aspect}
                 missingText="この時刻の図はありません" onOpen={() => setViewer(i)}
               />
             </div>
@@ -169,7 +169,7 @@ export function MaijiView() {
         {" "}図はタップで全画面になります。
       </div>
       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "8px 16px 16px" }}>
-        <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_maiji.html`} accent>気象庁 毎時大気解析</ExtLink>
+        <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_maiji.html`} accent>気象庁 三十分大気解析</ExtLink>
       </div>
 
       {viewer !== null && items[viewer] && (

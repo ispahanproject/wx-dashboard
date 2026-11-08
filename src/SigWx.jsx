@@ -1,5 +1,5 @@
 /* ============================================================
-   SIG WX の各表示 — SIGMET（地図＋原文）、低高度悪天予想図、積乱雲情報、解説報
+   SIG WX の各表示 — SIGMET（地図＋原文）、下層悪天予想図、積乱雲情報、解説報
    （国内悪天予想図は ChartsGallery.jsx の SigwxProgCharts、台風・豪雨は WeatherBriefing.jsx）
    SIGMET は AWC の国際 SIGMET（Cloudflare Worker 経由）から福岡FIR分を表示
    ============================================================ */
@@ -308,7 +308,7 @@ export function CciPanel() {
   return <PanelFrame title="積乱雲情報" style={{ padding: 0 }}><CciView refresh={0} /></PanelFrame>;
 }
 
-// 低高度悪天予想図（地上〜FL150）。タップで全画面、全画面では FT03→06→09→時系列 を左右で切替
+// 下層悪天予想図（地上〜FL150）。タップで全画面、全画面では FT03→06→09→時系列 を左右で切替
 export function LowLevelView() {
   const [prefs, setPrefs] = useState(() => {
     const v = loadPref(LL_PREF_KEY, {});
@@ -337,12 +337,12 @@ export function LowLevelView() {
   }, [src]);
 
   const items = LL_FTS.map((f) => ({
-    key: f.key, title: `低高度悪天予想図 ${area.label}`, code: f.key === "39" ? "時系列" : f.label,
+    key: f.key, title: `下層悪天予想図 ${area.label}`, code: f.key === "39" ? "時系列" : f.label,
     src: lowLevelUrl(prefs.area, f.key), href: lowLevelUrl(prefs.area, f.key), meta: "",
   }));
 
   return (
-    <PanelFrame title="低高度悪天予想図" style={{ padding: 0 }}>
+    <PanelFrame title="下層悪天予想図" style={{ padding: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", padding: "16px 16px 10px" }}>
         <Segmented options={LL_AREAS} value={prefs.area} onChange={(v) => setPref("area", v)} label="地域" />
         <Segmented options={LL_FTS.map((f) => ({ key: f.key, label: ftLabel(f) }))} value={prefs.ft} onChange={(v) => setPref("ft", v)} label="予想時間" />
@@ -353,7 +353,7 @@ export function LowLevelView() {
       </div>
       <div style={{ padding: "0 16px" }}>
         <ChartFigure
-          src={src} alt={`低高度悪天予想図 ${area.label} ${prefs.ft === "39" ? "時系列" : `FT${prefs.ft}`}`} dim={dim} aspect="1000 / 734"
+          src={src} alt={`下層悪天予想図 ${area.label} ${prefs.ft === "39" ? "時系列" : `FT${prefs.ft}`}`} dim={dim} aspect="1000 / 734"
           onOpen={() => setViewer(LL_FTS.findIndex((f) => f.key === prefs.ft))}
         />
       </div>
@@ -362,7 +362,7 @@ export function LowLevelView() {
       </div>
       <Caption>地上〜FL150 の雲底・視程・乱気流・着氷・積乱雲域などを、3・6・9時間先まで予想した図。タップで全画面、全画面では左右で予想時間を切り替えられます。</Caption>
       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "0 16px 16px" }}>
-        <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_low-level_sigwx.html`} accent>気象庁 低高度悪天予想図</ExtLink>
+        <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_low-level_sigwx.html`} accent>気象庁 下層悪天予想図</ExtLink>
         <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_low-level_detailed-sigwx.html`}>詳細版（府県別）</ExtLink>
       </div>
       {viewer !== null && (

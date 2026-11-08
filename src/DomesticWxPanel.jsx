@@ -1,6 +1,6 @@
 /* ============================================================
    気象庁データの共通部品
-   地図タイル（ナウキャスト・衛星プロダクト）、積乱雲情報、毎時大気解析・低高度悪天の URL、
+   地図タイル（ナウキャスト・衛星プロダクト）、積乱雲情報、三十分大気解析・下層悪天の URL、
    PDF の画像化、エマグラム、JMA 飛行場時系列予報、オフライン保存用の URL 一覧
    データはすべて気象庁の公開ソースからブラウザで直接取得（CORS許可済み）
    ============================================================ */
@@ -453,7 +453,7 @@ export function CciView({ refresh }) {
 }
 
 /* ============================================================
-   低高度悪天予想図（SIG WX）
+   下層悪天予想図（SIG WX）
    ============================================================ */
 export const LL_AREAS = [
   { key: "fbsp", label: "北海道" }, { key: "fbsn", label: "東北" }, { key: "fbtk", label: "東日本" },
@@ -464,7 +464,7 @@ export const LL_FTS = [
 ];
 
 /* ============================================================
-   毎時大気解析（断面図・平面図）（ENROUTE）
+   三十分大気解析（断面図・平面図）（ENROUTE）
    ============================================================ */
 export const CROSS_OPTS = [
   ...["145.0", "142.5", "140.0", "137.5", "135.0", "132.5", "130.0", "127.5", "125.0", "122.5"]
@@ -986,12 +986,12 @@ export async function collectChartUrls() {
     const pick = [list.near?.now?.slice(-1)[0], list.asia?.now?.slice(-1)[0], list.near?.ft24?.[0], list.near?.ft48?.[0]];
     pick.filter(Boolean).forEach((f) => urls.push(WM_PNG + f));
   } catch { /* skip */ }
-  // SIG WX：SIGMET（原文・図）・解説報・低高度悪天 全地域×全FT
+  // SIG WX：SIGMET（原文・図）・解説報・下層悪天 全地域×全FT
   urls.push(`${WORKER_URL}/api/data/isigmet?format=json`);
   SIGMET_AREAS.forEach((a) => urls.push(sigmetUrl(a.key)));
   CMNT_AREAS.forEach((a) => urls.push(cmntUrl(a.key)));
   for (const a of LL_AREAS) for (const f of LL_FTS) urls.push(lowLevelUrl(a.key, f.key));
-  // ENROUTE：毎時大気解析 最新の全断面・全FL
+  // ENROUTE：三十分大気解析 最新の全断面・全FL
   try {
     const [ts] = await fetchMaijiTimes();
     if (ts) {

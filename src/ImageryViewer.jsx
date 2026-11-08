@@ -43,7 +43,7 @@ const SOURCE_INFO = {
   cci: { title: "積乱雲情報", desc: "ひまわりの観測から解析した積乱雲域と、積雲が急に発達している域。背景は赤外（白いほど雲頂が高い）。", legend: CCI_LEGEND, legendTitle: "積乱雲情報" },
 };
 const LINKS = [
-  { label: "気象庁 ひまわり", href: `${JMA}/bosai/himawari/` },
+  { label: "気象庁 気象衛星ひまわり", href: "https://www.jma.go.jp/bosai/map.html#5/34.5/137/&elem=ir&contents=himawari" },
   { label: "気象庁 ナウキャスト", href: `${JMA}/bosai/nowc/` },
   { label: "気象庁 積乱雲情報", href: "https://www.data.jma.go.jp/omaad/aviation/jp/cci/" },
 ];

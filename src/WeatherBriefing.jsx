@@ -1328,7 +1328,7 @@ const MENU_VIEWS = {
     { key: "livecam", label: "ライブカメラ", render: () => <LiveCameraPanel /> },
   ],
   enroute: [
-    { key: "maiji", label: "毎時大気解析", render: () => <MaijiView /> },
+    { key: "maiji", label: "三十分大気解析", render: () => <MaijiView /> },
     { key: "xsec", label: "断面図", render: () => <CrossSectionCharts /> },
     { key: "emagram", label: "エマグラム", render: () => <EmagramSection /> },
     { key: "upper", label: "上層風", render: () => <OpsWxPanel /> },
@@ -1336,7 +1336,7 @@ const MENU_VIEWS = {
   sigwx: [
     { key: "sigmet", label: "SIGMET", render: () => <SigmetView /> },
     { key: "prog", label: "悪天予想図", render: () => <SigwxProgCharts /> },
-    { key: "lowlevel", label: "低高度", render: () => <LowLevelView /> },
+    { key: "lowlevel", label: "下層悪天", render: () => <LowLevelView /> },
     { key: "cci", label: "積乱雲情報", render: () => <CciPanel /> },
     { key: "cmnt", label: "解説報", render: () => <CmntView /> },
     { key: "typhoon", label: "台風・豪雨", render: () => <SevereWxPanel /> },
@@ -1837,12 +1837,10 @@ function JapanOverview() {
           background: "rgba(0,0,0,0.4)",
         }}>
           <ExtLink href="https://www.jma.go.jp/bosai/nowc/" accent>ナウキャスト</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/satellite/">衛星</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/weather_map/">ASAS天気図</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/#type:aupq78">AUPQ78 850/700</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/#type:aupq35">AUPQ35 500/300</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/#type:analysis">大気解析</ExtLink>
-          <ExtLink href="https://www.data.jma.go.jp/airinfo/data/awfo_maiji.html">空域悪天情報</ExtLink>
+          <ExtLink href="https://www.jma.go.jp/bosai/map.html#5/34.5/137/&elem=ir&contents=himawari">気象衛星</ExtLink>
+          <ExtLink href="https://www.jma.go.jp/bosai/weather_map/">天気図</ExtLink>
+          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/">数値予報天気図</ExtLink>
+          <ExtLink href="https://www.data.jma.go.jp/airinfo/data/awfo_maiji.html">三十分大気解析</ExtLink>
           <ExtLink href="https://himawari.asia/">ひまわりRT</ExtLink>
         </div>
       </PanelFrame>
@@ -2417,7 +2415,7 @@ function MetarTafPanel() {
                       transition: "all 0.2s ease",
                     }}>Summary</button>
                   )}
-                  <ExtLink href={`https://aviationweather.gov/gfa/#obs=metar&region=other&extent=${icao}`}>AWC</ExtLink>
+                  <ExtLink href={`https://aviationweather.gov/data/metar/?id=${icao}&hours=0&taf=1`}>AWC</ExtLink>
                   <ExtLink href={`https://atis.guru/atis/${icao}`} amber>ATIS</ExtLink>
                   <button onClick={() => removeAirport(icao)} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: FS.md }}>✕</button>
                 </div>
@@ -2612,8 +2610,8 @@ function RadarPanel() {
         <div style={{ display: "flex", gap: "4px", padding: "8px 14px", flexWrap: "wrap", borderTop: "1px solid rgba(110, 231, 183, 0.06)", background: "rgba(0,0,0,0.4)" }}>
           <ExtLink href="https://www.jma.go.jp/bosai/nowc/" accent>気象庁ナウキャスト</ExtLink>
           <ExtLink href="https://www.jma.go.jp/bosai/rain/">雨雲の動き</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:thunder">雷ナウキャスト</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:tornado">竜巻ナウキャスト</ExtLink>
+          <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:thns">雷ナウキャスト</ExtLink>
+          <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:trns">竜巻ナウキャスト</ExtLink>
           <ExtLink href="https://www.jma.go.jp/bosai/amedas/">AMEDAS</ExtLink>
         </div>
       </PanelFrame>
@@ -2686,7 +2684,7 @@ const TYPHOON_LINKS = [
   { label: "JTWC", desc: "Joint Typhoon Warning Center", url: "https://www.metoc.navy.mil/jtwc/jtwc.html" },
   { label: "Windy Hurricanes", desc: "Global tropical cyclone tracks", url: "https://www.windy.com/-Hurricanes-tropical-storms/hurricanes?36,137,5" },
   { label: "earth.nullschool", desc: "Global wind visualization", url: "https://earth.nullschool.net/#current/wind/surface/level/orthographic=-222.00,35.00,512" },
-  { label: "過去の台風経路", desc: "JMA Best Track Archive", url: "https://www.data.jma.go.jp/yoho/typhoon/route_map/bstv.html" },
+  { label: "過去の台風経路図", desc: "JMA 台風経路図（年別）", url: "https://www.data.jma.go.jp/typhoon/route_map/index.html" },
 ];
 
 const RISK_CRITERIA = [
@@ -2771,9 +2769,9 @@ function SevereWxPanel() {
           {/* JMAリンク */}
           <div style={{ display: "flex", gap: "6px", padding: "10px 16px", flexWrap: "wrap", borderTop: "1px solid rgba(110,231,183,0.08)" }}>
             <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:hrpns" accent>降水ナウキャスト</ExtLink>
-            <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:thunder">雷ナウキャスト</ExtLink>
-            <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:tornado">竜巻ナウキャスト</ExtLink>
-            <ExtLink href="https://www.river.go.jp/kawabou/mb/rd/xbandmap.html">XRAIN 高精度降水</ExtLink>
+            <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:thns">雷ナウキャスト</ExtLink>
+            <ExtLink href="https://www.jma.go.jp/bosai/nowc/#zoom:6/lat:36.0/lon:139.0/colordepth:normal/elements:trns">竜巻ナウキャスト</ExtLink>
+            <ExtLink href="https://www.river.go.jp/kawabou/pc/rd">XRAIN（川の防災情報）</ExtLink>
             <ExtLink href="https://www.jma.go.jp/bosai/risk/">キキクル</ExtLink>
           </div>
         </PanelFrame>
@@ -2826,12 +2824,10 @@ function SevereWxPanel() {
 }
 
 const JMA_UPPER_CHARTS = [
-  { title: "AUPQ35 (500/300hPa)", desc: "ジェット気流・トラフ・リッジ位置", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq35" },
-  { title: "AUPQ78 (850/700hPa)", desc: "暖気・寒気移流。850hPa 0℃/-6℃ライン", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq78" },
-  { title: "FBJP 国内悪天予想図", desc: "CAT/ICE/CB予想域。FL別6-18h予想", url: "https://www.jma.go.jp/bosai/numericmap/#type:fbjp" },
-  { title: "FBFE 下層悪天予想図", desc: "FL100以下 ICE/TURB/VIS", url: "https://www.jma.go.jp/bosai/numericmap/#type:fbfe" },
-  { title: "ASAS 地上実況天気図", desc: "高・低気圧中心と前線位置", url: "https://www.jma.go.jp/bosai/weather_map/" },
-  { title: "FSAS 地上予想天気図", desc: "24h/48h先の前線・気圧配置予想", url: "https://www.jma.go.jp/bosai/weather_map/#type=forecast" },
+  { title: "数値予報天気図（AUPQ35・AUPQ78 ほか）", desc: "AUPQ35 500/300hPa＝ジェット・トラフ・リッジ、AUPQ78 850/700hPa＝寒気・暖気の移流（一覧から選ぶ）", url: "https://www.jma.go.jp/bosai/numericmap/" },
+  { title: "FBJP 国内悪天予想図", desc: "乱気流・着氷・積乱雲域・ジェット軸・0℃高度の予想", url: "https://www.data.jma.go.jp/airinfo/data/awfo_fbjp.html" },
+  { title: "下層悪天予想図", desc: "地上〜FL150 の雲・視程・乱気流・着氷", url: "https://www.data.jma.go.jp/airinfo/data/awfo_low-level_sigwx.html" },
+  { title: "地上天気図（ASAS・FSAS）", desc: "実況と24・48時間予想（ページ内で切替）", url: "https://www.jma.go.jp/bosai/weather_map/" },
 ];
 
 const PILOT_GUIDE = [
@@ -3970,7 +3966,6 @@ function LiveCameraPanel() {
         <ExtLink href="https://weather.jal.co.jp/livecam/index.html" accent>JAL LiveCam</ExtLink>
         <ExtLink href="https://www.flightradar24.com">FlightRadar24</ExtLink>
         <ExtLink href="https://flightaware.com/live/">FlightAware</ExtLink>
-        <ExtLink href="https://aisjapan.mlit.go.jp/">AIS Japan</ExtLink>
       </div>
     </div>
   );
@@ -4670,7 +4665,7 @@ export default function WeatherBriefing() {
       urls.push(jmaTafChartUrl(icao, 1), jmaTafChartUrl(icao, 2), jmaCommentUrl(icao, false));
     }
 
-    // 図（WX CHARTS・ENROUTE・SIG WX）：天気図・数値予報天気図・悪天予想図・SIGMET・低高度悪天・毎時大気解析
+    // 図（WX CHARTS・ENROUTE・SIG WX）：天気図・数値予報天気図・悪天予想図・SIGMET・下層悪天・三十分大気解析
     try { urls.push(...await collectChartUrls()); } catch { /* skip */ }
 
     navigator.serviceWorker.controller.postMessage({ type: "PREFLIGHT_CACHE", urls: [...new Set(urls)] });

@@ -122,13 +122,11 @@ const PROG_CHARTS = [
 const PROG_LINKS = [
   { title: "悪天", links: [
     { label: "FBJP 12時間予想（全初期値）", href: `${JMA_DATA}/airinfo/awfo_fbjp112/awfo_fbjp112.html` },
-    { label: "AWC SIGWX", href: "https://aviationweather.gov/gfa/#area=other" },
-    { label: "AWC 乱気流", href: "https://aviationweather.gov/gfa/#obs=turb" },
-    { label: "AWC 着氷", href: "https://aviationweather.gov/gfa/#obs=ice" },
+    { label: "AWC SIGWX（国際）", href: "https://aviationweather.gov/sigwx" },
   ]},
   { title: "火山灰", links: [
     { label: "東京 VAAC", href: "https://ds.data.jma.go.jp/svd/vaac/data/" },
-    { label: "降灰予報", href: `${JMA}/bosai/ashfall/` },
+    { label: "降灰予報", href: "https://www.jma.go.jp/bosai/map.html#5/34.5/137/&contents=ashfall" },
   ]},
 ];
 

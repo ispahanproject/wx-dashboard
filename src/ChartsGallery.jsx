@@ -22,6 +22,14 @@ const PDF_LAG_H = 4; // 数値予報天気図の PDF は初期時刻の約3.6時
 const CYCLE_LAG_MIN = 140; // FBJP112・FXJP106：3時間毎の初期値、約2時間14分後に掲載
 const AUTO_REFRESH_MS = 10 * 60e3;
 export const DIM_FILTER = "brightness(0.68) contrast(1.05)";
+const ISO_KEY = "wxcharts_isotherm"; // 寒気の目安（等温線の色付け）の表示
+const ISO_COLOR = "#2563eb";
+// 等温線の色付けの説明（例: 500hPa −30℃線）。d.iso は見つかった線の数（null は色付けできなかった）
+const isoNote = (c, d, on) => {
+  if (!c.isotherm || !on || d?.iso === undefined) return null;
+  const name = `${c.isotherm.level} ${String(c.isotherm.target).replace("-", "−")}℃線`;
+  return d.iso > 0 ? `${name}を青で表示` : `${name}は読み取れませんでした`;
+};
 
 const pad = (n) => String(n).padStart(2, "0");
 const parseTs = (s) => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12)));
@@ -87,8 +95,9 @@ const WX_CHARTS = [
   { key: "asas", cat: "sfc", title: "アジア 実況", code: "ASAS", kind: "wm", region: "asia", sel: "now" },
   { ...FBJP_CHART, cat: "sev" }, // その日の悪天の全体像（「すべて」だけに表示。SIG WX にも同じ図）
   { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48] },
-  { key: "aupq78", cat: "upper", title: "850/700hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78" }, // 気象庁 AUPQ78＝850・700hPa
-  { key: "aupq35", cat: "upper", title: "500/300hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35" }, // 気象庁 AUPQ35＝500・300hPa
+  // 気象庁 AUPQ78＝850・700hPa、AUPQ35＝500・300hPa。isotherm は寒気の目安として色を付ける等温線（下段の図）
+  { key: "aupq78", cat: "upper", title: "850/700hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78", isotherm: { target: -6, level: "850hPa" } },
+  { key: "aupq35", cat: "upper", title: "500/300hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35", isotherm: { target: -30, level: "500hPa" } },
   { key: "aupa25", cat: "upper", title: "250hPa 解析", code: "AUPA25", kind: "pdf", file: "aupa25" },
   { key: "fupa252", cat: "upper", title: "250hPa 24時間予想", code: "FUPA252", kind: "pdf", file: "fupa252", ft: [24], hideInAll: true },
 ];
@@ -137,7 +146,7 @@ const XSEC_LINKS = [
 
 // 各図の取得状態 { status, src, href, timeLabel, ageFrom, error }
 // charts はモジュール直下の定数を渡す（参照が変わると取り直しになる）
-function useChartSources(charts, manualRefresh, autoTick) {
+function useChartSources(charts, manualRefresh, autoTick, isoOn = false) {
   const [data, setData] = useState({});
   const patch = useCallback((key, v) => setData((p) => ({ ...p, [key]: { ...(p[key] || {}), ...v } })), []);
 
@@ -200,29 +209,30 @@ function useChartSources(charts, manualRefresh, autoTick) {
       const url = `${NWP_PDF}${c.file}_${init}.pdf`;
       patch(c.key, { href: url });
       setData((p) => (p[c.key]?.src ? p : { ...p, [c.key]: { ...(p[c.key] || {}), status: "loading" } }));
-      getPdfImage(url, manualRefresh)
+      getPdfImage(url, manualRefresh, c.isotherm && isoOn ? { target: c.isotherm.target, color: ISO_COLOR } : null)
         .then((r) => {
           if (!alive) return;
           const modified = r.modified ? new Date(r.modified) : null;
           const base = modified ? initFromModified(modified, init) : null;
-          patch(c.key, { status: "ok", src: r.src, error: null, timeLabel: base ? runLabel(c, base) : `${c.ft ? "初期値" : "解析"} ${init}Z`, ageFrom: null });
+          patch(c.key, { status: "ok", src: r.src, error: null, timeLabel: base ? runLabel(c, base) : `${c.ft ? "初期値" : "解析"} ${init}Z`, ageFrom: null, iso: r.isotherm });
         })
         .catch((e) => alive && patch(c.key, { status: "error", error: `PDF を取得できません（${e.message}）` }));
     });
     return () => { alive = false; };
-  }, [charts, init, manualRefresh, patch]);
+  }, [charts, init, manualRefresh, isoOn, patch]);
 
   return data;
 }
 
 // 一覧のカード
-function ChartCard({ chart, d, dim, nowMs, onOpen, onRetry }) {
+function ChartCard({ chart, d, dim, nowMs, isoOn, onOpen, onRetry }) {
   const src = d?.src;
   const [loadedSrc, setLoadedSrc] = useState(null);
   const [errorSrc, setErrorSrc] = useState(null);
   const failed = d?.status === "error" || (src && src === errorSrc);
   const ready = src && src === loadedSrc;
   const meta = [d?.timeLabel, d?.ageFrom ? ago(d.ageFrom, nowMs) : null].filter(Boolean).join(" · ");
+  const iso = isoNote(chart, d, isoOn);
 
   return (
     <button
@@ -241,6 +251,12 @@ function ChartCard({ chart, d, dim, nowMs, onOpen, onRetry }) {
         <span style={{ fontSize: FS.xs, color: C.textMuted }}>{chart.code}</span>
         <span style={{ marginLeft: "auto", fontSize: FS.xs, color: C.textSub }}>{meta || " "}</span>
       </div>
+      {iso && (
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "0 12px 8px", fontSize: FS.xs, color: d.iso > 0 ? C.text : C.textMuted }}>
+          {d.iso > 0 && <span aria-hidden="true" style={{ width: "18px", height: "4px", borderRadius: "2px", background: ISO_COLOR, flexShrink: 0 }} />}
+          {iso}
+        </div>
+      )}
       <div style={{
         position: "relative", width: "calc(100% - 20px)", margin: "0 10px 10px", aspectRatio: chart.aspect || "4 / 3",
         background: "#ffffff", borderRadius: "6px", overflow: "hidden",
@@ -406,6 +422,9 @@ export function ChartFigure({ src, alt, dim, onOpen, aspect, minHeight = 240, mi
 
 // 図の一覧（カード）。cats を渡すと分類の切替を出す
 export function ChartGallery({ title, charts, cats, filterKey, links, note, minCard = 300 }) {
+  const hasIso = charts.some((c) => c.isotherm);
+  const [isoOn, setIsoOnState] = useState(() => loadPref(ISO_KEY, true) !== false);
+  const setIsoOn = (v) => { setIsoOnState(v); savePref(ISO_KEY, v); };
   const [filter, setFilterState] = useState(() => {
     const v = cats && filterKey ? loadPref(filterKey, "all") : "all";
     return cats?.some((c) => c.key === v) ? v : "all"; // 以前の「悪天」など、なくなった分類は「すべて」に戻す
@@ -415,7 +434,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
   const [autoTick, setAutoTick] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [viewer, setViewer] = useState(null); // 表示中の図のインデックス（visible 内）
-  const data = useChartSources(charts, manualRefresh, autoTick);
+  const data = useChartSources(charts, manualRefresh, autoTick, hasIso && isoOn);
 
   const setFilter = (v) => { setFilterState(v); if (filterKey) savePref(filterKey, v); };
 
@@ -430,7 +449,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
     const d = data[c.key] || {};
     return {
       key: c.key, title: c.title, code: c.code, src: d.status === "ok" ? d.src : null, href: d.href,
-      meta: [d.timeLabel, d.ageFrom ? ago(d.ageFrom, nowMs) : null].filter(Boolean).join(" · "),
+      meta: [d.timeLabel, d.ageFrom ? ago(d.ageFrom, nowMs) : null, isoNote(c, d, isoOn)].filter(Boolean).join(" · "),
     };
   });
 
@@ -447,6 +466,12 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
           {cats && <Segmented options={cats} value={filter} onChange={setFilter} label="分類" />}
           <span style={{ fontSize: FS.xs, color: C.textMuted }}>タップで全画面{charts.length > 1 ? "、左右スワイプで次の図へ" : ""}</span>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            {hasIso && (
+              <label title="500hPa の −30℃線と 850hPa の −6℃線を、図のラベルを読み取って青で示します（目安）" style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
+                <input type="checkbox" checked={isoOn} onChange={(e) => setIsoOn(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
+                寒気の目安を色付け
+              </label>
+            )}
             <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
               <input type="checkbox" checked={dim} onChange={(e) => setDim(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
               図を減光（夜間用）
@@ -458,7 +483,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
         <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minCard}px), 1fr))`, alignItems: "start", gap: "14px", padding: "12px 16px 16px" }}>
           {visible.map((c, i) => (
             <ChartCard
-              key={c.key} chart={c} d={data[c.key]} dim={dim} nowMs={nowMs}
+              key={c.key} chart={c} d={data[c.key]} dim={dim} nowMs={nowMs} isoOn={hasIso && isoOn}
               onOpen={() => setViewer(i)}
               onRetry={() => setManualRefresh((n) => n + 1)}
             />
@@ -494,7 +519,7 @@ export default function WxChartsGallery() {
   return (
     <ChartGallery
       title="天気図一覧" charts={WX_CHARTS} cats={WX_CATS} filterKey={FILTER_KEY} links={WX_LINKS}
-      note="出典: 気象庁（天気図・数値予報天気図・航空気象情報）。数値予報天気図は PDF を画像化して表示。250hPa 24時間予想は「上空」に表示"
+      note="出典: 気象庁（天気図・数値予報天気図・航空気象情報）。数値予報天気図は PDF を画像化して表示。250hPa 24時間予想は「上空」に表示。寒気の目安（500hPa −30℃線・850hPa −6℃線）は図のラベルを読み取って自動で色付けしたもので、読み取れない部分は色が付きません"
     />
   );
 }

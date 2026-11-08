@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef } from "react";
 import { PanelFrame, ExtLink, Segmented, actionBtnStyle } from "./ui.jsx";
 import { C, FS, FONT } from "./theme.js";
+import { findIsotherm } from "./isotherm.js";
 
 const MONO = FONT.ui;
 const GREEN = "#6ee7b7";
@@ -179,19 +180,32 @@ function Links({ children }) {
 /* ============================================================
    PDF → 画像（AUPA25 / AXJP140 などはPDFのみ公開のため pdf.js で描画）
    ============================================================ */
-const pdfCache = new Map(); // key: url|refresh → Promise<{src, modified}>
+const pdfCache = new Map(); // key: url|refresh|等温線 → Promise<{src, modified, isotherm}>
+const pdfDataCache = new Map(); // key: url|refresh → Promise<{bytes, modified}>（色付けの有無で取り直さない）
 
-async function renderPdfToImage(url) {
+function fetchPdf(url, refresh) {
+  const key = `${url}|${refresh}`;
+  if (!pdfDataCache.has(key)) {
+    for (const k of pdfDataCache.keys()) if (k.startsWith(`${url}|`)) pdfDataCache.delete(k); // 古い取得分は捨てる
+    pdfDataCache.set(key, fetch(url, { cache: "no-cache" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return { bytes: new Uint8Array(await res.arrayBuffer()), modified: res.headers.get("Last-Modified") };
+      })
+      .catch((e) => { pdfDataCache.delete(key); throw e; }));
+  }
+  return pdfDataCache.get(key);
+}
+
+// isotherm: { target: -30, color } を渡すと、その等温線に色を付ける（線の下に蛍光ペンのように引く）
+async function renderPdfToImage(url, refresh, isotherm) {
   const [pdfjs, worker] = await Promise.all([
     import("pdfjs-dist"),
     import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
   ]);
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-  const res = await fetch(url, { cache: "no-cache" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const modified = res.headers.get("Last-Modified");
-  const data = new Uint8Array(await res.arrayBuffer());
-  const doc = await pdfjs.getDocument({ data }).promise;
+  const { bytes, modified } = await fetchPdf(url, refresh);
+  const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise; // 渡したデータは worker に移るので写しを渡す
   try {
     const page = await doc.getPage(1);
     const base = page.getViewport({ scale: 1 });
@@ -203,19 +217,45 @@ async function renderPdfToImage(url) {
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+    let lines = null; // null＝色付けしない／失敗、[]＝見つからない
+    if (isotherm) {
+      try { lines = findIsotherm(await page.getOperatorList(), pdfjs.OPS, isotherm.target); } catch { lines = null; }
+    }
+    if (lines?.length) {
+      ctx.save();
+      ctx.strokeStyle = isotherm.color;
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = 3.5 * scale;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      for (const pts of lines) {
+        ctx.beginPath();
+        pts.forEach(([x, y], k) => { const [X, Y] = vp.convertToViewportPoint(x, y); if (k) ctx.lineTo(X, Y); else ctx.moveTo(X, Y); });
+        ctx.stroke();
+      }
+      ctx.restore();
+      // 図は透明の背景で別に描いて重ねる（黒い線が色の線の上に来る）
+      const layer = document.createElement("canvas");
+      layer.width = canvas.width;
+      layer.height = canvas.height;
+      await page.render({ canvasContext: layer.getContext("2d"), viewport: vp, background: "rgba(0,0,0,0)" }).promise;
+      ctx.drawImage(layer, 0, 0);
+    } else {
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    }
     const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-    return { src: URL.createObjectURL(blob), modified };
+    return { src: URL.createObjectURL(blob), modified, isotherm: isotherm ? (lines ? lines.length : null) : undefined };
   } finally {
     doc.destroy();
   }
 }
 
 // PDF を画像化した結果（キャッシュ付き）。天気図一覧タブからも使う
-export function getPdfImage(url, refresh = 0) {
-  const key = `${url}|${refresh}`;
+export function getPdfImage(url, refresh = 0, isotherm = null) {
+  const key = `${url}|${refresh}|${isotherm ? isotherm.target : ""}`;
   if (!pdfCache.has(key)) {
-    pdfCache.set(key, renderPdfToImage(url).catch((e) => { pdfCache.delete(key); throw e; }));
+    pdfCache.set(key, renderPdfToImage(url, refresh, isotherm).catch((e) => { pdfCache.delete(key); throw e; }));
   }
   return pdfCache.get(key);
 }

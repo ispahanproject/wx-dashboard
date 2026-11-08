@@ -269,7 +269,7 @@ export default function ImageryViewer() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-      <PanelFrame title="IMAGERY / 画像" style={{ padding: 0 }}>
+      <PanelFrame title="衛星・レーダー・雷・積乱雲情報" style={{ padding: 0 }}>
         {/* 種類・バンド・地域 */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", padding: "16px 16px 10px" }}>
           <div role="group" aria-label="種類" style={{ display: "inline-flex", padding: "3px", borderRadius: "10px", background: "rgba(10,16,28,0.9)", border: `1px solid ${C.border}` }}>

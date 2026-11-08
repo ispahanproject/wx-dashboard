@@ -1,30 +1,24 @@
 /* ============================================================
-   悪天・SIGMET — SIGMET（地図＋原文）、積乱雲情報、悪天予想図、解説報、台風・豪雨
+   SIG WX の各表示 — SIGMET（地図＋原文）、低高度悪天予想図、積乱雲情報、解説報
+   （国内悪天予想図は ChartsGallery.jsx の SigwxProgCharts、台風・豪雨は WeatherBriefing.jsx）
    SIGMET は AWC の国際 SIGMET（Cloudflare Worker 経由）から福岡FIR分を表示
    ============================================================ */
 import { useState, useEffect } from "react";
-import { PanelFrame, ExtLink } from "./ui.jsx";
+import { PanelFrame, ExtLink, Segmented, segWrapStyle, segBtnStyle } from "./ui.jsx";
 import { C, FS, FONT } from "./theme.js";
 import {
   TileMap, projectPct, BASEMAP, COASTLINE, CciView, ChartImg, Caption, WORKER_URL,
-  FBJP_URL, sigmetUrl, fxjp106Url, fxjp106Bases, cmntUrl, SIGMET_AREAS, CMNT_AREAS, pad,
+  sigmetUrl, cmntUrl, SIGMET_AREAS, CMNT_AREAS, LL_AREAS, LL_FTS, lowLevelUrl, pad,
 } from "./DomesticWxPanel.jsx";
+import { ChartFigure, ChartViewer, useDimPref, loadPref, savePref } from "./ChartsGallery.jsx";
 
 const JMA = "https://www.jma.go.jp";
 const JMA_DATA = "https://www.data.jma.go.jp";
 const SAT = `${JMA}/bosai/himawari/data/satimg`;
 const SAT_FD_TIMES = `${SAT}/targetTimes_fd.json`;
-const VIEW_KEY = "severe_view";
 const SIG_PREF_KEY = "severe_sigmet_prefs";
+const LL_PREF_KEY = "sigwx_lowlevel";
 const AUTO_REFRESH_MS = 5 * 60e3;
-
-const VIEWS = [
-  { key: "sigmet", label: "SIGMET" },
-  { key: "cci", label: "積乱雲情報" },
-  { key: "prog", label: "悪天予想図" },
-  { key: "cmnt", label: "解説報" },
-  { key: "legacy", label: "台風・豪雨" },
-];
 
 // 現象ごとの表示（色・線種）
 const HAZARDS = {
@@ -97,7 +91,7 @@ function useLatestIr(enabled) {
   return t;
 }
 
-function SigmetView() {
+export function SigmetView() {
   const [prefs, setPrefs] = useState(() => loadJson(SIG_PREF_KEY, { region: "fir", bg: "map", neighbors: false, mode: "map" }));
   const setPref = (k, v) => setPrefs((p) => {
     const n = { ...p, [k]: v };
@@ -134,12 +128,8 @@ function SigmetView() {
     ]
     : [{ id: "base", url: BASEMAP }];
 
-  const seg = (on) => ({
-    height: "40px", padding: "0 12px", borderRadius: "8px", border: "none", cursor: "pointer", fontFamily: "inherit",
-    background: on ? "rgba(110,231,183,0.14)" : "transparent", color: on ? C.accent : C.textSub,
-    fontWeight: on ? 700 : 400, fontSize: FS.sm,
-  });
-  const segWrap = { display: "inline-flex", padding: "3px", borderRadius: "10px", background: "rgba(10,16,28,0.9)", border: `1px solid ${C.border}` };
+  const seg = (on) => segBtnStyle(on);
+  const segWrap = segWrapStyle;
   const vt = sig.fetchedAt;
 
   return (
@@ -296,70 +286,88 @@ function SigmetView() {
   );
 }
 
-function ProgView() {
-  const bases = fxjp106Bases();
-  const bt = bases[bases.length - 1];
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 420px), 1fr))", gap: "16px" }}>
-      <PanelFrame title="国内悪天予想図 FBJP" style={{ padding: 0 }}>
-        <div style={{ padding: "16px 16px 0" }}><ChartImg src={FBJP_URL} label="国内悪天予想図 FBJP" minHeight={300} /></div>
-        <Caption>乱気流・着氷・積乱雲域・ジェット軸・0℃高度の予想。</Caption>
-      </PanelFrame>
-      <PanelFrame title={`航空路予想断面 FXJP106（初期値 ${pad(bt)}Z）`} style={{ padding: 0 }}>
-        <div style={{ padding: "16px 16px 0" }}><ChartImg src={fxjp106Url(pad(bt))} label={`FXJP106 ${pad(bt)}Z`} minHeight={300} /></div>
-        <Caption>国内主要航空路に沿った6・12時間予想断面図。</Caption>
-      </PanelFrame>
-    </div>
-  );
-}
-
-function CmntView() {
+export function CmntView() {
   const [area, setArea] = useState(CMNT_AREAS[0].key);
-  const seg = (on) => ({
-    height: "40px", padding: "0 12px", borderRadius: "8px", border: "none", cursor: "pointer", fontFamily: "inherit",
-    background: on ? "rgba(110,231,183,0.14)" : "transparent", color: on ? C.accent : C.textSub,
-    fontWeight: on ? 700 : 400, fontSize: FS.sm,
-  });
   return (
     <PanelFrame title="全国航空気象解説報" style={{ padding: 0 }}>
       <div style={{ padding: "16px 16px 10px" }}>
-        <div role="group" aria-label="範囲" style={{ display: "inline-flex", padding: "3px", borderRadius: "10px", background: "rgba(10,16,28,0.9)", border: `1px solid ${C.border}` }}>
-          {CMNT_AREAS.map((a) => (
-            <button key={a.key} type="button" aria-pressed={area === a.key} onClick={() => setArea(a.key)} style={seg(area === a.key)}>{a.label}</button>
-          ))}
-        </div>
+        <Segmented options={CMNT_AREAS} value={area} onChange={setArea} label="範囲" />
       </div>
       <div style={{ padding: "0 16px" }}><ChartImg src={cmntUrl(area)} label={`全国航空気象解説報 ${area}`} minHeight={360} /></div>
       <Caption>予報官による悪天の解説図（注目すべき悪天域とその見通し）。</Caption>
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "0 16px 16px" }}>
+        <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_ajpn_cmnt_airspace.html`} accent>解説報（国内空域）</ExtLink>
+        <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_ajpn_cmnt_fukuokafir.html`}>解説報（福岡FIR）</ExtLink>
+      </div>
     </PanelFrame>
   );
 }
 
-export default function SevereHub({ legacy }) {
-  const [view, setViewState] = useState(() => {
-    try { return localStorage.getItem(VIEW_KEY) || "sigmet"; } catch { return "sigmet"; }
+// 積乱雲情報（地図・コマ送り）
+export function CciPanel() {
+  return <PanelFrame title="積乱雲情報" style={{ padding: 0 }}><CciView refresh={0} /></PanelFrame>;
+}
+
+// 低高度悪天予想図（地上〜FL150）。タップで全画面、全画面では FT03→06→09→時系列 を左右で切替
+export function LowLevelView() {
+  const [prefs, setPrefs] = useState(() => {
+    const v = loadPref(LL_PREF_KEY, {});
+    return {
+      area: LL_AREAS.some((a) => a.key === v?.area) ? v.area : "fbtk",
+      ft: LL_FTS.some((f) => f.key === v?.ft) ? v.ft : "03",
+    };
   });
-  const setView = (v) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ } };
-  const seg = (on) => ({
-    height: "44px", padding: "0 16px", borderRadius: "8px", border: "none", cursor: "pointer", fontFamily: "inherit",
-    background: on ? "rgba(110,231,183,0.14)" : "transparent", color: on ? C.accent : C.textSub,
-    fontWeight: on ? 700 : 400, fontSize: FS.sm,
-  });
+  const setPref = (k, v) => setPrefs((p) => { const n = { ...p, [k]: v }; savePref(LL_PREF_KEY, n); return n; });
+  const [dim, setDim] = useDimPref();
+  const [viewer, setViewer] = useState(null);
+  const [modified, setModified] = useState(null);
+  const area = LL_AREAS.find((a) => a.key === prefs.area);
+  const ftLabel = (f) => (f.key === "39" ? "時系列" : `${+f.key}時間後`);
+  const src = lowLevelUrl(prefs.area, prefs.ft);
+
+  // 更新時刻（図そのものには掲載時刻がないので Last-Modified で表示）
+  useEffect(() => {
+    let alive = true;
+    setModified(null);
+    fetch(src, { method: "HEAD", cache: "no-cache" })
+      .then((r) => (r.ok ? r.headers.get("Last-Modified") : null))
+      .then((lm) => alive && lm && setModified(new Date(lm)))
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [src]);
+
+  const items = LL_FTS.map((f) => ({
+    key: f.key, title: `低高度悪天予想図 ${area.label}`, code: f.key === "39" ? "時系列" : f.label,
+    src: lowLevelUrl(prefs.area, f.key), href: lowLevelUrl(prefs.area, f.key), meta: "",
+  }));
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0, fontSize: FS.lg, fontWeight: 700, color: C.text }}>悪天・SIGMET</h2>
-        <div role="group" aria-label="表示する情報" style={{ display: "inline-flex", flexWrap: "wrap", padding: "3px", borderRadius: "10px", background: "rgba(10,16,28,0.9)", border: `1px solid ${C.border}` }}>
-          {VIEWS.map((v) => (
-            <button key={v.key} type="button" aria-pressed={view === v.key} onClick={() => setView(v.key)} style={seg(view === v.key)}>{v.label}</button>
-          ))}
-        </div>
+    <PanelFrame title="低高度悪天予想図" style={{ padding: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", padding: "16px 16px 10px" }}>
+        <Segmented options={LL_AREAS} value={prefs.area} onChange={(v) => setPref("area", v)} label="地域" />
+        <Segmented options={LL_FTS.map((f) => ({ key: f.key, label: ftLabel(f) }))} value={prefs.ft} onChange={(v) => setPref("ft", v)} label="予想時間" />
+        <label style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
+          <input type="checkbox" checked={dim} onChange={(e) => setDim(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
+          図を減光（夜間用）
+        </label>
       </div>
-      {view === "sigmet" && <SigmetView />}
-      {view === "cci" && <PanelFrame title="積乱雲情報" style={{ padding: 0 }}><CciView refresh={0} /></PanelFrame>}
-      {view === "prog" && <ProgView />}
-      {view === "cmnt" && <CmntView />}
-      {view === "legacy" && legacy}
-    </div>
+      <div style={{ padding: "0 16px" }}>
+        <ChartFigure
+          src={src} alt={`低高度悪天予想図 ${area.label} ${prefs.ft === "39" ? "時系列" : `FT${prefs.ft}`}`} dim={dim} aspect="1000 / 734"
+          onOpen={() => setViewer(LL_FTS.findIndex((f) => f.key === prefs.ft))}
+        />
+      </div>
+      <div style={{ padding: "10px 16px 0", fontSize: FS.xs, color: C.textSub }}>
+        {modified ? `更新 ${pad(modified.getUTCDate())}日 ${hhmmZ(modified)}` : " "}
+      </div>
+      <Caption>地上〜FL150 の雲底・視程・乱気流・着氷・積乱雲域などを、3・6・9時間先まで予想した図。タップで全画面、全画面では左右で予想時間を切り替えられます。</Caption>
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", padding: "0 16px 16px" }}>
+        <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_low-level_sigwx.html`} accent>気象庁 低高度悪天予想図</ExtLink>
+        <ExtLink href={`${JMA_DATA}/airinfo/data/awfo_low-level_detailed-sigwx.html`}>詳細版（府県別）</ExtLink>
+      </div>
+      {viewer !== null && (
+        <ChartViewer items={items} index={viewer} setIndex={setViewer} onClose={() => setViewer(null)} dim={dim} />
+      )}
+    </PanelFrame>
   );
 }

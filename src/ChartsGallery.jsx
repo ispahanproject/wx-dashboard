@@ -1,10 +1,10 @@
 /* ============================================================
-   WX CHARTS — 天気図一覧
-   地上・上空・悪天の図をカードで一覧表示し、タップで全画面ビューア
-   （←→キー／左右スワイプで次の図、夜間用の減光）。データは気象庁の公開ソース
+   図の一覧（カード）と全画面ビューア
+   WX CHARTS（地上・上空）、SIG WX の国内悪天予想図、ENROUTE の断面図で共用。
+   タップで全画面（←→キー／左右スワイプで次の図、夜間用の減光）。データは気象庁の公開ソース
    ============================================================ */
 import { useState, useEffect, useRef, useCallback } from "react";
-import { PanelFrame, ExtLink } from "./ui.jsx";
+import { PanelFrame, ExtLink, Segmented, actionBtnStyle } from "./ui.jsx";
 import { C, FS } from "./theme.js";
 import { getPdfImage, defaultInit } from "./DomesticWxPanel.jsx";
 
@@ -15,10 +15,13 @@ const WM_PNG = `${JMA}/bosai/weather_map/data/png/`;
 const NWP_PDF = `${JMA}/bosai/numericmap/data/nwpmap/`;
 const FBJP_URL = `${JMA_DATA}/airinfo/data/pict/fbjp/fbjp.png`;
 const fbjp112Url = (hh) => `${JMA_DATA}/airinfo/data/pict/nwp/fbjp112_${hh}.png`;
-const DIM_KEY = "wxcharts_dim";
+const fxjp106Url = (hh) => `${JMA_DATA}/airinfo/data/pict/nwp/fxjp106_${hh}.png`;
+const DIM_KEY = "wxcharts_dim"; // 減光の設定は図を出すすべての画面で共有
 const FILTER_KEY = "wxcharts_filter";
 const PDF_LAG_H = 4; // 数値予報天気図の PDF は初期時刻の約3.6時間後に公開
+const CYCLE_LAG_MIN = 140; // FBJP112・FXJP106：3時間毎の初期値、約2時間14分後に掲載
 const AUTO_REFRESH_MS = 10 * 60e3;
+export const DIM_FILTER = "brightness(0.68) contrast(1.05)";
 
 const pad = (n) => String(n).padStart(2, "0");
 const parseTs = (s) => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(8, 10), +s.slice(10, 12)));
@@ -29,59 +32,84 @@ const ago = (d, nowMs) => {
   if (m < 1440) return `${Math.floor(m / 60)}時間${m % 60 ? `${m % 60}分` : ""}前`;
   return `${Math.floor(m / 1440)}日前`;
 };
-// PDF の更新時刻から初期時刻（00Z/12Z）を逆算
-const initFromModified = (modified) => {
-  const t = new Date(modified.getTime() - 3 * 3600e3);
-  t.setUTCMinutes(0, 0, 0);
-  t.setUTCHours(t.getUTCHours() >= 12 ? 12 : 0);
+// 取得した PDF（_00 / _12）の初期時刻：更新時刻より前で、いちばん近いその時刻
+// （図によって掲載までの時間が違う：AXJP は約2時間、AUPQ などは約3.6時間）
+const initFromModified = (modified, initHH) => {
+  const t = new Date(modified.getTime());
+  t.setUTCHours(+initHH, 0, 0, 0);
+  if (t > modified) t.setUTCDate(t.getUTCDate() - 1);
   return t;
 };
-// FBJP 12時間予想：3時間毎の初期値、初期時刻の約2時間14分後に掲載 → 2時間20分前を基準に選ぶ
-const fbjp112BaseDate = (stepsBack = 0) => {
-  const d = new Date(Date.now() - 140 * 60e3);
+// 3時間毎の初期値の図：掲載までの時間を引いた時刻から、最新の初期時刻を選ぶ
+const cycleBaseDate = (stepsBack = 0) => {
+  const d = new Date(Date.now() - CYCLE_LAG_MIN * 60e3);
   d.setUTCMinutes(0, 0, 0);
   d.setUTCHours(Math.floor(d.getUTCHours() / 3) * 3 - stepsBack * 3);
   return d;
 };
-const loadPref = (key, fallback) => {
+// 解析図は「解析」、予想図は「初期値 → 予想時刻」（予想時間が複数なら一覧）
+const runLabel = (c, base) => {
+  if (!c.ft) return `解析 ${fmtZ(base)}`;
+  if (c.ft.length === 1) return `初期値 ${fmtZ(base)} → 予想 ${fmtZ(new Date(base.getTime() + c.ft[0] * 3600e3))}`;
+  return `初期値 ${fmtZ(base)}（${c.ft.join("・")}時間予想）`;
+};
+export const loadPref = (key, fallback) => {
   try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
 };
-const savePref = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } };
+export const savePref = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } };
 
-const CATS = [
+// 図の減光（夜間用）。図を出す画面どうしで設定を共有する
+export function useDimPref() {
+  const [dim, setDimState] = useState(() => loadPref(DIM_KEY, false) === true);
+  const setDim = useCallback((v) => { setDimState(v); savePref(DIM_KEY, v); }, []);
+  return [dim, setDim];
+}
+
+/* ---------- 図の定義 ----------
+   kind: wm＝気象庁の天気図一覧（list.json）、png＝固定URLの画像、
+         cycle3h＝3時間毎の初期値の画像（urlFor）、pdf＝数値予報天気図の PDF（画像化して表示）
+   ft: 予想時間（無ければ解析図）、aspect: カードの縦横比 */
+const WX_CATS = [
   { key: "all", label: "すべて" },
   { key: "sfc", label: "地上" },
   { key: "upper", label: "上空" },
-  { key: "sev", label: "悪天" },
 ];
 
-const CHARTS = [
+const WX_CHARTS = [
   { key: "spas", cat: "sfc", title: "地上 実況", code: "SPAS", kind: "wm", region: "near", sel: "now" },
   { key: "fsas24", cat: "sfc", title: "24時間 予想", code: "FSAS24", kind: "wm", region: "near", sel: "ft24" },
   { key: "fsas48", cat: "sfc", title: "48時間 予想", code: "FSAS48", kind: "wm", region: "near", sel: "ft48" },
   { key: "asas", cat: "sfc", title: "アジア 実況", code: "ASAS", kind: "wm", region: "asia", sel: "now" },
-  { key: "fbjp", cat: "sev", title: "国内悪天予想図", code: "FBJP", kind: "png", url: FBJP_URL },
-  { key: "fbjp112", cat: "sev", title: "国内悪天 12時間予想", code: "FBJP112", kind: "fbjp112" },
   { key: "aupq78", cat: "upper", title: "500/300hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78" },
   { key: "aupq35", cat: "upper", title: "850/700hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35" },
   { key: "aupa25", cat: "upper", title: "250hPa 解析", code: "AUPA25", kind: "pdf", file: "aupa25" },
-  { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854" },
+  { key: "fupa252", cat: "upper", title: "250hPa 24時間予想", code: "FUPA252", kind: "pdf", file: "fupa252", ft: [24] },
+  { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48] },
 ];
 
-const LINK_GROUPS = [
+const WX_LINKS = [
+  { title: "天気図", links: [
+    { label: "気象庁 天気図", href: `${JMA}/bosai/weather_map/` },
+    { label: "数値予報天気図一覧", href: `${JMA}/bosai/numericmap/` },
+  ]},
+  { title: "上空・風", links: [
+    { label: "ウィンドプロファイラ", href: `${JMA}/bosai/windprofiler/` },
+    { label: "Windy 250hPa 風", href: "https://www.windy.com/-Wind-250hPa-wind250h?wind250h,36,137,5" },
+    { label: "Windy 850hPa 気温", href: "https://www.windy.com/-Temperature-temp?temp,36,137,5" },
+  ]},
+];
+
+// SIG WX：国内悪天予想図
+const PROG_CHARTS = [
+  { key: "fbjp", title: "国内悪天予想図", code: "FBJP", kind: "png", url: FBJP_URL },
+  { key: "fbjp112", title: "国内悪天 12時間予想", code: "FBJP112", kind: "cycle3h", urlFor: fbjp112Url, ft: [12] },
+];
+const PROG_LINKS = [
   { title: "悪天", links: [
-    { label: "下層悪天予想図", href: `${JMA_DATA}/airinfo/data/awfo_low-level_sigwx.html` },
-    { label: "下層悪天 詳細版", href: `${JMA_DATA}/airinfo/data/awfo_low-level_detailed-sigwx.html` },
     { label: "FBJP 12時間予想（全初期値）", href: `${JMA_DATA}/airinfo/awfo_fbjp112/awfo_fbjp112.html` },
     { label: "AWC SIGWX", href: "https://aviationweather.gov/gfa/#area=other" },
     { label: "AWC 乱気流", href: "https://aviationweather.gov/gfa/#obs=turb" },
     { label: "AWC 着氷", href: "https://aviationweather.gov/gfa/#obs=ice" },
-  ]},
-  { title: "上空・風", links: [
-    { label: "数値予報天気図一覧", href: `${JMA}/bosai/numericmap/` },
-    { label: "ウィンドプロファイラ", href: `${JMA}/bosai/windprofiler/` },
-    { label: "Windy 250hPa 風", href: "https://www.windy.com/-Wind-250hPa-wind250h?wind250h,36,137,5" },
-    { label: "Windy 850hPa 気温", href: "https://www.windy.com/-Temperature-temp?temp,36,137,5" },
   ]},
   { title: "火山灰", links: [
     { label: "東京 VAAC", href: "https://ds.data.jma.go.jp/svd/vaac/data/" },
@@ -89,19 +117,33 @@ const LINK_GROUPS = [
   ]},
 ];
 
+// ENROUTE：断面図（縦長の図）
+const XSEC_CHARTS = [
+  { key: "fxjp106", title: "航空路 予想断面図", code: "FXJP106", kind: "cycle3h", urlFor: fxjp106Url, ft: [6, 12], aspect: "4 / 5" },
+  { key: "axjp140", title: "高層断面図 130°E・140°E", code: "AXJP130/140", kind: "pdf", file: "axjp140", aspect: "3 / 4" },
+];
+const XSEC_LINKS = [
+  { title: "断面図", links: [
+    { label: "気象庁 国内航空路予想断面図", href: `${JMA_DATA}/airinfo/awfo_fxjp106/awfo_fxjp106.html` },
+    { label: "数値予報天気図一覧", href: `${JMA}/bosai/numericmap/` },
+  ]},
+];
+
 // 各図の取得状態 { status, src, href, timeLabel, ageFrom, error }
-function useChartSources(manualRefresh, autoTick) {
+// charts はモジュール直下の定数を渡す（参照が変わると取り直しになる）
+function useChartSources(charts, manualRefresh, autoTick) {
   const [data, setData] = useState({});
   const patch = useCallback((key, v) => setData((p) => ({ ...p, [key]: { ...(p[key] || {}), ...v } })), []);
 
-  // 地上天気図・FBJP（軽いので自動更新でも取り直す）
+  // 画像の図（軽いので自動更新でも取り直す）
   useEffect(() => {
     let alive = true;
     const upd = (k, v) => alive && patch(k, v);
-    fetch(WM_LIST, { cache: "no-cache" })
+    const wm = charts.filter((c) => c.kind === "wm");
+    if (wm.length) fetch(WM_LIST, { cache: "no-cache" })
       .then((r) => r.json())
       .then((list) => {
-        CHARTS.filter((c) => c.kind === "wm").forEach((c) => {
+        wm.forEach((c) => {
           const arr = list?.[c.region]?.[c.sel] ?? [];
           const file = c.sel === "now" ? arr[arr.length - 1] : arr[0];
           if (!file) { upd(c.key, { status: "error", error: "データがありません" }); return; }
@@ -114,41 +156,41 @@ function useChartSources(manualRefresh, autoTick) {
           });
         });
       })
-      .catch(() => CHARTS.filter((c) => c.kind === "wm").forEach((c) => upd(c.key, { status: "error", error: "天気図の一覧を取得できません" })));
+      .catch(() => wm.forEach((c) => upd(c.key, { status: "error", error: "天気図の一覧を取得できません" })));
 
     const lastModified = (url) => fetch(url, { method: "HEAD", cache: "no-cache" })
       .then((r) => (r.ok ? r.headers.get("Last-Modified") : null))
       .then((s) => (s ? new Date(s) : null))
       .catch(() => null);
-    CHARTS.filter((c) => c.kind === "png").forEach((c) => {
+    charts.filter((c) => c.kind === "png").forEach((c) => {
       upd(c.key, { status: "ok", src: c.url, href: c.url, error: null });
       lastModified(c.url).then((lm) => { if (lm) upd(c.key, { timeLabel: `更新 ${fmtZ(lm)}`, ageFrom: lm }); });
     });
-    // FBJP 12時間予想：ファイル名が初期時刻の「時」だけなので、更新時刻で新しさを確かめる
-    CHARTS.filter((c) => c.kind === "fbjp112").forEach(async (c) => {
+    // 3時間毎の初期値の図：ファイル名が初期時刻の「時」だけなので、更新時刻で新しさを確かめる
+    charts.filter((c) => c.kind === "cycle3h").forEach(async (c) => {
+      const urlOf = (base) => c.urlFor(pad(base.getUTCHours()));
       const show = (base, lm) => {
-        const url = fbjp112Url(pad(base.getUTCHours()));
-        const vt = new Date(base.getTime() + 12 * 3600e3);
-        upd(c.key, { status: "ok", src: url, href: url, error: null, timeLabel: `初期値 ${fmtZ(base)} → 予想 ${fmtZ(vt)}`, ageFrom: lm || null });
+        const url = urlOf(base);
+        upd(c.key, { status: "ok", src: url, href: url, error: null, timeLabel: runLabel(c, base), ageFrom: lm || null });
       };
-      const base = fbjp112BaseDate(0);
-      const lm = await lastModified(fbjp112Url(pad(base.getUTCHours())));
+      const base = cycleBaseDate(0);
+      const lm = await lastModified(urlOf(base));
       // 更新時刻が6時間より古い＝まだ今回分が掲載されていない → 1つ前の初期値
       if (lm && Date.now() - lm.getTime() > 6 * 3600e3) {
-        const prev = fbjp112BaseDate(1);
-        show(prev, await lastModified(fbjp112Url(pad(prev.getUTCHours()))));
+        const prev = cycleBaseDate(1);
+        show(prev, await lastModified(urlOf(prev)));
       } else {
         show(base, lm);
       }
     });
     return () => { alive = false; };
-  }, [manualRefresh, autoTick, patch]);
+  }, [charts, manualRefresh, autoTick, patch]);
 
   // 数値予報天気図（PDF → 画像）。重いので初期時刻が変わったときと手動更新のときだけ
   const init = defaultInit(PDF_LAG_H);
   useEffect(() => {
     let alive = true;
-    CHARTS.filter((c) => c.kind === "pdf").forEach((c) => {
+    charts.filter((c) => c.kind === "pdf").forEach((c) => {
       const url = `${NWP_PDF}${c.file}_${init}.pdf`;
       patch(c.key, { href: url });
       setData((p) => (p[c.key]?.src ? p : { ...p, [c.key]: { ...(p[c.key] || {}), status: "loading" } }));
@@ -156,13 +198,13 @@ function useChartSources(manualRefresh, autoTick) {
         .then((r) => {
           if (!alive) return;
           const modified = r.modified ? new Date(r.modified) : null;
-          const base = modified ? initFromModified(modified) : null;
-          patch(c.key, { status: "ok", src: r.src, error: null, timeLabel: base ? `初期値 ${fmtZ(base)}` : `初期値 ${init}Z`, ageFrom: null });
+          const base = modified ? initFromModified(modified, init) : null;
+          patch(c.key, { status: "ok", src: r.src, error: null, timeLabel: base ? runLabel(c, base) : `${c.ft ? "初期値" : "解析"} ${init}Z`, ageFrom: null });
         })
         .catch((e) => alive && patch(c.key, { status: "error", error: `PDF を取得できません（${e.message}）` }));
     });
     return () => { alive = false; };
-  }, [init, manualRefresh, patch]);
+  }, [charts, init, manualRefresh, patch]);
 
   return data;
 }
@@ -194,9 +236,9 @@ function ChartCard({ chart, d, dim, nowMs, onOpen, onRetry }) {
         <span style={{ marginLeft: "auto", fontSize: FS.xs, color: C.textSub }}>{meta || " "}</span>
       </div>
       <div style={{
-        position: "relative", width: "calc(100% - 20px)", margin: "0 10px 10px", aspectRatio: "4 / 3",
+        position: "relative", width: "calc(100% - 20px)", margin: "0 10px 10px", aspectRatio: chart.aspect || "4 / 3",
         background: "#ffffff", borderRadius: "6px", overflow: "hidden",
-        filter: dim ? "brightness(0.68) contrast(1.05)" : "none",
+        filter: dim ? DIM_FILTER : "none",
       }}>
         {src && !failed && (
           <img
@@ -219,8 +261,8 @@ function ChartCard({ chart, d, dim, nowMs, onOpen, onRetry }) {
   );
 }
 
-// 全画面ビューア
-function ChartViewer({ items, index, setIndex, onClose, dim }) {
+// 全画面ビューア。items: [{ key, title, code, meta, src, href }]
+export function ChartViewer({ items, index, setIndex, onClose, dim }) {
   const item = items[index];
   const [fit, setFit] = useState(true);
   const closeRef = useRef(null);
@@ -298,7 +340,7 @@ function ChartViewer({ items, index, setIndex, onClose, dim }) {
             src={item.src} alt={item.title} draggable={false}
             style={{
               background: "#ffffff", borderRadius: "6px",
-              filter: dim ? "brightness(0.68) contrast(1.05)" : "none",
+              filter: dim ? DIM_FILTER : "none",
               ...(fit ? { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" } : { maxWidth: "none" }),
             }}
           />
@@ -319,17 +361,57 @@ function ChartViewer({ items, index, setIndex, onClose, dim }) {
   );
 }
 
-export default function WxChartsGallery() {
-  const [filter, setFilterState] = useState(() => loadPref(FILTER_KEY, "all"));
-  const [dim, setDimState] = useState(() => loadPref(DIM_KEY, false));
+// 画面内に1枚の図を出す（読込中・欠測の表示、タップで全画面）
+export function ChartFigure({ src, alt, dim, onOpen, aspect, minHeight = 240, missingText = "この図はありません" }) {
+  const [loadedSrc, setLoadedSrc] = useState(null);
+  const [errorSrc, setErrorSrc] = useState(null);
+  const failed = !!src && src === errorSrc;
+  const ready = !!src && src === loadedSrc;
+  return (
+    <button
+      type="button" className="wxc-card" onClick={ready ? onOpen : undefined}
+      aria-label={ready ? `${alt}を全画面で開く` : alt}
+      style={{
+        position: "relative", display: "block", width: "100%", padding: 0, border: "none", borderRadius: "6px",
+        overflow: "hidden", background: "#ffffff", cursor: ready ? "zoom-in" : "default", fontFamily: "inherit",
+        aspectRatio: aspect, minHeight: ready || aspect ? 0 : minHeight,
+        filter: dim ? DIM_FILTER : "none",
+      }}
+    >
+      {src && !failed && (
+        <img
+          src={src} alt={alt} draggable={false}
+          onLoad={() => setLoadedSrc(src)} onError={() => setErrorSrc(src)}
+          style={{ width: "100%", height: aspect ? "100%" : "auto", objectFit: "contain", display: "block" }}
+        />
+      )}
+      {!ready && (
+        <span style={{
+          position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
+          background: "#0b1220", padding: "12px", textAlign: "center",
+          color: failed ? "#fca5a5" : C.textMuted, fontSize: FS.sm,
+        }}>
+          {failed ? missingText : "読み込み中…"}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// 図の一覧（カード）。cats を渡すと分類の切替を出す
+export function ChartGallery({ title, charts, cats, filterKey, links, note, minCard = 300 }) {
+  const [filter, setFilterState] = useState(() => {
+    const v = cats && filterKey ? loadPref(filterKey, "all") : "all";
+    return cats?.some((c) => c.key === v) ? v : "all"; // 以前の「悪天」など、なくなった分類は「すべて」に戻す
+  });
+  const [dim, setDim] = useDimPref();
   const [manualRefresh, setManualRefresh] = useState(0);
   const [autoTick, setAutoTick] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [viewer, setViewer] = useState(null); // 表示中の図のインデックス（visible 内）
-  const data = useChartSources(manualRefresh, autoTick);
+  const data = useChartSources(charts, manualRefresh, autoTick);
 
-  const setFilter = (v) => { setFilterState(v); savePref(FILTER_KEY, v); };
-  const setDim = (v) => { setDimState(v); savePref(DIM_KEY, v); };
+  const setFilter = (v) => { setFilterState(v); if (filterKey) savePref(filterKey, v); };
 
   useEffect(() => {
     const auto = setInterval(() => setAutoTick((t) => t + 1), AUTO_REFRESH_MS);
@@ -337,19 +419,13 @@ export default function WxChartsGallery() {
     return () => { clearInterval(auto); clearInterval(clock); };
   }, []);
 
-  const visible = CHARTS.filter((c) => filter === "all" || c.cat === filter);
+  const visible = charts.filter((c) => filter === "all" || c.cat === filter);
   const items = visible.map((c) => {
     const d = data[c.key] || {};
     return {
       key: c.key, title: c.title, code: c.code, src: d.status === "ok" ? d.src : null, href: d.href,
       meta: [d.timeLabel, d.ageFrom ? ago(d.ageFrom, nowMs) : null].filter(Boolean).join(" · "),
     };
-  });
-
-  const segBtn = (on) => ({
-    height: "40px", padding: "0 14px", borderRadius: "8px", border: "none", cursor: "pointer",
-    background: on ? "rgba(110,231,183,0.14)" : "transparent",
-    color: on ? C.accent : C.textSub, fontWeight: on ? 700 : 400, fontSize: FS.sm, fontFamily: "inherit",
   });
 
   return (
@@ -360,27 +436,20 @@ export default function WxChartsGallery() {
         .wxc-card:focus-visible { outline: 2px solid ${C.accent}; outline-offset: 2px; }
       `}</style>
 
-      <PanelFrame title="WX CHARTS / 天気図" style={{ padding: 0 }}>
+      <PanelFrame title={title} style={{ padding: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", padding: "16px 16px 4px" }}>
-          <div role="group" aria-label="分類" style={{ display: "inline-flex", padding: "3px", borderRadius: "10px", background: "rgba(10,16,28,0.9)", border: `1px solid ${C.border}` }}>
-            {CATS.map((c) => (
-              <button key={c.key} type="button" aria-pressed={filter === c.key} onClick={() => setFilter(c.key)} style={segBtn(filter === c.key)}>{c.label}</button>
-            ))}
-          </div>
-          <span style={{ fontSize: FS.xs, color: C.textMuted }}>タップで全画面、左右スワイプで次の図へ</span>
+          {cats && <Segmented options={cats} value={filter} onChange={setFilter} label="分類" />}
+          <span style={{ fontSize: FS.xs, color: C.textMuted }}>タップで全画面{charts.length > 1 ? "、左右スワイプで次の図へ" : ""}</span>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
               <input type="checkbox" checked={dim} onChange={(e) => setDim(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
               図を減光（夜間用）
             </label>
-            <button type="button" onClick={() => setManualRefresh((n) => n + 1)} style={{
-              height: "40px", padding: "0 14px", borderRadius: "8px", cursor: "pointer",
-              background: "transparent", border: `1px solid ${C.border}`, color: C.textSub, fontSize: FS.sm, fontFamily: "inherit",
-            }}>更新</button>
+            <button type="button" onClick={() => setManualRefresh((n) => n + 1)} style={actionBtnStyle}>更新</button>
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))", gap: "14px", padding: "12px 16px 16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minCard}px), 1fr))`, alignItems: "start", gap: "14px", padding: "12px 16px 16px" }}>
           {visible.map((c, i) => (
             <ChartCard
               key={c.key} chart={c} d={data[c.key]} dim={dim} nowMs={nowMs}
@@ -389,27 +458,57 @@ export default function WxChartsGallery() {
             />
           ))}
         </div>
-        <div style={{ padding: "0 16px 14px", fontSize: FS.xs, color: C.textMuted }}>
-          出典: 気象庁（天気図・数値予報天気図・航空気象情報）。数値予報天気図は PDF を画像化して表示
-        </div>
+        {note && <div style={{ padding: "0 16px 14px", fontSize: FS.xs, color: C.textMuted }}>{note}</div>}
       </PanelFrame>
 
-      <PanelFrame title="関連リンク" style={{ padding: "18px 16px 14px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "14px" }}>
-          {LINK_GROUPS.map((g) => (
-            <div key={g.title} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <span style={{ fontSize: FS.xs, fontWeight: 700, color: C.textSub, letterSpacing: "1px" }}>{g.title}</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {g.links.map((l) => <ExtLink key={l.href} href={l.href}>{l.label}</ExtLink>)}
+      {links?.length > 0 && (
+        <PanelFrame title="関連リンク" style={{ padding: "18px 16px 14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "14px" }}>
+            {links.map((g) => (
+              <div key={g.title} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <span style={{ fontSize: FS.xs, fontWeight: 700, color: C.textSub, letterSpacing: "1px" }}>{g.title}</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                  {g.links.map((l) => <ExtLink key={l.href} href={l.href}>{l.label}</ExtLink>)}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </PanelFrame>
+            ))}
+          </div>
+        </PanelFrame>
+      )}
 
       {viewer !== null && items[viewer] && (
         <ChartViewer items={items} index={viewer} setIndex={setViewer} onClose={() => setViewer(null)} dim={dim} />
       )}
     </div>
+  );
+}
+
+// WX CHARTS：地上・上空の天気図
+export default function WxChartsGallery() {
+  return (
+    <ChartGallery
+      title="天気図一覧" charts={WX_CHARTS} cats={WX_CATS} filterKey={FILTER_KEY} links={WX_LINKS}
+      note="出典: 気象庁（天気図・数値予報天気図）。数値予報天気図は PDF を画像化して表示"
+    />
+  );
+}
+
+// SIG WX：国内悪天予想図（FBJP・FBJP112）
+export function SigwxProgCharts() {
+  return (
+    <ChartGallery
+      title="国内悪天予想図" charts={PROG_CHARTS} links={PROG_LINKS} minCard={420}
+      note="乱気流・着氷・積乱雲域・ジェット軸・0℃高度の予想。出典: 気象庁 航空気象情報"
+    />
+  );
+}
+
+// ENROUTE：断面図（FXJP106・AXJP130/140）
+export function CrossSectionCharts() {
+  return (
+    <ChartGallery
+      title="断面図" charts={XSEC_CHARTS} links={XSEC_LINKS} minCard={360}
+      note="FXJP106 は国内主要航空路に沿った6・12時間予想、AXJP130/140 は東経130°・140°に沿った解析（00Z・12Z）。出典: 気象庁"
+    />
   );
 }

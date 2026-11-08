@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { PanelFrame, ExtLink } from "./ui.jsx";
+import { PanelFrame, ExtLink, MenuShell } from "./ui.jsx";
 import { C, FS, FONT } from "./theme.js";
-import DomesticWxPanel, { EmagramSection, JmaAirportCharts, jmaTafChartUrl, jmaCommentUrl } from "./DomesticWxPanel.jsx";
-import WxChartsGallery from "./ChartsGallery.jsx";
+import { EmagramSection, JmaAirportCharts, jmaTafChartUrl, jmaCommentUrl, collectChartUrls } from "./DomesticWxPanel.jsx";
+import WxChartsGallery, { SigwxProgCharts, CrossSectionCharts } from "./ChartsGallery.jsx";
 import ImageryViewer from "./ImageryViewer.jsx";
-import SevereHub from "./SevereHub.jsx";
+import { SigmetView, CmntView, CciPanel, LowLevelView } from "./SigWx.jsx";
+import { MaijiView } from "./EnrouteViews.jsx";
 
 /* ============================================================
    AWC API BASE URL
@@ -1290,32 +1291,127 @@ function WorldClockBar() {
 }
 
 /* HUD panel decorator */
+/* ========== メニュー（6分類）========== */
+// 線のアイコン（24×24、色は文字色）
+const MENU_ICON_PATHS = {
+  charts: <><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20z" /><path d="M9 4v13.5M15 6.5V20" /></>,
+  terminal: <><path d="M8 3h8l1.5 5h-11z" /><path d="M10 8v13M14 8v13" /><path d="M5 21h14" /></>,
+  enroute: <><path d="M12 3 21 8l-9 5-9-5z" /><path d="m3 13 9 5 9-5" /></>,
+  sigwx: <path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12z" />,
+  imagery: <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="m21 16-5-5-9 9" /></>,
+  duty: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
+};
+function MenuIcon({ name, size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      {MENU_ICON_PATHS[name]}
+    </svg>
+  );
+}
+
+// 並び順＝数字キー 1〜6
+const TABS = [
+  { key: "charts", label: "WX CHARTS" },
+  { key: "terminal", label: "TERMINAL" },
+  { key: "enroute", label: "ENROUTE" },
+  { key: "sigwx", label: "SIG WX" },
+  { key: "imagery", label: "IMAGERY" },
+  { key: "duty", label: "DUTY" },
+];
+
+// 各メニューのサブ表示（乗務との連携は TERMINAL の METAR/TAF だけ）
+const MENU_VIEWS = {
+  charts: [{ key: "charts", label: "天気図", render: () => <WxChartsGallery /> }],
+  terminal: [
+    { key: "metar", label: "METAR / TAF", render: () => <MetarTafPanel /> },
+    { key: "livecam", label: "ライブカメラ", render: () => <LiveCameraPanel /> },
+  ],
+  enroute: [
+    { key: "maiji", label: "毎時大気解析", render: () => <MaijiView /> },
+    { key: "xsec", label: "断面図", render: () => <CrossSectionCharts /> },
+    { key: "emagram", label: "エマグラム", render: () => <EmagramSection /> },
+    { key: "upper", label: "上層風", render: () => <OpsWxPanel /> },
+  ],
+  sigwx: [
+    { key: "sigmet", label: "SIGMET", render: () => <SigmetView /> },
+    { key: "prog", label: "悪天予想図", render: () => <SigwxProgCharts /> },
+    { key: "lowlevel", label: "低高度", render: () => <LowLevelView /> },
+    { key: "cci", label: "積乱雲情報", render: () => <CciPanel /> },
+    { key: "cmnt", label: "解説報", render: () => <CmntView /> },
+    { key: "typhoon", label: "台風・豪雨", render: () => <SevereWxPanel /> },
+  ],
+  imagery: [
+    { key: "jma", label: "衛星・レーダー", render: () => <ImageryViewer /> },
+    { key: "windy", label: "Windy", render: () => <RadarPanel /> },
+  ],
+  duty: [{ key: "duty", label: "勤務予定", render: () => <DutySchedulePanel /> }],
+};
+
+function useMediaQuery(query) {
+  const [match, setMatch] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const on = () => setMatch(mq.matches);
+    on();
+    mq.addEventListener?.("change", on);
+    return () => mq.removeEventListener?.("change", on);
+  }, [query]);
+  return match;
+}
+
+// 上部のタブ（PC・iPad 横）
 function TabBtn({ active, onClick, children, icon, shortcut }) {
   return (
-    <button onClick={onClick} style={{
-      padding: "10px 16px",
+    <button type="button" onClick={onClick} aria-current={active ? "page" : undefined} style={{
+      minHeight: "48px", padding: "0 18px",
       flexShrink: 0, whiteSpace: "nowrap",
       background: active ? "rgba(110, 231, 183, 0.10)" : "transparent",
       border: "none",
-      borderBottom: active ? "2px solid #6ee7b7" : "2px solid transparent",
-      color: active ? "#6ee7b7" : C.textMuted,
+      borderBottom: active ? `2px solid ${C.accent}` : "2px solid transparent",
+      color: active ? C.accent : C.textSub,
       fontSize: FS.sm, fontWeight: active ? 700 : 500, cursor: "pointer",
       display: "flex", alignItems: "center", gap: "8px",
-      transition: "all 0.15s ease",
+      transition: "background 0.15s ease, color 0.15s ease",
       fontFamily: FONT.ui, letterSpacing: "1px",
-      
-      position: "relative",
     }}>
-      <span style={{ fontSize: FS.md, opacity: active ? 1 : 0.6 }}>{icon}</span>
-      <span>{children.toUpperCase?.() ?? children}</span>
+      <span style={{ display: "inline-flex", opacity: active ? 1 : 0.75 }}><MenuIcon name={icon} /></span>
+      <span>{children}</span>
       {shortcut && (
-        <span style={{
-          fontSize: FS.xs, color: active ? "#6ee7b780" : C.textMuted,
-          fontFamily: FONT.ui,
-          marginLeft: "2px",
-        }}>{shortcut}</span>
+        <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: FONT.data, marginLeft: "2px" }}>{shortcut}</span>
       )}
     </button>
+  );
+}
+
+// 画面下部のタブバー（iPad 縦・スマホ）
+function BottomNav({ tabs, active, onSelect }) {
+  return (
+    <nav aria-label="メニュー" style={{
+      position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 200,
+      background: "rgba(3, 8, 16, 0.96)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
+      borderTop: `1px solid ${C.border}`,
+      paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      paddingLeft: "env(safe-area-inset-left, 0px)", paddingRight: "env(safe-area-inset-right, 0px)",
+    }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${tabs.length}, 1fr)`, maxWidth: "960px", margin: "0 auto" }}>
+        {tabs.map((t) => {
+          const on = t.key === active;
+          return (
+            <button key={t.key} type="button" aria-current={on ? "page" : undefined} onClick={() => onSelect(t.key)} style={{
+              position: "relative", minHeight: "58px", padding: "8px 2px", border: "none", background: "transparent",
+              cursor: "pointer", fontFamily: FONT.ui, color: on ? C.accent : C.textSub,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px",
+            }}>
+              {on && <span aria-hidden="true" style={{ position: "absolute", top: 0, left: "22%", right: "22%", height: "2px", borderRadius: "0 0 2px 2px", background: C.accent }} />}
+              <MenuIcon name={t.key} size={22} />
+              <span style={{ fontSize: FS.xs, fontWeight: on ? 700 : 500, letterSpacing: "0.5px", whiteSpace: "nowrap" }}>{t.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -2547,368 +2643,6 @@ function RadarPanel() {
 }
 
 
-/* ========== ANALYSIS ========== */
-function AnalysisPanel() {
-  const [timestamp, setTimestamp] = useState(null);
-  const [tsLabel, setTsLabel] = useState("");
-  const [tsIndex, setTsIndex] = useState(0);
-  const [tsList, setTsList] = useState([]);
-  const [viewMode, setViewMode] = useState("cross"); // "cross" | "plane" | "sounding"
-  const [planeLevel, setPlaneLevel] = useState("35"); // FL350
-  const [imgError, setImgError] = useState({});
-  const [zoomImg, setZoomImg] = useState(null); // { src, label }
-  // 図の減光（夜間用）。WX CHARTS と設定を共有し、元の図は白地のまま表示する
-  const [dimCharts, setDimChartsState] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("wxcharts_dim") || "false") === true; } catch { return false; }
-  });
-  const setDimCharts = (v) => {
-    setDimChartsState(v);
-    try { localStorage.setItem("wxcharts_dim", JSON.stringify(v)); } catch { /* ignore */ }
-  };
-  const chartFilter = dimCharts ? "brightness(0.68) contrast(1.05)" : "none";
-
-  // JMAの断面図コード: 経度→内部コード (functions_maiji.jsより)
-  const LONS = [
-    { label: "E145°", code: "50" },
-    { label: "E140°", code: "52" },
-    { label: "E135°", code: "54" },
-    { label: "E130°", code: "56" },
-  ];
-
-  const PLANE_LEVELS = [
-    { code: "45", label: "FL450", hPa: "150hPa", ft: "≈45,000ft" },
-    { code: "35", label: "FL350", hPa: "250hPa", ft: "≈35,000ft" },
-    { code: "25", label: "FL250", hPa: "400hPa", ft: "≈25,000ft" },
-    { code: "15", label: "FL150", hPa: "550hPa", ft: "≈15,000ft" },
-  ];
-
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState(null);
-
-  // list_maiji.js からタイムスタンプ一覧を取得
-  const fetchTimestamps = useCallback((isManual = false) => {
-    if (isManual) setRefreshing(true);
-    fetch("https://www.data.jma.go.jp/airinfo/data/conf/list_maiji.js", { cache: "no-store" })
-      .then((r) => r.text())
-      .then((text) => {
-        const matches = [...text.matchAll(/"(\d{14})"/g)].map((m) => m[1]);
-        const labels = [...text.matchAll(/"(\d{2}\/\d{2} \d{2}:\d{2})"/g)].map((m) => m[1]);
-        if (matches.length > 0) {
-          const list = matches.map((ts, i) => ({ ts, label: labels[i] || ts }));
-          setTsList(list);
-          setTsIndex(0);
-          setTimestamp(list[0].ts);
-          setTsLabel(list[0].label);
-          setImgError({});
-        }
-        setLastRefresh(new Date());
-      })
-      .catch(() => {
-        if (!timestamp) {
-          const now = new Date();
-          now.setUTCMinutes(0, 0, 0);
-          const ts = now.toISOString().replace(/[-:T]/g, "").slice(0, 14).padEnd(14, "0");
-          setTimestamp(ts);
-          setTsLabel("latest");
-        }
-      })
-      .finally(() => setRefreshing(false));
-  }, [timestamp]);
-
-  useEffect(() => { fetchTimestamps(); }, []);
-
-  const goTs = (dir) => {
-    const next = tsIndex + dir;
-    if (next >= 0 && next < tsList.length) {
-      setTsIndex(next);
-      setTimestamp(tsList[next].ts);
-      setTsLabel(tsList[next].label);
-      setImgError({});
-    }
-  };
-
-  const imageUrl = (code) =>
-    `https://www.data.jma.go.jp/airinfo/data/pict/maiji/WANLC1${code}_RJTD_${timestamp}.PNG`;
-  const planeUrl = (level) =>
-    `https://www.data.jma.go.jp/airinfo/data/pict/maiji/WANLF1${level}_RJTD_${timestamp}.PNG`;
-
-  const panelStyle = {
-    background: "rgba(15, 23, 42, 0.5)",
-    border: "1px solid rgba(148, 163, 184, 0.1)",
-    borderRadius: "12px",
-    padding: "20px",
-    marginBottom: "20px",
-  };
-
-  const headerLabel = {
-    color: C.textSub,
-    fontSize: FS.xs,
-    fontWeight: 700,
-    letterSpacing: "1px",
-    fontFamily: FONT.ui,
-    
-  };
-
-  return (
-    <div>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-
-      {/* ヘッダー */}
-      <div style={panelStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-          <div>
-            <div style={headerLabel}>◈ JMA 三十分大気解析 / 30-MIN ATMOSPHERIC ANALYSIS</div>
-            <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.ui, marginTop: "3px" }}>
-              SOURCE: data.jma.go.jp/airinfo — REAL-TIME IMAGE FEED
-            </div>
-          </div>
-          {/* ビューモード切り替え */}
-          <div style={{ display: "flex", gap: "6px" }}>
-            {[{ key: "cross", label: "断面図 (経度別)" }, { key: "plane", label: "平面図 (FL別)" }, { key: "sounding", label: "エマグラム (観測)" }].map((m) => (
-              <button key={m.key} onClick={() => setViewMode(m.key)} style={{
-                padding: "5px 14px",
-                background: viewMode === m.key ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
-                border: `1px solid ${viewMode === m.key ? "rgba(110, 231, 183, 0.5)" : "rgba(148, 163, 184, 0.15)"}`,
-                borderRadius: "6px", color: viewMode === m.key ? "#6ee7b7" : C.textMuted,
-                fontSize: FS.xs, cursor: "pointer", fontFamily: FONT.ui,
-                transition: "all 0.15s ease",
-              }}>{m.label}</button>
-            ))}
-          </div>
-        </div>
-
-        {/* タイムスタンプ操作 */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
-          <button onClick={() => goTs(1)} disabled={tsIndex >= tsList.length - 1} style={{
-            padding: "4px 10px", background: "rgba(30, 41, 59, 0.8)", border: "1px solid rgba(148, 163, 184, 0.2)",
-            borderRadius: "4px", color: "#94a3b8", fontSize: FS.sm, cursor: "pointer", fontFamily: FONT.ui,
-          }}>◀ PREV</button>
-          <div style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(110, 231, 183, 0.3)", borderRadius: "6px", padding: "4px 16px" }}>
-            <span style={{ color: "#6ee7b7", fontSize: FS.sm, fontFamily: FONT.data, fontWeight: 700 }}>
-              {tsLabel ? `${tsLabel} UTC` : "Loading..."}
-            </span>
-          </div>
-          <button onClick={() => goTs(-1)} disabled={tsIndex <= 0} style={{
-            padding: "4px 10px", background: "rgba(30, 41, 59, 0.8)", border: "1px solid rgba(148, 163, 184, 0.2)",
-            borderRadius: "4px", color: "#94a3b8", fontSize: FS.sm, cursor: "pointer", fontFamily: FONT.ui,
-          }}>NEXT ▶</button>
-          <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.ui }}>
-            {tsIndex + 1} / {tsList.length}
-          </div>
-          <button onClick={() => fetchTimestamps(true)} disabled={refreshing} style={{
-            padding: "4px 10px", background: "rgba(30, 41, 59, 0.8)", border: "1px solid rgba(148, 163, 184, 0.2)",
-            borderRadius: "4px", color: refreshing ? "#6ee7b7" : "#94a3b8", fontSize: FS.sm, cursor: refreshing ? "wait" : "pointer",
-            fontFamily: FONT.ui, transition: "all 0.15s ease",
-          }}>
-            <span style={{ display: "inline-block", animation: refreshing ? "spin 1s linear infinite" : "none" }}>↻</span>
-            {refreshing ? " UPDATING…" : " REFRESH"}
-          </button>
-          {lastRefresh && (
-            <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.ui }}>
-              {lastRefresh.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-            </div>
-          )}
-          {viewMode !== "sounding" && (
-            <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "36px", fontSize: FS.xs, color: C.textSub, fontFamily: FONT.ui, cursor: "pointer" }}>
-              <input type="checkbox" checked={dimCharts} onChange={(e) => setDimCharts(e.target.checked)} style={{ width: "18px", height: "18px", accentColor: "#6ee7b7" }} />
-              図を減光（夜間用）
-            </label>
-          )}
-          {/* FL切り替え（平面図時のみ） */}
-          {viewMode === "plane" && (
-            <div style={{ display: "flex", gap: "6px", marginLeft: "auto" }}>
-              {PLANE_LEVELS.map((lv) => (
-                <button key={lv.code} onClick={() => { setPlaneLevel(lv.code); setImgError({}); }} style={{
-                  padding: "4px 10px",
-                  background: planeLevel === lv.code ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
-                  border: `1px solid ${planeLevel === lv.code ? "rgba(110, 231, 183, 0.4)" : "rgba(148, 163, 184, 0.1)"}`,
-                  borderRadius: "4px", color: planeLevel === lv.code ? "#6ee7b7" : C.textMuted,
-                  fontSize: FS.xs, cursor: "pointer", fontFamily: FONT.ui,
-                }}>{lv.label} <span style={{ fontSize: FS.xs, opacity: 0.6 }}>{lv.hPa}</span></button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 断面図: 東経4地点グリッド */}
-        {viewMode === "cross" && timestamp && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
-            {LONS.map((lon) => (
-              <div key={lon.code} style={{
-                background: "rgba(0,0,0,0.5)",
-                border: `1px solid ${imgError[lon.code] ? "rgba(248, 113, 113, 0.3)" : "rgba(110, 231, 183, 0.2)"}`,
-                borderRadius: "8px", overflow: "hidden",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", background: "rgba(0,0,0,0.6)", borderBottom: "1px solid rgba(110, 231, 183, 0.15)" }}>
-                  <span style={{ color: C.textSub, fontSize: FS.xs, fontWeight: 700, fontFamily: FONT.ui, letterSpacing: "1px" }}>{lon.label}</span>
-                  <a href={imageUrl(lon.code)} target="_blank" rel="noopener noreferrer" style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.ui, textDecoration: "none" }}>↗ JMA</a>
-                </div>
-                {imgError[lon.code] ? (
-                  <div style={{ height: "220px", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.ui }}>
-                    NO DATA FOR {tsLabel}
-                  </div>
-                ) : (
-                  <div
-                    style={{ background: "#ffffff", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
-                    onClick={() => setZoomImg({ src: imageUrl(lon.code), label: `${lon.label} — ${tsLabel}` })}
-                  >
-                    <img
-                      src={imageUrl(lon.code)}
-                      alt={`大気解析 ${lon.label} ${tsLabel}`}
-                      onError={() => setImgError((prev) => ({ ...prev, [lon.code]: true }))}
-                      style={{ width: "100%", display: "block", filter: chartFilter }}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 平面図: FL別 */}
-        {viewMode === "plane" && timestamp && (
-          <div style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(110, 231, 183, 0.2)", borderRadius: "8px", overflow: "hidden" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", background: "rgba(0,0,0,0.6)", borderBottom: "1px solid rgba(110, 231, 183, 0.15)" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-                <span style={{ color: C.textSub, fontSize: FS.xs, fontWeight: 700, fontFamily: FONT.ui, letterSpacing: "1px" }}>
-                  {PLANE_LEVELS.find((l) => l.code === planeLevel)?.label} PLANE VIEW
-                </span>
-                <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.ui }}>
-                  {PLANE_LEVELS.find((l) => l.code === planeLevel)?.hPa} / {PLANE_LEVELS.find((l) => l.code === planeLevel)?.ft}
-                </span>
-              </div>
-              <a href={planeUrl(planeLevel)} target="_blank" rel="noopener noreferrer" style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.ui, textDecoration: "none" }}>↗ JMA</a>
-            </div>
-            {imgError["plane"] ? (
-              <div style={{ height: "300px", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.ui }}>
-                NO DATA FOR {tsLabel}
-              </div>
-            ) : (
-              <div
-                style={{ background: "#ffffff", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
-                onClick={() => setZoomImg({ src: planeUrl(planeLevel), label: `${PLANE_LEVELS.find(l => l.code === planeLevel)?.label} PLANE — ${tsLabel}` })}
-              >
-                <img
-                  src={planeUrl(planeLevel)}
-                  alt={`平面図 FL${planeLevel}0 ${tsLabel}`}
-                  onError={() => setImgError((prev) => ({ ...prev, plane: true }))}
-                  style={{ width: "100%", display: "block", filter: chartFilter }}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* エマグラム（気象庁ラジオゾンデ観測） */}
-        {viewMode === "sounding" && <EmagramSection />}
-
-        {/* リンク */}
-        <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
-          <ExtLink href="https://www.data.jma.go.jp/airinfo/data/awfo_maiji.html" accent>📊 気象庁 三十分大気解析</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/weather_map/">🗺️ 天気図</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/">📈 数値予報天気図</ExtLink>
-        </div>
-      </div>
-
-      {/* 参照リンク群 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
-        {[
-          {
-            title: "地上天気図 (ASAS/FSAS)", desc: "高気圧・低気圧・前線の位置と動向", links: [
-              { label: "実況天気図 ASAS", url: "https://www.jma.go.jp/bosai/weather_map/" },
-              { label: "予想天気図 FSAS24/48", url: "https://www.jma.go.jp/bosai/weather_map/#type=forecast" },
-            ]
-          },
-          {
-            title: "高層天気図", desc: "ジェット気流・トラフ・リッジ", links: [
-              { label: "AUPQ35 (850/700hPa)", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq35" },
-              { label: "AUPQ78 (500/300hPa)", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq78" },
-            ]
-          },
-          {
-            title: "悪天予想図", desc: "Turbulence, Icing, Cb 予想域", links: [
-              { label: "国内悪天 FBJP", url: "https://www.jma.go.jp/bosai/numericmap/#type:fbjp" },
-              { label: "下層悪天 FBFE", url: "https://www.jma.go.jp/bosai/numericmap/#type:fbfe" },
-            ]
-          },
-          {
-            title: "航空気象 (AWC)", desc: "国際線向け SIGWX・乱気流", links: [
-              { label: "Aviation Weather Center", url: "https://aviationweather.gov" },
-              { label: "SIGWX Chart", url: "https://aviationweather.gov/gfa/#area=other" },
-              { label: "Turbulence Forecast", url: "https://aviationweather.gov/gfa/#obs=turb" },
-            ]
-          },
-          {
-            title: "Windy 高層風", desc: "FL別の風・気温ビジュアル", links: [
-              { label: "上層風 250hPa", url: "https://www.windy.com/-Wind-250hPa-wind250h?wind250h" },
-              { label: "気温分布", url: "https://www.windy.com/-Temperature-temp?temp" },
-            ]
-          },
-          {
-            title: "ウィンドプロファイラ", desc: "上空の風向風速の時間変化", links: [
-              { label: "気象庁 WINDAS", url: "https://www.jma.go.jp/bosai/windprofiler/" },
-            ]
-          },
-        ].map((s, i) => (
-          <div key={i} style={{ padding: "16px", background: "rgba(15, 23, 42, 0.4)", border: "1px solid rgba(148, 163, 184, 0.08)", borderRadius: "10px" }}>
-            <div style={{ color: "#e2e8f0", fontSize: FS.sm, fontWeight: 600, marginBottom: "4px" }}>{s.title}</div>
-            <div style={{ color: C.textMuted, fontSize: FS.xs, marginBottom: "10px" }}>{s.desc}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              {s.links.map((l, j) => (
-                <a key={j} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", fontSize: FS.sm, textDecoration: "none", fontFamily: FONT.ui }}>→ {l.label}</a>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ズームオーバーレイ */}
-      {zoomImg && (
-        <div
-          onClick={() => setZoomImg(null)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 9999,
-            background: "rgba(0,0,0,0.92)",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            cursor: "pointer",
-            padding: "env(safe-area-inset-top, 10px) env(safe-area-inset-right, 10px) env(safe-area-inset-bottom, 10px) env(safe-area-inset-left, 10px)",
-          }}
-        >
-          {/* ヘッダー */}
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            width: "100%", maxWidth: "95vw", padding: "8px 4px", marginBottom: "8px",
-          }}>
-            <span style={{ color: C.text, fontSize: FS.sm, fontWeight: 700, fontFamily: FONT.ui, letterSpacing: "1px" }}>
-              {zoomImg.label}
-            </span>
-            <span style={{ color: C.textMuted, fontSize: FS.lg, fontFamily: FONT.ui, padding: "4px 12px" }}>✕</span>
-          </div>
-          {/* 画像 */}
-          <div style={{
-            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-            width: "100%", maxWidth: "95vw", overflow: "auto", WebkitOverflowScrolling: "touch",
-          }}>
-            <img
-              src={zoomImg.src}
-              alt={zoomImg.label}
-              style={{
-                maxWidth: "100%", maxHeight: "85vh", objectFit: "contain",
-                borderRadius: "4px",
-                background: "#ffffff",
-                filter: chartFilter,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-/* ========== WX CHARTS — 気象チャート一覧 ========== */
 /* ========== OPS WEATHER BRIEFING ========== */
 
 const OPS_AIRPORTS = [
@@ -4629,6 +4363,7 @@ function WeatherAlertBanner() {
 }
 
 /* ========== EVENT LOG — イベントコンソール ========== */
+let eventLogSeq = 0; // ログの key（同じミリ秒に複数追加されても重ならないよう連番）
 function EventLog() {
   const [logs, setLogs] = useState([]);
   const [expanded, setExpanded] = useState(false);
@@ -4638,7 +4373,7 @@ function EventLog() {
   const addLog = useCallback((type, message) => {
     const now = new Date();
     const ts = now.toISOString().slice(11, 19);
-    setLogs(prev => [{ ts, type, message, id: Date.now() }, ...prev].slice(0, 100));
+    setLogs(prev => [{ ts, type, message, id: ++eventLogSeq }, ...prev].slice(0, 100));
   }, []);
 
   // 起動時ログ
@@ -4866,10 +4601,13 @@ function BootSequence({ onComplete, sysStatus }) {
 /* ========== MAIN APP ========== */
 export default function WeatherBriefing() {
   const [booted, setBooted] = useState(bootAlreadyShown);
-  const [activeTab, setActiveTab] = useState("metar");
-  const [displayMode, setDisplayMode] = useState("single"); // "single" | "multi"
-  const [multiPanels, setMultiPanels] = useState(["metar", "satellite", "radar", "analysis"]);
+  const [activeTab, setActiveTabState] = useState("terminal");
   const [now, setNow] = useState(new Date());
+  // 幅が狭い（iPad 縦・スマホ・狭いウィンドウ）ときは1列、縦長なら下部タブバー
+  const narrow = useMediaQuery("(max-width: 1099px)");
+  const bottomNav = useMediaQuery("(max-width: 1099px) and (orientation: portrait)");
+  const contentRef = useRef(null);
+  const tabBarRef = useRef(null);
   const sysStatus = useSystemStatus();
   useEffect(() => {
     const iv = setInterval(() => setNow(new Date()), 60000);
@@ -4932,109 +4670,45 @@ export default function WeatherBriefing() {
       urls.push(jmaTafChartUrl(icao, 1), jmaTafChartUrl(icao, 2), jmaCommentUrl(icao, false));
     }
 
-    // Atmospheric analysis images — all 4 cross sections + 4 plane levels × latest timestamp
-    try {
-      const tsRes = await fetch("https://www.data.jma.go.jp/airinfo/data/conf/list_maiji.js");
-      const tsText = await tsRes.text();
-      const tsMatches = [...tsText.matchAll(/"(\d{14})"/g)].map(m => m[1]);
-      const latestTs = tsMatches[0];
-      if (latestTs) {
-        for (const code of ["50", "52", "54", "56"]) {
-          urls.push(`https://www.data.jma.go.jp/airinfo/data/pict/maiji/WANLC1${code}_RJTD_${latestTs}.PNG`);
-        }
-        for (const code of ["15", "25", "35", "45"]) {
-          urls.push(`https://www.data.jma.go.jp/airinfo/data/pict/maiji/WANLF1${code}_RJTD_${latestTs}.PNG`);
-        }
-      }
-    } catch {}
+    // 図（WX CHARTS・ENROUTE・SIG WX）：天気図・数値予報天気図・悪天予想図・SIGMET・低高度悪天・毎時大気解析
+    try { urls.push(...await collectChartUrls()); } catch { /* skip */ }
 
-    // JMA weather maps — surface charts
-    urls.push("https://www.jma.go.jp/bosai/weather_map/data/png/spas_color.png");
-    try {
-      const listRes = await fetch("https://www.jma.go.jp/bosai/weather_map/data/list.json");
-      const listData = await listRes.json();
-      if (listData?.near?.length) {
-        const latest = listData.near[listData.near.length - 1];
-        for (const el of latest.elements) {
-          if (["SPAS", "FSAS24", "FSAS48", "ASAS"].some(t => el.includes(t)) && el.endsWith(".png")) {
-            urls.push(`https://www.jma.go.jp/bosai/weather_map/data/png/${el}`);
-          }
-        }
-      }
-    } catch {}
-    // FBJP severe weather charts
-    urls.push("https://www.data.jma.go.jp/airinfo/data/pict/fbjp/fbjp.png");
-    // FBJP 12h — cache latest base time
-    const cacheUtcH = new Date().getUTCHours();
-    const cacheBT = cacheUtcH >= 2 ? Math.floor((cacheUtcH - 2) / 3) * 3 : 21;
-    urls.push(`https://www.data.jma.go.jp/airinfo/data/pict/nwp/fbjp112_${String(cacheBT).padStart(2, "0")}.png`);
-
-    navigator.serviceWorker.controller.postMessage({ type: "PREFLIGHT_CACHE", urls });
+    navigator.serviceWorker.controller.postMessage({ type: "PREFLIGHT_CACHE", urls: [...new Set(urls)] });
   };
 
   const doClearCache = () => {
     navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_CACHE" });
   };
 
-  const tabs = [
-    { key: "metar", label: "METAR / TAF", icon: "📡" },
-    { key: "satellite", label: "画像", icon: "🛰️" },
-    { key: "radar", label: "レーダー", icon: "🌧️" },
-    { key: "analysis", label: "大気解析", icon: "📊" },
-    { key: "charts", label: "WX CHARTS", icon: "📈" },
-    { key: "opswx", label: "OPS WX", icon: "🎯" },
-    { key: "livecam", label: "LIVE CAM", icon: "📹" },
-    { key: "duty", label: "DUTY", icon: "📋" },
-    { key: "severe", label: "悪天・SIGMET", icon: "⛈️" },
-    { key: "domestic", label: "国内解析", icon: "🗾" },
-  ];
-
-  const panelMap = {
-    metar: <MetarTafPanel />,
-    satellite: <ImageryViewer />,
-    radar: <RadarPanel />,
-    analysis: <AnalysisPanel />,
-    charts: <WxChartsGallery />,
-    opswx: <OpsWxPanel />,
-    livecam: <LiveCameraPanel />,
-    duty: <DutySchedulePanel />,
-    severe: <SevereHub legacy={<SevereWxPanel />} />,
-    domestic: <DomesticWxPanel />,
-  };
-
-  // マルチディスプレイのスロット切り替え
-  const cycleMultiPanel = (slotIdx) => {
-    setMultiPanels(prev => {
-      const next = [...prev];
-      const allKeys = tabs.map(t => t.key);
-      const currentIdx = allKeys.indexOf(next[slotIdx]);
-      next[slotIdx] = allKeys[(currentIdx + 1) % allKeys.length];
-      return next;
+  // メニュー切替。下までスクロールしていたら、新しいメニューの先頭が見える位置に戻す
+  const setActiveTab = useCallback((key) => {
+    setActiveTabState(key);
+    requestAnimationFrame(() => {
+      const el = contentRef.current;
+      if (!el) return;
+      const offset = (tabBarRef.current?.offsetHeight || 0) + 8;
+      const top = el.getBoundingClientRect().top;
+      if (top < offset) window.scrollTo({ top: Math.max(0, window.scrollY + top - offset) });
     });
-  };
+  }, []);
+  const activeInfo = TABS.find((t) => t.key === activeTab) || TABS[0];
 
   // ===== キーボードショートカット =====
   const [showShortcuts, setShowShortcuts] = useState(false);
   useEffect(() => {
     const handler = (e) => {
-      // 入力中はスキップ
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      // 入力中・ブラウザのショートカット（⌘F など）はスキップ
+      const tag = e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       const key = e.key;
 
-      // 1-9,0: タブ切り替え
-      if (key >= "0" && key <= "9") {
+      // 1-6: メニュー切り替え（図の全画面表示中は切り替えない）
+      if (key >= "1" && key <= String(TABS.length)) {
+        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
         e.preventDefault();
-        const idx = key === "0" ? 9 : parseInt(key, 10) - 1;
-        if (tabs[idx]) {
-          setActiveTab(tabs[idx].key);
-          setDisplayMode("single");
-        }
-      }
-      // M: マルチディスプレイ切り替え
-      if (key === "m" || key === "M") {
-        e.preventDefault();
-        setDisplayMode(d => d === "multi" ? "single" : "multi");
+        setActiveTab(TABS[parseInt(key, 10) - 1].key);
       }
       // R: リフレッシュ（全ページリロード）
       if (key === "r" || key === "R") {
@@ -5062,7 +4736,7 @@ export default function WeatherBriefing() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [tabs]);
+  }, [setActiveTab]);
 
   return (
     <div style={{
@@ -5071,6 +4745,7 @@ export default function WeatherBriefing() {
       color: "#94a3b8",
       fontFamily: FONT.ui,
       position: "relative",
+      paddingBottom: bottomNav ? "calc(64px + env(safe-area-inset-bottom, 0px))" : 0,
     }}>
       {/* 起動シーケンス */}
       {!booted && <BootSequence onComplete={() => setBooted(true)} sysStatus={sysStatus} />}
@@ -5098,8 +4773,7 @@ export default function WeatherBriefing() {
               
             }}>◈ KEYBOARD SHORTCUTS</div>
             {[
-              { keys: "1-9", desc: "タブ切り替え（METAR / 衛星 / レーダー / 解析 / CHARTS / OPS / CAM / DUTY / SEVERE）" },
-              { keys: "M", desc: "マルチディスプレイモード ON/OFF" },
+              { keys: "1-6", desc: "メニュー切り替え（WX CHARTS / TERMINAL / ENROUTE / SIG WX / IMAGERY / DUTY）" },
               { keys: "F", desc: "フルスクリーン ON/OFF" },
               { keys: "R", desc: "ページリフレッシュ" },
               { keys: "?", desc: "このヘルプを表示/非表示" },
@@ -5266,143 +4940,47 @@ export default function WeatherBriefing() {
       {/* ===== JMA気象概况ティッカー (メインモニター直下) ===== */}
       <JmaWeatherTicker />
 
-      {/* ===== TAB BAR ===== */}
-      <div style={{
-        padding: "0 24px",
-        borderBottom: `1px solid ${C.border}`,
-        background: "rgba(3, 8, 16, 0.9)",
-        backdropFilter: "blur(8px)",
-        position: "sticky", top: 0, zIndex: 100,
-      }}>
-        <div style={{
-          display: "flex", alignItems: "stretch",
-          maxWidth: "1400px", margin: "0 auto",
-          overflowX: "auto", WebkitOverflowScrolling: "touch",
-          scrollbarWidth: "none",
+      {/* ===== MENU BAR（PC・iPad 横は上部、縦長の画面は下部） ===== */}
+      {!bottomNav && (
+        <div ref={tabBarRef} style={{
+          padding: "0 24px",
+          borderBottom: `1px solid ${C.border}`,
+          background: "rgba(3, 8, 16, 0.92)",
+          backdropFilter: "blur(8px)",
+          position: "sticky", top: 0, zIndex: 100,
         }}>
-          {tabs.map((tab, i) => (
-            <TabBtn
-              key={tab.key}
-              active={displayMode === "single" && activeTab === tab.key}
-              onClick={() => { setActiveTab(tab.key); setDisplayMode("single"); }}
-              icon={tab.icon}
-              shortcut={i < 9 ? `${i + 1}` : i === 9 ? "0" : null}
-            >
-              {tab.label}
-            </TabBtn>
-          ))}
-
-          {/* セパレーター */}
-          <div style={{ width: "1px", margin: "8px 6px", background: "rgba(110,231,183,0.1)", flexShrink: 0 }} />
-
-          {/* MULTI-DISPLAY モード切り替え */}
-          <button onClick={() => setDisplayMode(displayMode === "multi" ? "single" : "multi")} style={{
-            padding: "10px 16px",
-            background: displayMode === "multi" ? "rgba(96,165,250,0.10)" : "transparent",
-            border: "none",
-            borderBottom: displayMode === "multi" ? "2px solid #60a5fa" : "2px solid transparent",
-            color: displayMode === "multi" ? "#60a5fa" : C.textMuted,
-            fontSize: FS.sm, fontWeight: displayMode === "multi" ? 700 : 500,
-            cursor: "pointer",
-            fontFamily: FONT.ui, letterSpacing: "1px",
-            
-            display: "flex", alignItems: "center", gap: "8px",
-            transition: "all 0.15s ease",
-            flexShrink: 0,
+          <nav aria-label="メニュー" style={{
+            display: "flex", alignItems: "stretch",
+            maxWidth: "1400px", margin: "0 auto",
+            overflowX: "auto", WebkitOverflowScrolling: "touch",
+            scrollbarWidth: "none",
           }}>
-            <span style={{ display: "inline-grid", gridTemplateColumns: "1fr 1fr", gap: "2px" }}>
-              {[0,1,2,3].map(i => (
-                <span key={i} style={{
-                  display: "block", width: "6px", height: "5px",
-                  background: displayMode === "multi" ? "#60a5fa" : "#64748b",
-                  borderRadius: "1px",
-                  opacity: displayMode === "multi" ? 1 : 0.5,
-                }} />
-              ))}
-            </span>
-            MULTI
-            <span style={{ fontSize: FS.xs, color: displayMode === "multi" ? "#60a5fa80" : C.textMuted, fontFamily: FONT.ui }}>M</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ===== TAB CONTENT ===== */}
-      {displayMode === "single" ? (
-        /* シングルモード — 従来の2カラムレイアウト */
-        <div style={{ padding: "20px 24px", maxWidth: "1400px", margin: "0 auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: "20px", alignItems: "start" }}>
-            <div>
-              {panelMap[activeTab]}
-            </div>
-            <div style={{ position: "sticky", top: "16px" }}>
-              <AstroDetail now={now} />
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* マルチディスプレイモード — 2×2 グリッド + サイドバー */
-        <div style={{ padding: "12px 16px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: "8px", alignItems: "start" }}>
-            {/* 左: 2×2 グリッド */}
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gridTemplateRows: "auto auto",
-              gap: "8px",
-            }}>
-              {multiPanels.map((panelKey, idx) => {
-                const tabInfo = tabs.find(t => t.key === panelKey) ?? tabs[0];
-                return (
-                  <div key={`slot-${idx}`} style={{
-                    position: "relative",
-                    background: "rgba(3, 8, 16, 0.6)",
-                    border: "1px solid rgba(110, 231, 183, 0.12)",
-                    borderRadius: "4px",
-                    overflow: "hidden",
-                    maxHeight: "600px",
-                    overflowY: "auto",
-                    scrollbarWidth: "thin",
-                    scrollbarColor: "rgba(110,231,183,0.2) transparent",
-                  }}>
-                    {/* パネルヘッダー */}
-                    <div style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "4px 10px",
-                      background: "rgba(0,0,0,0.6)",
-                      borderBottom: "1px solid rgba(110, 231, 183, 0.1)",
-                      position: "sticky", top: 0, zIndex: 10,
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: FONT.ui, letterSpacing: "1px" }}>MONITOR {idx + 1}</span>
-                        <span style={{ color: C.textMuted, fontSize: FS.xs }}>|</span>
-                        <span style={{ fontSize: FS.xs }}>{tabInfo.icon}</span>
-                        <span style={{ fontSize: FS.xs, color: "#6ee7b7", fontFamily: FONT.ui, letterSpacing: "1px", fontWeight: 700 }}>{tabInfo.label}</span>
-                      </div>
-                      <button onClick={() => cycleMultiPanel(idx)} style={{
-                        padding: "2px 8px",
-                        background: "rgba(110,231,183,0.06)",
-                        border: "1px solid rgba(110,231,183,0.15)",
-                        borderRadius: "2px",
-                        color: C.textMuted, fontSize: FS.xs, cursor: "pointer",
-                        fontFamily: FONT.ui,
-                        letterSpacing: "1px",
-                      }}>SWITCH ▶</button>
-                    </div>
-                    {/* パネル本体 */}
-                    <div style={{ padding: "10px" }}>
-                      {panelMap[panelKey]}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {/* 右: サイドバー（月齢等） */}
-            <div style={{ position: "sticky", top: "16px" }}>
-              <AstroDetail now={now} />
-            </div>
-          </div>
+            {TABS.map((tab, i) => (
+              <TabBtn
+                key={tab.key}
+                active={activeTab === tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                icon={tab.key}
+                shortcut={`${i + 1}`}
+              >
+                {tab.label}
+              </TabBtn>
+            ))}
+          </nav>
         </div>
       )}
+
+      {/* ===== MENU CONTENT ===== */}
+      <div ref={contentRef} style={{ padding: narrow ? "16px 16px" : "20px 24px", maxWidth: "1400px", margin: "0 auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: narrow ? "minmax(0, 1fr)" : "minmax(0, 1fr) 280px", gap: "20px", alignItems: "start" }}>
+          <div style={{ minWidth: 0 }}>
+            <MenuShell key={activeTab} id={activeTab} title={activeInfo.label} views={MENU_VIEWS[activeTab]} />
+          </div>
+          <div style={narrow ? undefined : { position: "sticky", top: "64px" }}>
+            <AstroDetail now={now} />
+          </div>
+        </div>
+      </div>
 
       {/* ===== EVENT LOG — コンソール帯 ===== */}
       <EventLog />
@@ -5416,6 +4994,8 @@ export default function WeatherBriefing() {
       }}>
         ◈ FOR REFERENCE ONLY — ALWAYS VERIFY WITH OFFICIAL SOURCES — NOT FOR OPERATIONAL USE WITHOUT CROSS-CHECK ◈
       </div>
+
+      {bottomNav && <BottomNav tabs={TABS} active={activeTab} onSelect={setActiveTab} />}
     </div>
   );
 }

@@ -16,7 +16,7 @@ const JMA_DATA = "https://www.data.jma.go.jp";
 const WM_LIST = `${JMA}/bosai/weather_map/data/list.json`;
 const WM_PNG = `${JMA}/bosai/weather_map/data/png/`;
 const NWP_PDF = `${JMA}/bosai/numericmap/data/nwpmap/`;
-const FBJP_URL = `${JMA_DATA}/airinfo/data/pict/fbjp/fbjp.png`;
+export const FBJP_URL = `${JMA_DATA}/airinfo/data/pict/fbjp/fbjp.png`;
 const fbjp112Url = (hh) => `${JMA_DATA}/airinfo/data/pict/nwp/fbjp112_${hh}.png`;
 const himaUrl = (band, hhmm) => `${JMA_DATA}/mscweb/data/himawari/img/jpn/jpn_${band}_${hhmm}.jpg`;
 export const NOWC = `${JMA}/bosai/jmatile/data/nowc`;
@@ -144,7 +144,7 @@ function Lightbox({ src, label, onClose }) {
 }
 
 // 画像表示（読込中/欠測表示・タップで拡大）
-function ChartImg({ src, label, minHeight = 300, white = true }) {
+export function ChartImg({ src, label, minHeight = 300, white = true }) {
   // 状態は src 単位で保持（キャッシュ済み画像で onLoad が先に発火しても取りこぼさない）
   const [loadedSrc, setLoadedSrc] = useState(null);
   const [errorSrc, setErrorSrc] = useState(null);
@@ -173,7 +173,7 @@ function ChartImg({ src, label, minHeight = 300, white = true }) {
   );
 }
 
-function Placeholder({ minHeight = 300, text }) {
+export function Placeholder({ minHeight = 300, text }) {
   return (
     <div style={{ minHeight, display: "flex", alignItems: "center", justifyContent: "center", background: "#050a14" }}>
       <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: MONO, letterSpacing: "1px" }}>{text}</span>
@@ -191,7 +191,7 @@ function Toolbar({ children }) {
   );
 }
 
-function Caption({ children }) {
+export function Caption({ children }) {
   return (
     <div style={{ padding: "8px 12px", color: C.textMuted, fontSize: FS.xs, lineHeight: 1.6, fontFamily: MONO, background: "rgba(0,0,0,0.35)", borderTop: "1px solid rgba(110,231,183,0.06)" }}>
       {children}
@@ -664,16 +664,16 @@ function NowcastSection({ mode, refresh }) {
 export const SATPROD = `${JMA_DATA}/tile/satprod`;
 export const CCI_TIMES = `${SATPROD}/targetTimes_cbi_jp.json`;
 export const COASTLINE = (z, x, y) => `${JMA_DATA}/omaad/const/COASTLINE/${z}/${x}/${y}.png`;
-const sigmetUrl = (code) => `${JMA_DATA}/airinfo/data/pict/sigmet/${code}.png`;
-const fxjp106Url = (hh) => `${JMA_DATA}/airinfo/data/pict/nwp/fxjp106_${hh}.png`;
-const cmntUrl = (code) => `${JMA_DATA}/airinfo/data/pict/ajpn_cmnt/${code}.png`;
+export const sigmetUrl = (code) => `${JMA_DATA}/airinfo/data/pict/sigmet/${code}.png`;
+export const fxjp106Url = (hh) => `${JMA_DATA}/airinfo/data/pict/nwp/fxjp106_${hh}.png`;
+export const cmntUrl = (code) => `${JMA_DATA}/airinfo/data/pict/ajpn_cmnt/${code}.png`;
 
-const SIGMET_AREAS = [
+export const SIGMET_AREAS = [
   { key: "QGMA98", label: "福岡FIR 全体" },
   { key: "QGOA98", label: "本州付近" },
   { key: "QGPA98", label: "南西諸島" },
 ];
-const CMNT_AREAS = [
+export const CMNT_AREAS = [
   { key: "qyya82", label: "国内空域" },
   { key: "qyya83", label: "福岡FIR" },
 ];
@@ -690,13 +690,13 @@ const SEVERE_VIEWS = [
 ];
 
 // FXJP106: 3時間毎の初期値、約2時間15分後に掲載
-const fxjp106Bases = () => {
+export const fxjp106Bases = () => {
   const now = new Date(Date.now() - 135 * 60e3);
   const latest = Math.floor(now.getUTCHours() / 3) * 3;
   return Array.from({ length: 8 }, (_, i) => (latest - (7 - i) * 3 + 24) % 24);
 };
 
-function CciView({ refresh }) {
+export function CciView({ refresh }) {
   const [regionKey, setRegionKey] = useState("honshu");
   const [bgMode, setBgMode] = useState("tbb");
   const [times, setTimes] = useState([]);
@@ -935,7 +935,7 @@ function MaijiSection({ refresh }) {
 /* ============================================================
    エマグラム（気象庁ラジオゾンデ観測 / University of Wyoming 経由）
    ============================================================ */
-const WORKER_URL = import.meta.env.VITE_WORKER_URL || "https://wx-awc-proxy.trinity-funkyboy.workers.dev";
+export const WORKER_URL = import.meta.env.VITE_WORKER_URL || "https://wx-awc-proxy.trinity-funkyboy.workers.dev";
 const SONDE_STATIONS = [
   { id: "47401", name: "稚内" }, { id: "47412", name: "札幌" }, { id: "47418", name: "釧路" },
   { id: "47582", name: "秋田" }, { id: "47600", name: "輪島" }, { id: "47646", name: "館野" },

@@ -4,6 +4,7 @@ import { C, FS } from "./theme.js";
 import DomesticWxPanel, { EmagramSection, JmaAirportCharts, jmaTafChartUrl, jmaCommentUrl } from "./DomesticWxPanel.jsx";
 import WxChartsGallery from "./ChartsGallery.jsx";
 import ImageryViewer from "./ImageryViewer.jsx";
+import SevereHub from "./SevereHub.jsx";
 
 /* ============================================================
    AWC API BASE URL
@@ -4977,7 +4978,7 @@ export default function WeatherBriefing() {
     { key: "opswx", label: "OPS WX", icon: "🎯" },
     { key: "livecam", label: "LIVE CAM", icon: "📹" },
     { key: "duty", label: "DUTY", icon: "📋" },
-    { key: "severe", label: "SEVERE WX", icon: "⛈️" },
+    { key: "severe", label: "悪天・SIGMET", icon: "⛈️" },
     { key: "domestic", label: "国内解析", icon: "🗾" },
   ];
 
@@ -4990,7 +4991,7 @@ export default function WeatherBriefing() {
     opswx: <OpsWxPanel />,
     livecam: <LiveCameraPanel />,
     duty: <DutySchedulePanel />,
-    severe: <SevereWxPanel />,
+    severe: <SevereHub legacy={<SevereWxPanel />} />,
     domestic: <DomesticWxPanel />,
   };
 

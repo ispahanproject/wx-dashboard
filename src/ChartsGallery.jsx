@@ -87,8 +87,8 @@ const WX_CHARTS = [
   { key: "asas", cat: "sfc", title: "アジア 実況", code: "ASAS", kind: "wm", region: "asia", sel: "now" },
   { ...FBJP_CHART, cat: "sev" }, // その日の悪天の全体像（「すべて」だけに表示。SIG WX にも同じ図）
   { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48] },
-  { key: "aupq35", cat: "upper", title: "850/700hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35" },
-  { key: "aupq78", cat: "upper", title: "500/300hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78" },
+  { key: "aupq78", cat: "upper", title: "850/700hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78" }, // 気象庁 AUPQ78＝850・700hPa
+  { key: "aupq35", cat: "upper", title: "500/300hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35" }, // 気象庁 AUPQ35＝500・300hPa
   { key: "aupa25", cat: "upper", title: "250hPa 解析", code: "AUPA25", kind: "pdf", file: "aupa25" },
   { key: "fupa252", cat: "upper", title: "250hPa 24時間予想", code: "FUPA252", kind: "pdf", file: "fupa252", ft: [24], hideInAll: true },
 ];

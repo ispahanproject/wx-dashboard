@@ -1839,8 +1839,8 @@ function JapanOverview() {
           <ExtLink href="https://www.jma.go.jp/bosai/nowc/" accent>ナウキャスト</ExtLink>
           <ExtLink href="https://www.jma.go.jp/bosai/satellite/">衛星</ExtLink>
           <ExtLink href="https://www.jma.go.jp/bosai/weather_map/">ASAS天気図</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/#type:aupq78">AUPQ78 500/300</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/#type:aupq35">AUPQ35 850/700</ExtLink>
+          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/#type:aupq78">AUPQ78 850/700</ExtLink>
+          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/#type:aupq35">AUPQ35 500/300</ExtLink>
           <ExtLink href="https://www.jma.go.jp/bosai/numericmap/#type:analysis">大気解析</ExtLink>
           <ExtLink href="https://www.data.jma.go.jp/airinfo/data/awfo_maiji.html">空域悪天情報</ExtLink>
           <ExtLink href="https://himawari.asia/">ひまわりRT</ExtLink>
@@ -2535,7 +2535,7 @@ function RadarPanel() {
   const hazards = [
     { icon: "⛈️", label: "Cb / Thunderstorm", steps: ["レーダーで>40dBZ輝点を確認", "雷ナウキャスト活動度2以上", "衛星IR白輝点・急速発達"] },
     { icon: "🌫️", label: "Fog / Low Visibility", steps: ["METAR VV / RVR確認", "衛星VIS薄灰色エリア", "地上温度 − 露点差 < 3°C"] },
-    { icon: "🌬️", label: "Wind Shear / Turb", steps: ["CAT領域（Windyタービュランス）", "高層天気図 AUPQ78 風速差", "PIREP・SIGMET確認"] },
+    { icon: "🌬️", label: "Wind Shear / Turb", steps: ["CAT領域（Windyタービュランス）", "高層天気図 AUPQ35 風速差", "PIREP・SIGMET確認"] },
     { icon: "🌊", label: "Heavy Rain / Flood", steps: ["レーダー連続エコー>20mm/h", "AMEDAS積算雨量", "土砂災害警戒情報"] },
     { icon: "❄️", label: "Icing", steps: ["FL050-200 0°C面高度", "AICING SIGMET", "ACARS報告確認"] },
     { icon: "🌋", label: "Volcanic Ash", steps: ["Tokyo VAAC情報", "SIGMET VOLCANIC ASH", "衛星SO2バンド確認"] },
@@ -2826,8 +2826,8 @@ function SevereWxPanel() {
 }
 
 const JMA_UPPER_CHARTS = [
-  { title: "AUPQ78 (500/300hPa)", desc: "ジェット気流・トラフ・リッジ位置", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq78" },
-  { title: "AUPQ35 (850/700hPa)", desc: "暖気・寒気移流。850hPa 0℃/-6℃ライン", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq35" },
+  { title: "AUPQ35 (500/300hPa)", desc: "ジェット気流・トラフ・リッジ位置", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq35" },
+  { title: "AUPQ78 (850/700hPa)", desc: "暖気・寒気移流。850hPa 0℃/-6℃ライン", url: "https://www.jma.go.jp/bosai/numericmap/#type:aupq78" },
   { title: "FBJP 国内悪天予想図", desc: "CAT/ICE/CB予想域。FL別6-18h予想", url: "https://www.jma.go.jp/bosai/numericmap/#type:fbjp" },
   { title: "FBFE 下層悪天予想図", desc: "FL100以下 ICE/TURB/VIS", url: "https://www.jma.go.jp/bosai/numericmap/#type:fbfe" },
   { title: "ASAS 地上実況天気図", desc: "高・低気圧中心と前線位置", url: "https://www.jma.go.jp/bosai/weather_map/" },

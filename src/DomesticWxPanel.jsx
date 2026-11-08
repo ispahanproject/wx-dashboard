@@ -6,6 +6,7 @@
    ============================================================ */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PanelFrame, ExtLink } from "./ui.jsx";
+import { C, FS } from "./theme.js";
 
 const MONO = "'JetBrains Mono', monospace";
 const GREEN = "#6ee7b7";
@@ -48,8 +49,8 @@ function Seg({ options, value, onChange, color = GREEN, small }) {
             background: active ? "rgba(110,231,183,0.14)" : "rgba(15,23,42,0.5)",
             border: `1px solid ${active ? color : "rgba(110,231,183,0.1)"}`,
             borderRadius: "2px",
-            color: active ? color : "#64748b",
-            fontSize: small ? "9px" : "10px", cursor: "pointer", fontFamily: MONO,
+            color: active ? color : C.textMuted,
+            fontSize: FS.xs, cursor: "pointer", fontFamily: MONO,
             letterSpacing: "0.5px", whiteSpace: "nowrap",
           }}>{o.label}</button>
         );
@@ -63,7 +64,7 @@ const btnStyle = (on) => ({
   background: on ? "rgba(110,231,183,0.18)" : "rgba(15,23,42,0.6)",
   border: `1px solid ${on ? GREEN : "rgba(110,231,183,0.15)"}`,
   borderRadius: "2px", color: on ? GREEN : "#94a3b8",
-  fontSize: "11px", cursor: "pointer", fontFamily: MONO,
+  fontSize: FS.xs, cursor: "pointer", fontFamily: MONO,
 });
 
 // コマ送りバー（◀ ▶・スライダー・再生）
@@ -91,8 +92,8 @@ function StepBar({ index, count, setIndex, label, sub, playing, setPlaying }) {
         style={{ flex: "1 1 160px", accentColor: GREEN, minWidth: "120px" }}
       />
       <div style={{ fontFamily: MONO, minWidth: "150px", textAlign: "right" }}>
-        <div style={{ color: GREEN, fontSize: "11px", fontWeight: 700 }}>{label}</div>
-        {sub && <div style={{ color: "#475569", fontSize: "9px" }}>{sub}</div>}
+        <div style={{ color: GREEN, fontSize: FS.xs, fontWeight: 700 }}>{label}</div>
+        {sub && <div style={{ color: C.textMuted, fontSize: FS.xs }}>{sub}</div>}
       </div>
     </div>
   );
@@ -124,7 +125,7 @@ function Lightbox({ src, label, onClose }) {
         display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
         padding: "calc(8px + env(safe-area-inset-top, 0px)) 14px 8px", fontFamily: MONO,
       }}>
-        <span style={{ color: GREEN, fontSize: "11px" }}>{label}</span>
+        <span style={{ color: GREEN, fontSize: FS.xs }}>{label}</span>
         <span style={{ display: "flex", gap: "6px" }}>
           <button style={btnStyle(!fit)} onClick={(e) => { e.stopPropagation(); setFit(!fit); }}>
             {fit ? "原寸" : "全体"}
@@ -162,7 +163,7 @@ function ChartImg({ src, label, minHeight = 300, white = true }) {
       />
       {state !== "ok" && (
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#050a14" }}>
-          <span style={{ color: state === "error" ? "#f87171" : "#334155", fontSize: "11px", fontFamily: MONO, letterSpacing: "2px" }}>
+          <span style={{ color: state === "error" ? "#f87171" : C.textMuted, fontSize: FS.xs, fontFamily: MONO, letterSpacing: "1px" }}>
             {state === "error" ? "NO DATA / 欠測" : "LOADING..."}
           </span>
         </div>
@@ -175,7 +176,7 @@ function ChartImg({ src, label, minHeight = 300, white = true }) {
 function Placeholder({ minHeight = 300, text }) {
   return (
     <div style={{ minHeight, display: "flex", alignItems: "center", justifyContent: "center", background: "#050a14" }}>
-      <span style={{ color: "#334155", fontSize: "11px", fontFamily: MONO, letterSpacing: "2px" }}>{text}</span>
+      <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: MONO, letterSpacing: "1px" }}>{text}</span>
     </div>
   );
 }
@@ -192,7 +193,7 @@ function Toolbar({ children }) {
 
 function Caption({ children }) {
   return (
-    <div style={{ padding: "8px 12px", color: "#64748b", fontSize: "10px", lineHeight: 1.6, fontFamily: MONO, background: "rgba(0,0,0,0.35)", borderTop: "1px solid rgba(110,231,183,0.06)" }}>
+    <div style={{ padding: "8px 12px", color: C.textMuted, fontSize: FS.xs, lineHeight: 1.6, fontFamily: MONO, background: "rgba(0,0,0,0.35)", borderTop: "1px solid rgba(110,231,183,0.06)" }}>
       {children}
     </div>
   );
@@ -241,17 +242,24 @@ async function renderPdfToImage(url) {
   }
 }
 
+// PDF を画像化した結果（キャッシュ付き）。天気図一覧タブからも使う
+export function getPdfImage(url, refresh = 0) {
+  const key = `${url}|${refresh}`;
+  if (!pdfCache.has(key)) {
+    pdfCache.set(key, renderPdfToImage(url).catch((e) => { pdfCache.delete(key); throw e; }));
+  }
+  return pdfCache.get(key);
+}
+
 function PdfChart({ url, label, refresh }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => {
     let alive = true;
     setResult(null); setError(null);
-    const key = `${url}|${refresh}`;
-    if (!pdfCache.has(key)) pdfCache.set(key, renderPdfToImage(url));
-    pdfCache.get(key)
+    getPdfImage(url, refresh)
       .then((r) => alive && setResult(r))
-      .catch((e) => { pdfCache.delete(key); alive && setError(e.message); });
+      .catch((e) => alive && setError(e.message));
     return () => { alive = false; };
   }, [url, refresh]);
   if (error) return <Placeholder minHeight={360} text={`NO DATA / 欠測 (${error})`} />;
@@ -267,8 +275,8 @@ function PdfChart({ url, label, refresh }) {
 /* ============================================================
    I. 天気図まとめ
    ============================================================ */
-// 公開待ち時間(h)を考慮して既定の初期時刻(00/12)を選ぶ
-const defaultInit = (lagH) => {
+// 公開待ち時間(h)を考慮して既定の初期時刻(00/12)を選ぶ（数値予報天気図の PDF は初期時刻の約3.6時間後に公開）
+export const defaultInit = (lagH) => {
   const h = new Date().getUTCHours();
   if (h >= 12 + lagH) return "12";
   if (h >= lagH) return "00";
@@ -282,10 +290,10 @@ const CHARTS = [
   { key: "fsas48", label: "48h 予想", type: "wm", region: "near", kind: "ft48", desc: "48時間後の地上予想天気図。" },
   { key: "fbjp", label: "国内悪天 FBJP", type: "img", desc: "国内悪天予想図。乱気流・着氷・Cb域・ジェット軸・0℃高度。" },
   { key: "fbjp112", label: "FBJP 12h予想", type: "fbjp112", desc: "国内悪天12時間予想図（3時間毎の初期値）。" },
-  { key: "aupa25", label: "250hPa 解析 AUPA25", type: "pdf", file: "aupa25", lag: 3, desc: "250hPa高層天気図（ジェット気流・等風速線）。" },
-  { key: "fupa252", label: "250hPa 予想 FUPA252", type: "pdf", file: "fupa252", lag: 5, desc: "250hPa 風・気温の予想図。" },
-  { key: "axjp140", label: "断面図 AXJP140", type: "pdf", file: "axjp140", lag: 3, desc: "140°E 沿いの高層断面解析（気温・風・圏界面）。" },
-  { key: "fxjp854", label: "850hPa θe FXJP854", type: "pdf", file: "fxjp854", lag: 5, desc: "850hPa相当温位・風 / 700hPa鉛直流の予想図。" },
+  { key: "aupa25", label: "250hPa 解析 AUPA25", type: "pdf", file: "aupa25", lag: 4, desc: "250hPa高層天気図（ジェット気流・等風速線）。" },
+  { key: "fupa252", label: "250hPa 予想 FUPA252", type: "pdf", file: "fupa252", lag: 4, desc: "250hPa 風・気温の予想図。" },
+  { key: "axjp140", label: "断面図 AXJP140", type: "pdf", file: "axjp140", lag: 4, desc: "140°E 沿いの高層断面解析（気温・風・圏界面）。" },
+  { key: "fxjp854", label: "850hPa θe FXJP854", type: "pdf", file: "fxjp854", lag: 4, desc: "850hPa相当温位・風 / 700hPa鉛直流の予想図。" },
 ];
 
 const extractWmTime = (fname) => {
@@ -458,7 +466,7 @@ function HimawariSection({ refresh }) {
           <div style={{
             position: "absolute", top: "8px", right: "10px", pointerEvents: "none",
             background: "rgba(0,0,0,0.7)", padding: "3px 8px", borderRadius: "2px",
-            color: GREEN, fontSize: "10px", fontFamily: MONO,
+            color: GREEN, fontSize: FS.xs, fontFamily: MONO,
           }}>{fmtJst(cur)}</div>
         </div>
       ) : <Placeholder minHeight={420} text="SEARCHING LATEST IMAGE..." />}
@@ -602,7 +610,7 @@ function NowcastSection({ mode, refresh }) {
         <Seg options={REGIONS} value={regionKey} onChange={setRegionKey} />
         {f && (
           <span style={{
-            padding: "3px 8px", borderRadius: "2px", fontSize: "10px", fontFamily: MONO,
+            padding: "3px 8px", borderRadius: "2px", fontSize: FS.xs, fontFamily: MONO,
             color: f.fc ? "#f59e0b" : GREEN,
             border: `1px solid ${f.fc ? "rgba(245,158,11,0.5)" : "rgba(110,231,183,0.4)"}`,
           }}>{f.fc ? `予想 +${leadMin}分` : "実況"}</span>
@@ -616,13 +624,13 @@ function NowcastSection({ mode, refresh }) {
       <StepBar index={idx} count={frames.length} setIndex={setIdx} playing={playing} setPlaying={setPlaying}
         label={vt ? fmtJst(vt) : "—"} sub={vt ? `${fmtUtc(vt)} · ${f.fc ? "予想" : "実況"}` : ""} />
       <div style={{ display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap", padding: "8px 12px", background: "rgba(0,0,0,0.45)", borderTop: "1px solid rgba(110,231,183,0.06)" }}>
-        <span style={{ color: "#475569", fontSize: "9px", fontFamily: MONO, marginRight: "6px" }}>
+        <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: MONO, marginRight: "6px" }}>
           {isRadar ? "降水強度 mm/h" : "雷活動度"}
         </span>
         {legend.map(([c, t]) => (
           <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: "4px", marginRight: "6px" }}>
             <span style={{ width: "18px", height: "10px", background: c, borderRadius: "1px", display: "inline-block" }} />
-            <span style={{ color: "#64748b", fontSize: "9px", fontFamily: MONO }}>{t}</span>
+            <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: MONO }}>{t}</span>
           </span>
         ))}
       </div>
@@ -734,7 +742,7 @@ function CciView({ refresh }) {
         {CCI_LEGEND.map(([c, label]) => (
           <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: "4px", marginRight: "10px" }}>
             <span style={{ width: "18px", height: "10px", background: c, border: "1px solid #000", display: "inline-block" }} />
-            <span style={{ color: "#94a3b8", fontSize: "9px", fontFamily: MONO }}>{label}</span>
+            <span style={{ color: "#94a3b8", fontSize: FS.xs, fontFamily: MONO }}>{label}</span>
           </span>
         ))}
       </div>
@@ -887,7 +895,7 @@ function MaijiSection({ refresh }) {
         <Seg options={[{ key: "cross", label: "断面図" }, { key: "plane", label: "平面図" }]} value={mode} onChange={setMode} color="#f59e0b" />
         <select value={sel} onChange={(e) => setSel(e.target.value)} style={{
           background: "#0b1220", color: GREEN, border: "1px solid rgba(110,231,183,0.3)",
-          borderRadius: "2px", padding: "5px 8px", fontFamily: MONO, fontSize: "11px",
+          borderRadius: "2px", padding: "5px 8px", fontFamily: MONO, fontSize: FS.xs,
         }}>
           {opts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
@@ -1234,7 +1242,7 @@ export function EmagramSection({ refresh = 0 }) {
   const ice = rows ? icingLayers(rows) : [];
   const stName = SONDE_STATIONS.find((s) => s.id === station)?.name;
   const stdLevels = [1000, 925, 850, 700, 500, 400, 300, 250, 200];
-  const cell = { padding: "3px 8px", textAlign: "right", fontFamily: MONO, fontSize: "11px", color: "#cbd5e1", borderBottom: "1px solid rgba(148,163,184,0.08)" };
+  const cell = { padding: "3px 8px", textAlign: "right", fontFamily: MONO, fontSize: FS.xs, color: "#cbd5e1", borderBottom: "1px solid rgba(148,163,184,0.08)" };
 
   return (
     <PanelFrame title="EMAGRAM / エマグラム（高層観測）" code="DOM-04" style={{ padding: 0 }}>
@@ -1258,8 +1266,8 @@ export function EmagramSection({ refresh = 0 }) {
             ["着氷注意層（0〜-20℃・湿数≦3）", ice.length ? ice.map((l) => `${Math.round(m2ft(l.zBot) / 100)}-${Math.round(m2ft(l.zTop) / 100)}`).join(", ") + " (×100ft)" : "なし", ice.length ? "#38bdf8" : "#6ee7b7"],
           ].map(([k, v, c]) => (
             <div key={k} style={{ padding: "8px 12px", background: "#050a14" }}>
-              <div style={{ color: "#475569", fontSize: "9px", fontFamily: MONO }}>{k}</div>
-              <div style={{ color: c, fontSize: "12px", fontFamily: MONO, fontWeight: 700, marginTop: "2px" }}>{v}</div>
+              <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: MONO }}>{k}</div>
+              <div style={{ color: c, fontSize: FS.sm, fontFamily: MONO, fontWeight: 700, marginTop: "2px" }}>{v}</div>
             </div>
           ))}
         </div>
@@ -1268,7 +1276,7 @@ export function EmagramSection({ refresh = 0 }) {
         <div style={{ overflowX: "auto", background: "rgba(0,0,0,0.35)", borderTop: "1px solid rgba(110,231,183,0.06)" }}>
           <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "460px" }}>
             <thead>
-              <tr>{["気圧", "高度", "気温", "露点", "湿数", "風"].map((h) => <th key={h} style={{ ...cell, color: "#64748b", fontWeight: 500 }}>{h}</th>)}</tr>
+              <tr>{["気圧", "高度", "気温", "露点", "湿数", "風"].map((h) => <th key={h} style={{ ...cell, color: C.textMuted, fontWeight: 500 }}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {stdLevels.map((p) => {
@@ -1371,7 +1379,7 @@ export function JmaAirportCharts({ icao }) {
   return (
     <div style={{ marginTop: "12px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-        <span style={{ color: "#f59e0b", fontSize: "10px", fontWeight: 600, letterSpacing: "2px", fontFamily: MONO, marginRight: "4px" }}>
+        <span style={{ color: "#f59e0b", fontSize: FS.xs, fontWeight: 600, letterSpacing: "1px", fontFamily: MONO, marginRight: "4px" }}>
           JMA {isFcst ? "時系列予報" : "時系列情報"}
         </span>
         {views.map((v) => {
@@ -1379,14 +1387,14 @@ export function JmaAirportCharts({ icao }) {
           const c = v.alert ? "#f87171" : "#f59e0b";
           return (
             <button key={v.key} onClick={() => setView(on ? null : v.key)} style={{
-              padding: "3px 10px", borderRadius: "3px", cursor: "pointer", fontFamily: MONO, fontSize: "10px",
+              padding: "3px 10px", borderRadius: "3px", cursor: "pointer", fontFamily: MONO, fontSize: FS.xs,
               background: on ? (v.alert ? "rgba(248,113,113,0.15)" : "rgba(245,158,11,0.15)") : "transparent",
               border: `1px solid ${on || v.alert ? c : "rgba(148,163,184,0.2)"}`,
               color: on || v.alert ? c : "#94a3b8",
             }}>{v.label}</button>
           );
         })}
-        <span style={{ color: "#475569", fontSize: "9px", fontFamily: MONO }}>
+        <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: MONO }}>
           {isFcst ? "1時間毎の風・横風・視程・シーリング・天気・TS確率" : "1時間毎の風・視程・シーリング等"}
         </span>
       </div>
@@ -1511,19 +1519,19 @@ export default function DomesticWxPanel() {
             const on = s.key === section;
             return (
               <button key={s.key} onClick={() => setSection(s.key)} style={{
-                padding: "7px 12px", cursor: "pointer", fontFamily: MONO, fontSize: "11px",
+                padding: "7px 12px", cursor: "pointer", fontFamily: MONO, fontSize: FS.xs,
                 background: on ? "rgba(110,231,183,0.14)" : "transparent",
                 border: `1px solid ${on ? GREEN : "rgba(110,231,183,0.08)"}`, borderRadius: "2px",
-                color: on ? GREEN : "#64748b", fontWeight: on ? 700 : 500,
+                color: on ? GREEN : C.textMuted, fontWeight: on ? 700 : 500,
               }}>{s.icon} {s.label}</button>
             );
           })}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-          <span style={{ color: "#475569", fontSize: "9px", fontFamily: MONO }}>更新 {fmtJst(updatedAt)}</span>
+          <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: MONO }}>更新 {fmtJst(updatedAt)}</span>
           <button onClick={doRefresh} style={btnStyle(false)}>⟳ 最新に更新</button>
           <button onClick={doOfflineCache} style={btnStyle(false)} title="主要な図をまとめて端末に保存（機内などオフラインで閲覧）">⬇ オフライン保存</button>
-          {cacheMsg && <span style={{ color: "#f59e0b", fontSize: "9px", fontFamily: MONO }}>{cacheMsg}</span>}
+          {cacheMsg && <span style={{ color: "#f59e0b", fontSize: FS.xs, fontFamily: MONO }}>{cacheMsg}</span>}
         </div>
       </div>
 
@@ -1536,7 +1544,7 @@ export default function DomesticWxPanel() {
       {section === "thunder" && <NowcastSection key="thunder" mode="thunder" refresh={refresh} />}
       {section === "lowlevel" && <LowLevelSection />}
 
-      <div style={{ color: "#334155", fontSize: "9px", fontFamily: MONO, textAlign: "right" }}>
+      <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: MONO, textAlign: "right" }}>
         出典: 気象庁（天気図・数値予報天気図・航空気象情報・気象衛星センター・ナウキャスト）／ 地図: 国土地理院
       </div>
     </div>

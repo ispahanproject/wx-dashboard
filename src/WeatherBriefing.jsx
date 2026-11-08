@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { PanelFrame, ExtLink } from "./ui.jsx";
+import { C, FS } from "./theme.js";
 import DomesticWxPanel, { EmagramSection, JmaAirportCharts, jmaTafChartUrl, jmaCommentUrl } from "./DomesticWxPanel.jsx";
+import WxChartsGallery from "./ChartsGallery.jsx";
 
 /* ============================================================
    AWC API BASE URL
@@ -83,13 +85,13 @@ async function fetchTafRaw(icao, signal) {
 const POLLEN_AREA_JIS = "13101"; // 千代田区（東京）
 
 const POLLEN_LEVELS = {
-  0: { text: "飛散前", emoji: "😴", color: "#475569" },
+  0: { text: "飛散前", emoji: "😴", color: C.textMuted },
   1: { text: "少ない", emoji: "😊", color: "#6ee7b7" },
   2: { text: "やや多い", emoji: "😐", color: "#fbbf24" },
   3: { text: "多い", emoji: "😷", color: "#f97316" },
   4: { text: "非常に多い", emoji: "🤧", color: "#ef4444" },
   5: { text: "極めて多い", emoji: "💀", color: "#e879f9" },
-  99: { text: "欠測", emoji: "❓", color: "#334155" },
+  99: { text: "欠測", emoji: "❓", color: C.textMuted },
 };
 
 async function fetchPollenForArea(jis) {
@@ -224,7 +226,7 @@ function InfoTicker({ now }) {
         display: "inline-block",
         whiteSpace: "nowrap",
         animation: "ticker 60s linear infinite",
-        color: "#64748b", fontSize: "10px",
+        color: C.textMuted, fontSize: FS.xs,
         fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.5px",
         paddingLeft: "100%",
       }}>
@@ -304,12 +306,12 @@ function AlmanacBar({ now }) {
           background: "rgba(3, 8, 16, 0.9)",
           position: "relative",
         }}>
-          <div style={{ fontSize: "8px", color: "#334155", letterSpacing: "2px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "2px" }}>{c.label}</div>
+          <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "2px" }}>{c.label}</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-            <span style={{ fontSize: "14px" }}>{c.icon}</span>
-            <span style={{ fontSize: "16px", fontWeight: 700, color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", textShadow: "0 0 10px rgba(110,231,183,0.4)" }}>{c.main}</span>
+            <span style={{ fontSize: FS.md }}>{c.icon}</span>
+            <span style={{ fontSize: FS.md, fontWeight: 700, color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", }}>{c.main}</span>
           </div>
-          <div style={{ fontSize: "10px", color: "#475569", fontFamily: "'JetBrains Mono', monospace", marginTop: "1px" }}>{c.sub}</div>
+          <div style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", marginTop: "1px" }}>{c.sub}</div>
           {c.extra}
         </div>
       ))}
@@ -448,14 +450,14 @@ function AstroDetail({ now }) {
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       {/* 月齢詳細 */}
       <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>
-        <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", marginBottom: "8px" }}>LUNAR STATUS</div>
+        <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", marginBottom: "8px" }}>LUNAR STATUS</div>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <span style={{ fontSize: "40px" }}>{moon.emoji}</span>
           <div>
-            <div style={{ fontSize: "22px", fontWeight: 700, color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", textShadow: "0 0 16px rgba(110,231,183,0.6)" }}>
+            <div style={{ fontSize: FS.lg, fontWeight: 700, color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", }}>
               月齢 {moon.age}
             </div>
-            <div style={{ fontSize: "13px", color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}>{lunarJpName(moon.age)} / {moon.name}</div>
+            <div style={{ fontSize: FS.sm, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}>{lunarJpName(moon.age)} / {moon.name}</div>
           </div>
         </div>
         {/* 月相バー */}
@@ -464,29 +466,29 @@ function AstroDetail({ now }) {
             <div key={i} style={{
               flex: 1, height: "6px", borderRadius: "1px",
               background: i < Math.round(moon.pct * 30) ? "#6ee7b7" : "rgba(110,231,183,0.08)",
-              boxShadow: i < Math.round(moon.pct * 30) ? "0 0 4px rgba(110,231,183,0.3)" : "none",
+              
             }} />
           ))}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: "3px" }}>
-          <span style={{ fontSize: "8px", color: "#1e293b", fontFamily: "'JetBrains Mono', monospace" }}>🌑 NEW</span>
-          <span style={{ fontSize: "8px", color: "#1e293b", fontFamily: "'JetBrains Mono', monospace" }}>🌕 FULL</span>
+          <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>🌑 NEW</span>
+          <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>🌕 FULL</span>
         </div>
       </div>
 
       {/* 日の出没テーブル */}
       <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>
-        <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", marginBottom: "8px" }}>SUNRISE / SUNSET (UTC)</div>
+        <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", marginBottom: "8px" }}>SUNRISE / SUNSET (UTC)</div>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <tbody>
             {airports.map(ap => {
               const s = sunriseSunset(now, ap.lat, ap.lng);
               return s ? (
                 <tr key={ap.icao} style={{ borderBottom: "1px solid rgba(110,231,183,0.05)" }}>
-                  <td style={{ padding: "4px 0", fontSize: "10px", color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{ap.icao}</td>
-                  <td style={{ padding: "4px 0", fontSize: "10px", color: "#64748b", fontFamily: "'JetBrains Mono', monospace" }}>{ap.name}</td>
-                  <td style={{ padding: "4px 0", fontSize: "10px", color: "#e2e8f0", fontFamily: "'JetBrains Mono', monospace", textAlign: "right" }}>🌅{s.rise}z</td>
-                  <td style={{ padding: "4px 0", fontSize: "10px", color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace", textAlign: "right" }}>🌇{s.set}z</td>
+                  <td style={{ padding: "4px 0", fontSize: FS.xs, color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{ap.icao}</td>
+                  <td style={{ padding: "4px 0", fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>{ap.name}</td>
+                  <td style={{ padding: "4px 0", fontSize: FS.xs, color: "#e2e8f0", fontFamily: "'JetBrains Mono', monospace", textAlign: "right" }}>🌅{s.rise}z</td>
+                  <td style={{ padding: "4px 0", fontSize: FS.xs, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace", textAlign: "right" }}>🌇{s.set}z</td>
                 </tr>
               ) : null;
             })}
@@ -496,7 +498,7 @@ function AstroDetail({ now }) {
 
       {/* 二十四節気 */}
       <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>
-        <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", marginBottom: "8px" }}>二十四節気 UPCOMING</div>
+        <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", marginBottom: "8px" }}>二十四節気 UPCOMING</div>
         {upcomingSekki.map((s, i) => {
           const jst = new Date(s.date.getTime());
           const mm = String(jst.getUTCMonth() + 1).padStart(2, "0");
@@ -504,9 +506,9 @@ function AstroDetail({ now }) {
           const diff = Math.round((s.date - today) / 86400000);
           return (
             <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: i < 2 ? "1px solid rgba(110,231,183,0.05)" : "none" }}>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: i === 0 ? "#6ee7b7" : "#475569", fontFamily: "'JetBrains Mono', monospace", textShadow: i === 0 ? "0 0 8px rgba(110,231,183,0.5)" : "none" }}>{s.name}</span>
-              <span style={{ fontSize: "10px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>{mm}/{dd}</span>
-              <span style={{ fontSize: "10px", color: i === 0 ? "#fbbf24" : "#334155", fontFamily: "'JetBrains Mono', monospace" }}>あと{diff}日</span>
+              <span style={{ fontSize: FS.sm, fontWeight: 700, color: i === 0 ? "#6ee7b7" : C.textMuted, fontFamily: "'JetBrains Mono', monospace", }}>{s.name}</span>
+              <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>{mm}/{dd}</span>
+              <span style={{ fontSize: FS.xs, color: i === 0 ? "#fbbf24" : C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>あと{diff}日</span>
             </div>
           );
         })}
@@ -527,7 +529,7 @@ function AstroDetail({ now }) {
         });
         return (
           <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>
-            <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", marginBottom: "8px" }}>六曜 ROKUYO</div>
+            <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", marginBottom: "8px" }}>六曜 ROKUYO</div>
             {/* 今日の六曜（大きく表示） */}
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
               <div style={{
@@ -535,12 +537,12 @@ function AstroDetail({ now }) {
                 background: rokuyoBg[rokuyo.idx],
                 border: `1px solid ${rokuyoColors[rokuyo.idx]}40`,
               }}>
-                <span style={{ fontSize: "20px", fontWeight: 700, color: rokuyoColors[rokuyo.idx], fontFamily: "'JetBrains Mono', monospace" }}>{rokuyo.name}</span>
+                <span style={{ fontSize: FS.lg, fontWeight: 700, color: rokuyoColors[rokuyo.idx], fontFamily: "'JetBrains Mono', monospace" }}>{rokuyo.name}</span>
               </div>
               <div>
-                <div style={{ fontSize: "10px", color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}>{rokuyo.en}</div>
-                <div style={{ fontSize: "9px", color: "#475569", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{rokuyo.desc}</div>
-                <div style={{ fontSize: "8px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>旧暦 {rokuyo.lunarMonth}月{rokuyo.lunarDay}日</div>
+                <div style={{ fontSize: FS.xs, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}>{rokuyo.en}</div>
+                <div style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{rokuyo.desc}</div>
+                <div style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>旧暦 {rokuyo.lunarMonth}月{rokuyo.lunarDay}日</div>
               </div>
             </div>
             {/* 7日分ミニカレンダー */}
@@ -551,8 +553,8 @@ function AstroDetail({ now }) {
                   background: i === 0 ? "rgba(110,231,183,0.1)" : "rgba(0,0,0,0.3)",
                   border: i === 0 ? "1px solid rgba(110,231,183,0.2)" : "1px solid transparent",
                 }}>
-                  <div style={{ fontSize: "8px", color: i === 0 ? "#6ee7b7" : "#475569", fontFamily: "'JetBrains Mono', monospace" }}>{d.jstDay}{d.jstDow}</div>
-                  <div style={{ fontSize: "10px", fontWeight: 700, color: rokuyoColors[d.idx], fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{d.name}</div>
+                  <div style={{ fontSize: FS.xs, color: i === 0 ? "#6ee7b7" : C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>{d.jstDay}{d.jstDow}</div>
+                  <div style={{ fontSize: FS.xs, fontWeight: 700, color: rokuyoColors[d.idx], fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{d.name}</div>
                 </div>
               ))}
             </div>
@@ -568,17 +570,17 @@ function AstroDetail({ now }) {
         const info = pollenData ? POLLEN_LEVELS[pollenData.level] || POLLEN_LEVELS[99] : null;
         return (
           <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>
-            <div style={{ fontSize: "10px", color: "#e879f9", letterSpacing: "2px", marginBottom: "8px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>🌿 花粉 POLLEN</div>
+            <div style={{ fontSize: FS.xs, color: "#e879f9", letterSpacing: "1px", marginBottom: "8px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>🌿 花粉 POLLEN</div>
             {pollenData && info ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: "32px" }}>{info.emoji}</span>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: info.color, fontFamily: "'JetBrains Mono', monospace" }}>{info.text}</div>
-                  <div style={{ fontSize: "9px", color: "#475569", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>東京 / tenki.jp</div>
+                  <div style={{ fontSize: FS.md, fontWeight: 700, color: info.color, fontFamily: "'JetBrains Mono', monospace" }}>{info.text}</div>
+                  <div style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>東京 / tenki.jp</div>
                 </div>
               </div>
             ) : (
-              <div style={{ fontSize: "10px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>
+              <div style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>
                 データ取得中...
               </div>
             )}
@@ -588,7 +590,7 @@ function AstroDetail({ now }) {
 
       {/* 暦情報 */}
       <div style={{ padding: "14px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px" }}>
-        <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", marginBottom: "8px" }}>CALENDAR DATA</div>
+        <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", marginBottom: "8px" }}>CALENDAR DATA</div>
         {[
           ["Day of Year", `DOY-${dayOfYear(now)} / 365`],
           ["Week No.", `第 ${weekNumber(now)} 週`],
@@ -598,8 +600,8 @@ function AstroDetail({ now }) {
           ["ICAO Day", new Date(now).toISOString().slice(2, 10).replace(/-/g, "")],
         ].map(([k, v]) => (
           <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
-            <span style={{ fontSize: "9px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{k}</span>
-            <span style={{ fontSize: "10px", color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}>{v}</span>
+            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{k}</span>
+            <span style={{ fontSize: FS.xs, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}>{v}</span>
           </div>
         ))}
       </div>
@@ -670,7 +672,7 @@ function JmaWeatherOverview() {
     <div style={{ padding: "14px", background: "rgba(5,10,20,0.9)", border: "1px solid rgba(110,231,183,0.15)", borderRadius: "4px" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <div style={{ fontSize: "9px", color: "#334155", letterSpacing: "2px", fontFamily: "'JetBrains Mono', monospace" }}>
+        <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", fontFamily: "'JetBrains Mono', monospace" }}>
           JMA WEATHER OVERVIEW
         </div>
         <button
@@ -680,8 +682,8 @@ function JmaWeatherOverview() {
             background: ticker ? "rgba(110,231,183,0.1)" : "transparent",
             border: `1px solid ${ticker ? "rgba(110,231,183,0.4)" : "rgba(110,231,183,0.1)"}`,
             borderRadius: "2px",
-            color: ticker ? "#6ee7b7" : "#334155",
-            fontSize: "8px", cursor: "pointer",
+            color: ticker ? "#6ee7b7" : C.textMuted,
+            fontSize: FS.xs, cursor: "pointer",
             fontFamily: "'JetBrains Mono', monospace",
           }}
         >
@@ -697,8 +699,8 @@ function JmaWeatherOverview() {
             background: areaIdx === i ? "rgba(110,231,183,0.12)" : "transparent",
             border: areaIdx === i ? "1px solid rgba(110,231,183,0.5)" : "1px solid rgba(110,231,183,0.08)",
             borderRadius: "2px",
-            color: areaIdx === i ? "#6ee7b7" : "#475569",
-            fontSize: "9px", cursor: "pointer",
+            color: areaIdx === i ? "#6ee7b7" : C.textMuted,
+            fontSize: FS.xs, cursor: "pointer",
             fontFamily: "'JetBrains Mono', monospace",
             letterSpacing: "0.5px",
           }}>
@@ -709,25 +711,25 @@ function JmaWeatherOverview() {
 
       {/* Area name + time */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", alignItems: "baseline" }}>
-        <span style={{ color: "#e2e8f0", fontSize: "12px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", textShadow: "0 0 8px rgba(226,232,240,0.3)" }}>{area.name}</span>
-        <span style={{ color: "#334155", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>{reportTime}</span>
+        <span style={{ color: "#e2e8f0", fontSize: FS.sm, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", }}>{area.name}</span>
+        <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>{reportTime}</span>
       </div>
 
       {/* Headline */}
       {data?.headlineText && (
         <div style={{ padding: "5px 8px", marginBottom: "8px", background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: "2px" }}>
-          <span style={{ color: "#fbbf24", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>⚠ {data.headlineText}</span>
+          <span style={{ color: "#fbbf24", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>⚠ {data.headlineText}</span>
         </div>
       )}
 
       {/* Body */}
       {isLoad && (
-        <div style={{ color: "#334155", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", textAlign: "center", padding: "20px 0" }}>
+        <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", textAlign: "center", padding: "20px 0" }}>
           LOADING...
         </div>
       )}
       {isErr && (
-        <div style={{ color: "#f87171", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", textAlign: "center", padding: "12px 0" }}>
+        <div style={{ color: "#f87171", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", textAlign: "center", padding: "12px 0" }}>
           FETCH ERROR
         </div>
       )}
@@ -741,8 +743,8 @@ function JmaWeatherOverview() {
           {paragraphs.map((p, i) => (
             <p key={i} style={{
               margin: "0 0 8px",
-              color: i === 0 ? "#94a3b8" : "#64748b",
-              fontSize: "10px", lineHeight: "1.7",
+              color: i === 0 ? "#94a3b8" : C.textMuted,
+              fontSize: FS.xs, lineHeight: "1.7",
               fontFamily: "'JetBrains Mono', monospace",
               borderLeft: i === 0 ? "2px solid rgba(110,231,183,0.3)" : "none",
               paddingLeft: i === 0 ? "8px" : "0",
@@ -757,10 +759,10 @@ function JmaWeatherOverview() {
           <div style={{
             whiteSpace: "nowrap",
             animation: "ticker 40s linear infinite",
-            color: "#6ee7b7", fontSize: "10px",
+            color: "#6ee7b7", fontSize: FS.xs,
             fontFamily: "'JetBrains Mono', monospace",
             paddingLeft: "100%",
-            textShadow: "0 0 8px rgba(110,231,183,0.4)",
+            
           }}>
             {paragraphs.join("　◈　")}
           </div>
@@ -771,7 +773,7 @@ function JmaWeatherOverview() {
       <div style={{ marginTop: "8px", textAlign: "right" }}>
         <a href={`https://www.jma.go.jp/bosai/forecast/#area_type=offices&area_code=${area.code}`}
           target="_blank" rel="noopener noreferrer"
-          style={{ color: "#1e293b", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>
+          style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>
           SRC: jma.go.jp ↗
         </a>
       </div>
@@ -1091,13 +1093,13 @@ function UnknownIataFix({ codes }) {
       marginTop: "8px", padding: "8px 12px", borderRadius: "4px",
       border: "1px solid rgba(245,158,11,0.45)", background: "rgba(245,158,11,0.08)",
     }}>
-      <span style={{ color: "#fcd34d", fontSize: "12px", fontWeight: 700, fontFamily: mono }}>
+      <span style={{ color: "#fcd34d", fontSize: FS.sm, fontWeight: 700, fontFamily: mono }}>
         ⚠ ICAO不明の空港があり、気象情報の対象から外れています
       </span>
       {codes.map((iata) => (
         <span key={iata} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-          <span style={{ color: "#fcd34d", fontSize: "13px", fontWeight: 700, fontFamily: mono }}>{iata}</span>
-          <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: mono }}>→</span>
+          <span style={{ color: "#fcd34d", fontSize: FS.sm, fontWeight: 700, fontFamily: mono }}>{iata}</span>
+          <span style={{ color: "#94a3b8", fontSize: FS.xs, fontFamily: mono }}>→</span>
           <input
             value={inputs[iata] || ""}
             onChange={(e) => setInputs((p) => ({ ...p, [iata]: e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4) }))}
@@ -1109,15 +1111,15 @@ function UnknownIataFix({ codes }) {
               width: "70px", padding: "6px 8px", borderRadius: "3px",
               background: "rgba(15,23,42,0.8)", color: "#e2e8f0", outline: "none",
               border: `1px solid ${invalid[iata] ? "#f87171" : "rgba(148,163,184,0.3)"}`,
-              fontSize: "13px", fontFamily: mono, letterSpacing: "2px",
+              fontSize: FS.sm, fontFamily: mono, letterSpacing: "1px",
             }}
           />
           <button onClick={() => save(iata)} style={{
             padding: "6px 12px", borderRadius: "3px", cursor: "pointer",
             background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.5)",
-            color: "#fcd34d", fontSize: "12px", fontFamily: mono,
+            color: "#fcd34d", fontSize: FS.sm, fontFamily: mono,
           }}>登録</button>
-          {invalid[iata] && <span style={{ color: "#f87171", fontSize: "11px", fontFamily: mono }}>英字4文字で入力</span>}
+          {invalid[iata] && <span style={{ color: "#f87171", fontSize: FS.xs, fontFamily: mono }}>英字4文字で入力</span>}
         </span>
       ))}
     </div>
@@ -1157,37 +1159,37 @@ function Clock() {
           <div style={{
             width: "7px", height: "7px", borderRadius: "50%",
             background: blink ? "#6ee7b7" : "transparent",
-            boxShadow: blink ? "0 0 10px #6ee7b7, 0 0 20px rgba(110,231,183,0.4)" : "none",
+            
             transition: "all 0.3s ease",
           }} />
-          <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>LIVE</span>
+          <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>LIVE</span>
         </div>
         <div>
           <span style={{
             color: "#6ee7b7", fontSize: "36px", fontFamily: "'JetBrains Mono', monospace",
-            fontWeight: 700, letterSpacing: "4px",
-            textShadow: "0 0 20px rgba(110, 231, 183, 0.8), 0 0 40px rgba(110, 231, 183, 0.3)",
+            fontWeight: 700, letterSpacing: "1px",
+            
           }}>
             {utcH}<span style={{ opacity: blink ? 1 : 0.3, transition: "opacity 0.3s" }}>:</span>{utcM}<span style={{ opacity: blink ? 1 : 0.3, transition: "opacity 0.3s" }}>:</span>{utcS}
           </span>
-          <span style={{ color: "#6ee7b7", fontSize: "11px", marginLeft: "8px", opacity: 0.6, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>UTC</span>
+          <span style={{ color: "#6ee7b7", fontSize: FS.xs, marginLeft: "8px", opacity: 0.6, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>UTC</span>
         </div>
       </div>
       {/* サブ情報行 */}
       <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-        <span style={{ color: "#334155", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{utcDate}</span>
-        <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>|</span>
-        <span style={{ color: "#64748b", fontSize: "12px", fontFamily: "'JetBrains Mono', monospace" }}>{jst} <span style={{ opacity: 0.5, fontSize: "10px" }}>JST</span></span>
-        <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>|</span>
+        <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{utcDate}</span>
+        <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>|</span>
+        <span style={{ color: C.textMuted, fontSize: FS.sm, fontFamily: "'JetBrains Mono', monospace" }}>{jst} <span style={{ opacity: 0.5, fontSize: FS.xs }}>JST</span></span>
+        <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>|</span>
         {/* METAR更新カウントダウン */}
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <span style={{ fontSize: "8px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>NEXT METAR</span>
+          <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>NEXT METAR</span>
           <span style={{
-            fontSize: "11px", fontWeight: 700,
+            fontSize: FS.xs, fontWeight: 700,
             fontFamily: "'JetBrains Mono', monospace",
             letterSpacing: "1px",
             color: metarUrgent ? "#fbbf24" : "#6ee7b7",
-            textShadow: metarUrgent ? "0 0 8px rgba(251,191,36,0.6)" : "0 0 6px rgba(110,231,183,0.4)",
+            
             animation: metarUrgent ? "statusBlink 1s ease infinite" : "none",
           }}>T-{metarCountdown}</span>
         </div>
@@ -1265,14 +1267,14 @@ function WorldClockBar() {
             borderRight: i < cities.length - 1 ? "1px solid rgba(110,231,183,0.06)" : "none",
           }}>
             <span style={{
-              fontSize: "7px",
-              color: c.label === "UTC" ? "#fbbf24" : c.label === "TYO" ? "#6ee7b7" : "#475569",
-              fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1.5px",
+              fontSize: FS.xs,
+              color: c.label === "UTC" ? "#fbbf24" : c.label === "TYO" ? "#6ee7b7" : C.textMuted,
+              fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
               fontWeight: c.label === "UTC" || c.label === "TYO" ? 700 : 400,
             }}>{c.label}</span>
             <MiniAnalogClock hours={hh} minutes={mm} seconds={ss} size={32} color={c.color} isNight={isNight} />
             <span style={{
-              fontSize: "8px",
+              fontSize: FS.xs,
               color: c.color,
               fontFamily: "'JetBrains Mono', monospace",
               fontWeight: c.label === "UTC" || c.label === "TYO" ? 700 : 400,
@@ -1289,23 +1291,24 @@ function WorldClockBar() {
 function TabBtn({ active, onClick, children, icon, shortcut }) {
   return (
     <button onClick={onClick} style={{
-      padding: "10px 20px",
+      padding: "10px 16px",
+      flexShrink: 0, whiteSpace: "nowrap",
       background: active ? "rgba(110, 231, 183, 0.10)" : "transparent",
       border: "none",
       borderBottom: active ? "2px solid #6ee7b7" : "2px solid transparent",
-      color: active ? "#6ee7b7" : "#64748b",
-      fontSize: "12px", fontWeight: active ? 700 : 500, cursor: "pointer",
+      color: active ? "#6ee7b7" : C.textMuted,
+      fontSize: FS.sm, fontWeight: active ? 700 : 500, cursor: "pointer",
       display: "flex", alignItems: "center", gap: "8px",
       transition: "all 0.15s ease",
-      fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1.5px",
-      textShadow: active ? "0 0 10px rgba(110,231,183,0.5)" : "none",
+      fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
+      
       position: "relative",
     }}>
-      <span style={{ fontSize: "15px", opacity: active ? 1 : 0.6 }}>{icon}</span>
+      <span style={{ fontSize: FS.md, opacity: active ? 1 : 0.6 }}>{icon}</span>
       <span>{children.toUpperCase?.() ?? children}</span>
       {shortcut && (
         <span style={{
-          fontSize: "8px", color: active ? "#6ee7b780" : "#334155",
+          fontSize: FS.xs, color: active ? "#6ee7b780" : C.textMuted,
           fontFamily: "'JetBrains Mono', monospace",
           marginLeft: "2px",
         }}>{shortcut}</span>
@@ -1388,11 +1391,11 @@ function MetarQuickStatus() {
               <div style={{
                 width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0,
                 background: d?.statusColor ?? "#334155",
-                boxShadow: d ? `0 0 6px ${d.statusColor}` : "none",
+                
               }} />
               {/* ICAO */}
               <span style={{
-                fontSize: "10px", fontWeight: 700, color: "#6ee7b7",
+                fontSize: FS.xs, fontWeight: 700, color: "#6ee7b7",
                 fontFamily: "'JetBrains Mono', monospace",
                 letterSpacing: "1px", width: "36px", flexShrink: 0,
               }}>{ap.icao}</span>
@@ -1400,7 +1403,7 @@ function MetarQuickStatus() {
                 <div style={{ display: "flex", alignItems: "center", gap: "5px", flex: 1, overflow: "hidden" }}>
                   {/* フライトカテゴリ */}
                   <span style={{
-                    fontSize: "8px", fontWeight: 700, color: d.statusColor,
+                    fontSize: FS.xs, fontWeight: 700, color: d.statusColor,
                     fontFamily: "'JetBrains Mono', monospace",
                     padding: "1px 4px", borderRadius: "1px",
                     background: `${d.statusColor}18`,
@@ -1408,14 +1411,14 @@ function MetarQuickStatus() {
                     letterSpacing: "1px", flexShrink: 0,
                   }}>{d.status}</span>
                   {/* 風 */}
-                  <span style={{ fontSize: "9px", color: "#60a5fa", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{d.wind}</span>
+                  <span style={{ fontSize: FS.xs, color: "#60a5fa", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{d.wind}</span>
                   {/* 雲 */}
-                  <span style={{ fontSize: "9px", color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{d.clouds}</span>
+                  <span style={{ fontSize: FS.xs, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{d.clouds}</span>
                   {/* 現象 */}
-                  {d.wx && <span style={{ fontSize: "9px", color: "#f87171", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, flexShrink: 0 }}>{d.wx}</span>}
+                  {d.wx && <span style={{ fontSize: FS.xs, color: "#f87171", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, flexShrink: 0 }}>{d.wx}</span>}
                 </div>
               ) : (
-                <span style={{ fontSize: "9px", color: "#1e293b", fontFamily: "'JetBrains Mono', monospace" }}>---</span>
+                <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>---</span>
               )}
             </div>
           );
@@ -1434,7 +1437,7 @@ function MetarQuickStatus() {
         ].map(c => (
           <div key={c.label} style={{ display: "flex", alignItems: "center", gap: "3px" }}>
             <div style={{ width: "4px", height: "4px", borderRadius: "50%", background: c.color }} />
-            <span style={{ fontSize: "7px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.5px" }}>{c.label}</span>
+            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.5px" }}>{c.label}</span>
           </div>
         ))}
       </div>
@@ -1536,18 +1539,18 @@ function UpperAirTable() {
           <div style={{
             width: "5px", height: "5px", borderRadius: "50%",
             background: dataLoading ? "#fbbf24" : dataError ? "#f87171" : "#6ee7b7",
-            boxShadow: `0 0 6px ${dataLoading ? "#fbbf24" : dataError ? "#f87171" : "#6ee7b7"}`,
+            
           }} />
-          <span style={{ color: "#475569", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>
+          <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>
             {dataLoading ? "FETCHING..." : dataError ? "ERROR" : "OPEN-METEO ECMWF"}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {lastFetch && <span style={{ color: "#334155", fontSize: "7px", fontFamily: "'JetBrains Mono', monospace" }}>UPD {lastFetch.toISOString().slice(11, 16)}Z</span>}
+          {lastFetch && <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>UPD {lastFetch.toISOString().slice(11, 16)}Z</span>}
           <button onClick={() => fetchRef.current()} style={{
             padding: "2px 6px", background: "rgba(110,231,183,0.06)",
             border: "1px solid rgba(110,231,183,0.15)", borderRadius: "2px",
-            color: "#6ee7b7", fontSize: "7px", cursor: "pointer",
+            color: "#6ee7b7", fontSize: FS.xs, cursor: "pointer",
             fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
           }}>↻</button>
         </div>
@@ -1561,8 +1564,8 @@ function UpperAirTable() {
               {["ICAO", "300hPa", "250hPa", "850T", "CAPE"].map((h, i) => (
                 <th key={h} style={{
                   padding: "5px 8px", textAlign: i === 0 ? "left" : "right",
-                  color: (isWinter && h === "850T") ? "#60a5fa" : (isSummer && h === "CAPE") ? "#fbbf24" : "#334155",
-                  fontSize: "7px", letterSpacing: "1px", fontWeight: 700,
+                  color: (isWinter && h === "850T") ? "#60a5fa" : (isSummer && h === "CAPE") ? "#fbbf24" : C.textMuted,
+                  fontSize: FS.xs, letterSpacing: "1px", fontWeight: 700,
                   background: (isWinter && h === "850T") ? "rgba(96,165,250,0.06)" : (isSummer && h === "CAPE") ? "rgba(251,191,36,0.06)" : "transparent",
                 }}>{h}</th>
               ))}
@@ -1576,20 +1579,20 @@ function UpperAirTable() {
                   borderBottom: "1px solid rgba(110,231,183,0.04)",
                   background: ri % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent",
                 }}>
-                  <td style={{ padding: "4px 8px", fontSize: "9px", fontWeight: 700, color: "#6ee7b7" }}>
-                    {ap.icao}<span style={{ marginLeft: "4px", fontSize: "7px", color: "#334155", fontWeight: 400 }}>{ap.name}</span>
+                  <td style={{ padding: "4px 8px", fontSize: FS.xs, fontWeight: 700, color: C.text, whiteSpace: "nowrap" }}>
+                    {ap.icao}<span style={{ marginLeft: "4px", fontSize: FS.xs, color: C.textMuted, fontWeight: 400 }}>{ap.name}</span>
                   </td>
-                  <td style={{ padding: "4px 8px", textAlign: "right", fontSize: "9px", color: jetColor(d.wind300spd) }}>{fmtWind(d.wind300dir, d.wind300spd)}</td>
-                  <td style={{ padding: "4px 8px", textAlign: "right", fontSize: "9px", color: jetColor(d.wind250spd) }}>{fmtWind(d.wind250dir, d.wind250spd)}</td>
+                  <td style={{ padding: "4px 8px", textAlign: "right", fontSize: FS.xs, color: jetColor(d.wind300spd) }}>{fmtWind(d.wind300dir, d.wind300spd)}</td>
+                  <td style={{ padding: "4px 8px", textAlign: "right", fontSize: FS.xs, color: jetColor(d.wind250spd) }}>{fmtWind(d.wind250dir, d.wind250spd)}</td>
                   <td style={{
-                    padding: "4px 8px", textAlign: "right", fontSize: "9px",
+                    padding: "4px 8px", textAlign: "right", fontSize: FS.xs,
                     fontWeight: isWinter ? 700 : 400, color: temp850Color(d.temp850),
                     background: isWinter ? "rgba(96,165,250,0.04)" : "transparent",
                   }}>
                     {d.temp850 != null ? `${d.temp850 > 0 ? "+" : ""}${d.temp850}` : "---"}
                   </td>
                   <td style={{
-                    padding: "4px 8px", textAlign: "right", fontSize: "9px",
+                    padding: "4px 8px", textAlign: "right", fontSize: FS.xs,
                     fontWeight: isSummer ? 700 : 400, color: capeColor(d.cape),
                     background: isSummer ? "rgba(251,191,36,0.04)" : "transparent",
                   }}>
@@ -1607,19 +1610,19 @@ function UpperAirTable() {
         display: "flex", gap: "8px", padding: "4px 10px", flexWrap: "wrap",
         borderTop: "1px solid rgba(110,231,183,0.05)", background: "rgba(0,0,0,0.3)",
       }}>
-        <span style={{ fontSize: "7px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>JET:</span>
+        <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>JET:</span>
         {[{ l: ">120kt", c: "#f87171" }, { l: "80-120", c: "#fbbf24" }, { l: "50-80", c: "#6ee7b7" }].map(x => (
           <div key={x.l} style={{ display: "flex", alignItems: "center", gap: "2px" }}>
             <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: x.c }} />
-            <span style={{ fontSize: "6px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>{x.l}</span>
+            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>{x.l}</span>
           </div>
         ))}
-        <span style={{ color: "#1e293b", fontSize: "7px" }}>│</span>
-        <span style={{ fontSize: "7px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>850T:</span>
+        <span style={{ color: C.textMuted, fontSize: FS.xs }}>│</span>
+        <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>850T:</span>
         {[{ l: "<-15", c: "#c084fc" }, { l: "<-6", c: "#60a5fa" }, { l: "<0", c: "#93c5fd" }].map(x => (
           <div key={x.l} style={{ display: "flex", alignItems: "center", gap: "2px" }}>
             <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: x.c }} />
-            <span style={{ fontSize: "6px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>{x.l}</span>
+            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>{x.l}</span>
           </div>
         ))}
       </div>
@@ -1675,38 +1678,38 @@ function JapanOverview() {
           background: "rgba(0,0,0,0.4)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", boxShadow: "0 0 8px #6ee7b7" }} />
-            <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", textShadow: "0 0 8px rgba(110,231,183,0.5)" }}>JAPAN AREA MONITOR</span>
+            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", }} />
+            <span style={{ color: C.textSub, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", }}>JAPAN AREA MONITOR</span>
           </div>
           <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ color: "#f59e0b", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", marginRight: "2px" }}>OPS</span>
+            <span style={{ color: "#f59e0b", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", marginRight: "2px" }}>OPS</span>
             {opsOverlays.map((o) => (
               <button key={o.key} onClick={() => setOverlayType(o.key)} style={{
                 padding: "4px 10px",
                 background: overlayType === o.key ? "rgba(245, 158, 11, 0.15)" : "transparent",
                 border: overlayType === o.key ? "1px solid rgba(245, 158, 11, 0.6)" : "1px solid rgba(110, 231, 183, 0.06)",
                 borderRadius: "2px",
-                color: overlayType === o.key ? "#f59e0b" : "#475569",
-                fontSize: "10px", cursor: "pointer",
+                color: overlayType === o.key ? "#f59e0b" : C.textMuted,
+                fontSize: FS.xs, cursor: "pointer",
                 fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.5px",
-                textShadow: overlayType === o.key ? "0 0 8px rgba(245,158,11,0.5)" : "none",
+                
                 transition: "all 0.15s ease",
               }}>
                 {o.icon} {o.label}
               </button>
             ))}
             <div style={{ width: "1px", height: "18px", background: "rgba(110,231,183,0.15)", margin: "0 4px" }} />
-            <span style={{ color: "#6ee7b7", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", marginRight: "2px" }}>SFC</span>
+            <span style={{ color: "#6ee7b7", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", marginRight: "2px" }}>SFC</span>
             {sfcOverlays.map((o) => (
               <button key={o.key} onClick={() => setOverlayType(o.key)} style={{
                 padding: "4px 10px",
                 background: overlayType === o.key ? "rgba(110, 231, 183, 0.12)" : "transparent",
                 border: overlayType === o.key ? "1px solid rgba(110, 231, 183, 0.5)" : "1px solid rgba(110, 231, 183, 0.06)",
                 borderRadius: "2px",
-                color: overlayType === o.key ? "#6ee7b7" : "#475569",
-                fontSize: "10px", cursor: "pointer",
+                color: overlayType === o.key ? "#6ee7b7" : C.textMuted,
+                fontSize: FS.xs, cursor: "pointer",
                 fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.5px",
-                textShadow: overlayType === o.key ? "0 0 8px rgba(110,231,183,0.5)" : "none",
+                
                 transition: "all 0.15s ease",
               }}>
                 {o.icon} {o.label}
@@ -1726,7 +1729,7 @@ function JapanOverview() {
             allow="autoplay"
           />
           {/* HUD overlay corners on map */}
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", boxShadow: "inset 0 0 60px rgba(0,0,0,0.4)" }} />
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", }} />
         </div>
 
         {/* Bottom link bar */}
@@ -1821,8 +1824,8 @@ function TodayDutyBar() {
         background: "rgba(5, 10, 20, 0.8)", border: "1px solid rgba(71,85,105,0.2)", borderRadius: "4px",
       }}>
         <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#475569", flexShrink: 0 }} />
-        <span style={{ color: "#475569", fontSize: "9px", fontWeight: 700, fontFamily: mono, letterSpacing: "2px" }}>TODAY</span>
-        <span style={{ color: "#94a3b8", fontSize: "13px", fontFamily: mono }}>REST DAY</span>
+        <span style={{ color: C.textMuted, fontSize: FS.xs, fontWeight: 700, fontFamily: mono, letterSpacing: "1px" }}>TODAY</span>
+        <span style={{ color: "#94a3b8", fontSize: FS.sm, fontFamily: mono }}>REST DAY</span>
       </div>
     );
   }
@@ -1838,17 +1841,17 @@ function TodayDutyBar() {
         <div style={{
           width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
           background: currentEvent ? (DUTY_COLORS[currentEvent.type] || "#94a3b8") : "#334155",
-          boxShadow: currentEvent ? `0 0 10px ${DUTY_COLORS[currentEvent.type]}` : "none",
+          
           animation: currentEvent && currentEvent.type === "FLY" ? "statusBlink 2s ease infinite" : "none",
         }} />
         {/* Label */}
-        <span style={{ color: "#6ee7b7", fontSize: "9px", fontWeight: 700, fontFamily: mono, letterSpacing: "2px", flexShrink: 0 }}>TODAY DUTY</span>
+        <span style={{ color: C.textSub, fontSize: FS.xs, fontWeight: 700, fontFamily: mono, letterSpacing: "1px", flexShrink: 0 }}>TODAY DUTY</span>
         {/* Current badge */}
         {currentEvent && (
           <span style={{
             background: DUTY_COLORS[currentEvent.type] || "#94a3b8",
             color: currentEvent.type === "OFF" ? "#e2e8f0" : "#030810",
-            padding: "2px 8px", borderRadius: "2px", fontSize: "9px", fontWeight: 700, fontFamily: mono,
+            padding: "2px 8px", borderRadius: "2px", fontSize: FS.xs, fontWeight: 700, fontFamily: mono,
           }}>{currentEvent.type}</span>
         )}
         {/* Separator */}
@@ -1858,11 +1861,11 @@ function TodayDutyBar() {
           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             {fullRoute.map((code, i) => (
               <span key={i} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                {i > 0 && <span style={{ color: "#334155", fontSize: "10px" }}>→</span>}
+                {i > 0 && <span style={{ color: C.textMuted, fontSize: FS.xs }}>→</span>}
                 <span title={isUnknownCode(code) ? "ICAO不明（気象情報の対象外）" : undefined} style={{
                   color: isUnknownCode(code) ? "#fcd34d"
                     : currentEvent?.type === "FLY" && currentEvent.route?.includes(code) ? "#6ee7b7" : "#e2e8f0",
-                  fontSize: "13px", fontWeight: 700, fontFamily: mono,
+                  fontSize: FS.sm, fontWeight: 700, fontFamily: mono,
                 }}>{isUnknownCode(code) ? `⚠${code}` : code}</span>
               </span>
             ))}
@@ -1873,17 +1876,17 @@ function TodayDutyBar() {
         {/* Countdown to next event */}
         {nextEvent && cdStr(nextEvent.start) && (
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-            <span style={{ color: "#475569", fontSize: "8px", fontFamily: mono, letterSpacing: "1px" }}>NEXT</span>
+            <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: mono, letterSpacing: "1px" }}>NEXT</span>
             <span style={{
               background: DUTY_COLORS[nextEvent.type] || "#94a3b8",
               color: nextEvent.type === "OFF" ? "#e2e8f0" : "#030810",
-              padding: "1px 5px", borderRadius: "2px", fontSize: "8px", fontWeight: 700, fontFamily: mono,
+              padding: "1px 5px", borderRadius: "2px", fontSize: FS.xs, fontWeight: 700, fontFamily: mono,
             }}>{nextEvent.type}</span>
-            <span style={{ color: "#fbbf24", fontSize: "12px", fontWeight: 700, fontFamily: mono }}>T-{cdStr(nextEvent.start)}</span>
+            <span style={{ color: "#fbbf24", fontSize: FS.sm, fontWeight: 700, fontFamily: mono }}>T-{cdStr(nextEvent.start)}</span>
           </div>
         )}
         {/* Time range */}
-        <span style={{ color: "#475569", fontSize: "9px", fontFamily: mono, flexShrink: 0 }}>
+        <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: mono, flexShrink: 0 }}>
           {fmtZ(firstStart)}–{fmtZ(lastEnd)} / {fmtL(firstStart)}–{fmtL(lastEnd)}L
         </span>
       </div>
@@ -1907,12 +1910,12 @@ function TodayDutyBar() {
               borderRadius: "2px",
               display: "flex", alignItems: "center", justifyContent: "center",
               overflow: "hidden",
-              boxShadow: isCurrent ? `0 0 8px ${col}55` : "none",
+              
             }}>
               {width > 8 && (
                 <span style={{
                   color: isCurrent ? (ev.type === "OFF" ? "#e2e8f0" : "#030810") : col,
-                  fontSize: "7px", fontWeight: 700, fontFamily: mono,
+                  fontSize: FS.xs, fontWeight: 700, fontFamily: mono,
                   whiteSpace: "nowrap", letterSpacing: "0.5px",
                 }}>
                   {ev.type === "FLY" && ev.route.length > 0 ? ev.route.join("-") : ev.type}
@@ -1925,7 +1928,7 @@ function TodayDutyBar() {
         {nowPct > 0 && nowPct < 100 && (
           <div style={{
             position: "absolute", top: 0, bottom: 0, left: `${nowPct}%`,
-            width: "2px", background: "#ef4444", boxShadow: "0 0 6px #ef4444",
+            width: "2px", background: "#ef4444", 
             zIndex: 2,
           }}>
             <div style={{
@@ -1955,8 +1958,8 @@ function CrosswindDisplay({ icao, metarRaw }) {
     borderLeft: "3px solid rgba(251, 191, 36, 0.4)",
   };
   const titleStyle = {
-    color: "#fbbf24", fontSize: "10px", fontWeight: 600,
-    letterSpacing: "2px", marginBottom: "4px", fontFamily: mono,
+    color: "#fbbf24", fontSize: FS.xs, fontWeight: 600,
+    letterSpacing: "1px", marginBottom: "4px", fontFamily: mono,
   };
 
   // CALM
@@ -1964,7 +1967,7 @@ function CrosswindDisplay({ icao, metarRaw }) {
     return (
       <div style={boxStyle}>
         <div style={titleStyle}>WIND COMPONENT</div>
-        <div style={{ fontFamily: mono, fontSize: "12px", color: "#6ee7b7" }}>CALM</div>
+        <div style={{ fontFamily: mono, fontSize: FS.sm, color: "#6ee7b7" }}>CALM</div>
       </div>
     );
   }
@@ -1974,8 +1977,8 @@ function CrosswindDisplay({ icao, metarRaw }) {
     return (
       <div style={boxStyle}>
         <div style={titleStyle}>WIND COMPONENT</div>
-        <div style={{ fontFamily: mono, fontSize: "12px", color: "#94a3b8" }}>
-          VRB {wind.speed}kt <span style={{ color: "#64748b", fontSize: "10px" }}>(max XW any rwy)</span>
+        <div style={{ fontFamily: mono, fontSize: FS.sm, color: "#94a3b8" }}>
+          VRB {wind.speed}kt <span style={{ color: C.textMuted, fontSize: FS.xs }}>(max XW any rwy)</span>
         </div>
       </div>
     );
@@ -1994,14 +1997,14 @@ function CrosswindDisplay({ icao, metarRaw }) {
         const gustAbsXw = c.gustXw != null ? Math.round(Math.abs(c.gustXw)) : null;
 
         return (
-          <div key={i} style={{ fontFamily: mono, fontSize: "11px", lineHeight: "1.6", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+          <div key={i} style={{ fontFamily: mono, fontSize: FS.xs, lineHeight: "1.6", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <span style={{ color: "#94a3b8", minWidth: "58px" }}>RWY {c.rwyName.padEnd(3)}</span>
             <span style={{ color: xwColor, fontWeight: 600 }}>XW {String(absXw).padStart(2)}kt {side}</span>
             {tw > 0 && (
               <span style={{ color: "#f87171", fontWeight: 600 }}>TW {tw}kt</span>
             )}
             {gustAbsXw != null && (
-              <span style={{ color: "#64748b", fontSize: "10px" }}>(G: XW {gustAbsXw}kt)</span>
+              <span style={{ color: C.textMuted, fontSize: FS.xs }}>(G: XW {gustAbsXw}kt)</span>
             )}
           </div>
         );
@@ -2113,7 +2116,7 @@ function MetarTafPanel() {
 
   const highlightMetar = (text) => {
     if (!text) return null;
-    if (text.includes("error") || text.includes("No METAR")) return <span style={{ color: "#64748b" }}>{text}</span>;
+    if (text.includes("error") || text.includes("No METAR")) return <span style={{ color: C.textMuted }}>{text}</span>;
     return text.split("\n").map((line, i) => {
       if (!line.trim()) return null;
       return (
@@ -2158,10 +2161,10 @@ function MetarTafPanel() {
                 padding: "3px 8px", background: isActive ? "rgba(110,231,183,0.12)" : "transparent",
                 border: `1px solid ${isActive ? "rgba(110,231,183,0.4)" : selectedCount > 0 ? "rgba(110,231,183,0.2)" : "rgba(148,163,184,0.1)"}`,
                 borderRadius: "4px", cursor: "pointer",
-                color: isActive ? "#6ee7b7" : selectedCount > 0 ? "#6ee7b7" : "#64748b",
-                fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", fontWeight: isActive ? 700 : 400,
+                color: isActive ? "#6ee7b7" : selectedCount > 0 ? "#6ee7b7" : C.textMuted,
+                fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", fontWeight: isActive ? 700 : 400,
               }}>
-                {group.region}{selectedCount > 0 && <span style={{ marginLeft: "3px", fontSize: "9px", opacity: 0.7 }}>({selectedCount})</span>}
+                {group.region}{selectedCount > 0 && <span style={{ marginLeft: "3px", fontSize: FS.xs, opacity: 0.7 }}>({selectedCount})</span>}
               </button>
             );
           })}
@@ -2179,9 +2182,9 @@ function MetarTafPanel() {
                       background: sel ? "rgba(110, 231, 183, 0.15)" : "rgba(30, 41, 59, 0.5)",
                       border: sel ? "1px solid rgba(110, 231, 183, 0.4)" : "1px solid rgba(148, 163, 184, 0.12)",
                       borderRadius: "4px", color: sel ? "#6ee7b7" : "#94a3b8",
-                      fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: FS.xs, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
                     }}>
-                    {ap.icao} <span style={{ opacity: 0.6, fontSize: "9px" }}>{ap.name}</span>
+                    {ap.icao} <span style={{ opacity: 0.6, fontSize: FS.xs }}>{ap.name}</span>
                   </button>
                 );
               })}
@@ -2196,35 +2199,35 @@ function MetarTafPanel() {
             style={{
               padding: "8px 14px", background: "rgba(15, 23, 42, 0.6)",
               border: "1px solid rgba(148, 163, 184, 0.15)", borderRadius: "6px",
-              color: "#e2e8f0", fontSize: "13px", fontFamily: "'JetBrains Mono', monospace",
-              outline: "none", width: "160px", letterSpacing: "2px",
+              color: "#e2e8f0", fontSize: FS.sm, fontFamily: "'JetBrains Mono', monospace",
+              outline: "none", width: "160px", letterSpacing: "1px",
             }} />
           <button onClick={() => { addAirport(customIcao); setCustomIcao(""); }}
-            style={{ padding: "8px 16px", background: "rgba(110, 231, 183, 0.12)", border: "1px solid rgba(110, 231, 183, 0.3)", borderRadius: "6px", color: "#6ee7b7", fontSize: "12px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>追加</button>
+            style={{ padding: "8px 16px", background: "rgba(110, 231, 183, 0.12)", border: "1px solid rgba(110, 231, 183, 0.3)", borderRadius: "6px", color: "#6ee7b7", fontSize: FS.sm, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>追加</button>
           <button onClick={fetchAll}
-            style={{ padding: "8px 20px", background: "linear-gradient(135deg, rgba(110, 231, 183, 0.2), rgba(96, 165, 250, 0.2))", border: "1px solid rgba(110, 231, 183, 0.4)", borderRadius: "6px", color: "#6ee7b7", fontSize: "12px", fontWeight: 600, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>↻ REFRESH</button>
+            style={{ padding: "8px 20px", background: "linear-gradient(135deg, rgba(110, 231, 183, 0.2), rgba(96, 165, 250, 0.2))", border: "1px solid rgba(110, 231, 183, 0.4)", borderRadius: "6px", color: "#6ee7b7", fontSize: FS.sm, fontWeight: 600, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>↻ REFRESH</button>
           {/* 自動更新トグル */}
           <button onClick={() => setAutoRefresh(a => !a)} style={{
             padding: "8px 14px",
             background: autoRefresh ? "rgba(110,231,183,0.08)" : "transparent",
             border: `1px solid ${autoRefresh ? "rgba(110,231,183,0.4)" : "rgba(148,163,184,0.15)"}`,
             borderRadius: "6px",
-            color: autoRefresh ? "#6ee7b7" : "#64748b",
-            fontSize: "10px", cursor: "pointer",
+            color: autoRefresh ? "#6ee7b7" : C.textMuted,
+            fontSize: FS.xs, cursor: "pointer",
             fontFamily: "'JetBrains Mono', monospace",
             display: "flex", alignItems: "center", gap: "6px",
           }}>
             <div style={{
               width: "6px", height: "6px", borderRadius: "50%",
               background: autoRefresh ? "#6ee7b7" : "#475569",
-              boxShadow: autoRefresh ? "0 0 6px #6ee7b7" : "none",
+              
               animation: autoRefresh ? "statusBlink 2s ease infinite" : "none",
             }} />
             AUTO {autoRefresh ? "ON" : "OFF"}
           </button>
           {/* 最終更新表示 */}
           {lastUpdate && (
-            <span style={{ fontSize: "9px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>
+            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>
               LAST: {lastUpdate.toISOString().slice(11, 19)}z
             </span>
           )}
@@ -2251,18 +2254,18 @@ function MetarTafPanel() {
                 border: "1px solid rgba(251,191,36,0.2)",
                 borderRadius: "4px",
               }}>
-                <span style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 700, fontFamily: mono, letterSpacing: "1px" }}>DUTY ROUTE</span>
-                <span style={{ fontSize: "11px", fontFamily: mono }}>
+                <span style={{ color: "#fbbf24", fontSize: FS.xs, fontWeight: 700, fontFamily: mono, letterSpacing: "1px" }}>DUTY ROUTE</span>
+                <span style={{ fontSize: FS.xs, fontFamily: mono }}>
                   {route.map((c, i) => (
                     <span key={i}>
-                      {i > 0 && <span style={{ color: "#64748b" }}> → </span>}
+                      {i > 0 && <span style={{ color: C.textMuted }}> → </span>}
                       <span style={{ color: unknownCodes.includes(c.trim().toUpperCase()) ? "#fcd34d" : "#e2e8f0", fontWeight: unknownCodes.includes(c.trim().toUpperCase()) ? 700 : 400 }}>
                         {unknownCodes.includes(c.trim().toUpperCase()) ? `⚠${c}` : c}
                       </span>
                     </span>
                   ))}
                 </span>
-                <span style={{ color: "#64748b", fontSize: "9px", fontFamily: mono, marginLeft: "auto" }}>
+                <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: mono, marginLeft: "auto" }}>
                   ICAO: {dutyIcaos.length ? dutyIcaos.join(", ") : "—"}
                 </span>
               </div>
@@ -2283,23 +2286,23 @@ function MetarTafPanel() {
               border: `1px solid ${hasChanged ? "rgba(251,191,36,0.3)" : "rgba(148, 163, 184, 0.1)"}`,
               borderRadius: "10px", padding: "16px 20px",
               transition: "all 0.5s ease",
-              boxShadow: hasChanged ? "0 0 20px rgba(251,191,36,0.08)" : "none",
+              
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <span style={{ color: "#6ee7b7", fontSize: "16px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>{icao}</span>
-                  {apInfo && <span style={{ color: "#64748b", fontSize: "12px" }}>{apInfo.name}</span>}
+                  <span style={{ color: C.text, fontSize: FS.md, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{icao}</span>
+                  {apInfo && <span style={{ color: C.textMuted, fontSize: FS.sm }}>{apInfo.name}</span>}
                   {AIRPORT_OPS_HOURS[icao] && (
-                    <span style={{ color: "#94a3b8", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>
+                    <span style={{ color: "#94a3b8", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
                       {AIRPORT_OPS_HOURS[icao]}
                     </span>
                   )}
-                  {loading[icao] && <span style={{ color: "#fbbf24", fontSize: "11px" }}>loading...</span>}
+                  {loading[icao] && <span style={{ color: "#fbbf24", fontSize: FS.xs }}>loading...</span>}
                   {hasChanged && (
                     <span style={{
                       padding: "2px 8px", borderRadius: "2px",
                       background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.4)",
-                      color: "#fbbf24", fontSize: "9px", fontWeight: 700,
+                      color: "#fbbf24", fontSize: FS.xs, fontWeight: 700,
                       fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
                       animation: "statusBlink 1s ease 3",
                     }}>UPDATED</span>
@@ -2310,15 +2313,15 @@ function MetarTafPanel() {
                     <button onClick={() => setWxSummaryOpen(prev => ({ ...prev, [icao]: !prev[icao] }))} style={{
                       background: wxSummaryOpen[icao] ? "rgba(251,191,36,0.15)" : "none",
                       border: `1px solid ${wxSummaryOpen[icao] ? "rgba(251,191,36,0.5)" : "rgba(148,163,184,0.2)"}`,
-                      color: wxSummaryOpen[icao] ? "#fbbf24" : "#64748b",
-                      cursor: "pointer", fontSize: "9px", fontWeight: 700, padding: "2px 8px",
+                      color: wxSummaryOpen[icao] ? "#fbbf24" : C.textMuted,
+                      cursor: "pointer", fontSize: FS.xs, fontWeight: 700, padding: "2px 8px",
                       borderRadius: "3px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
                       transition: "all 0.2s ease",
                     }}>Summary</button>
                   )}
                   <ExtLink href={`https://aviationweather.gov/gfa/#obs=metar&region=other&extent=${icao}`}>AWC</ExtLink>
                   <ExtLink href={`https://atis.guru/atis/${icao}`} amber>ATIS</ExtLink>
-                  <button onClick={() => removeAirport(icao)} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "14px" }}>✕</button>
+                  <button onClick={() => removeAirport(icao)} style={{ background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontSize: FS.md }}>✕</button>
                 </div>
               </div>
               {/* WX Summary モーダル */}
@@ -2326,9 +2329,9 @@ function MetarTafPanel() {
                 const wx = WX_SUMMARY[icao];
                 const apName = apInfo ? apInfo.name : icao;
                 const sectionStyle = { marginBottom: "10px" };
-                const labelStyle = { color: "#fbbf24", fontSize: "9px", fontWeight: 700, letterSpacing: "2px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" };
-                const itemStyle = { fontSize: "11px", lineHeight: "1.7", color: "#cbd5e1", paddingLeft: "8px", borderLeft: "2px solid rgba(251,191,36,0.2)" };
-                const periodStyle = { color: "#fbbf24", fontSize: "10px", fontWeight: 600 };
+                const labelStyle = { color: "#fbbf24", fontSize: FS.xs, fontWeight: 700, letterSpacing: "1px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" };
+                const itemStyle = { fontSize: FS.xs, lineHeight: "1.7", color: "#cbd5e1", paddingLeft: "8px", borderLeft: "2px solid rgba(251,191,36,0.2)" };
+                const periodStyle = { color: "#fbbf24", fontSize: FS.xs, fontWeight: 600 };
                 return (
                   <div onClick={() => setWxSummaryOpen(prev => ({ ...prev, [icao]: false }))} style={{
                     position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
@@ -2344,13 +2347,13 @@ function MetarTafPanel() {
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ color: "#fbbf24", fontSize: "11px", fontWeight: 700, letterSpacing: "2px", fontFamily: "'JetBrains Mono', monospace" }}>WX SUMMARY</span>
-                          <span style={{ color: "#6ee7b7", fontSize: "13px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{icao}</span>
-                          <span style={{ color: "#64748b", fontSize: "11px" }}>{apName}</span>
+                          <span style={{ color: "#fbbf24", fontSize: FS.xs, fontWeight: 700, letterSpacing: "1px", fontFamily: "'JetBrains Mono', monospace" }}>WX SUMMARY</span>
+                          <span style={{ color: "#6ee7b7", fontSize: FS.sm, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{icao}</span>
+                          <span style={{ color: C.textMuted, fontSize: FS.xs }}>{apName}</span>
                         </div>
                         <button onClick={() => setWxSummaryOpen(prev => ({ ...prev, [icao]: false }))} style={{
                           background: "none", border: "1px solid rgba(148,163,184,0.2)", color: "#94a3b8",
-                          cursor: "pointer", fontSize: "12px", padding: "2px 8px", borderRadius: "3px",
+                          cursor: "pointer", fontSize: FS.sm, padding: "2px 8px", borderRadius: "3px",
                           fontFamily: "'JetBrains Mono', monospace",
                         }}>ESC</button>
                       </div>
@@ -2379,7 +2382,7 @@ function MetarTafPanel() {
                         </div>
                       )}
                       {wx.remarks && (
-                        <div style={{ fontSize: "11px", lineHeight: "1.7", color: "#94a3b8", fontStyle: "italic", marginTop: "8px", paddingTop: "8px", borderTop: "1px solid rgba(251,191,36,0.1)" }}>
+                        <div style={{ fontSize: FS.xs, lineHeight: "1.7", color: "#94a3b8", fontStyle: "italic", marginTop: "8px", paddingTop: "8px", borderTop: "1px solid rgba(251,191,36,0.1)" }}>
                           {wx.remarks}
                         </div>
                       )}
@@ -2389,8 +2392,8 @@ function MetarTafPanel() {
               })()}
               {metarData[icao] && (
                 <div style={{ marginBottom: "12px" }}>
-                  <div style={{ color: "#60a5fa", fontSize: "10px", fontWeight: 600, letterSpacing: "2px", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>METAR</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", lineHeight: "1.7", padding: "10px 14px", background: "rgba(0,0,0,0.3)", borderRadius: "6px", borderLeft: "3px solid rgba(96, 165, 250, 0.4)" }}>
+                  <div style={{ color: "#60a5fa", fontSize: FS.xs, fontWeight: 600, letterSpacing: "1px", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>METAR</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: FS.sm, lineHeight: "1.7", padding: "10px 14px", background: "rgba(0,0,0,0.3)", borderRadius: "6px", borderLeft: "3px solid rgba(96, 165, 250, 0.4)" }}>
                     {highlightMetar(metarData[icao])}
                   </div>
                 </div>
@@ -2398,14 +2401,14 @@ function MetarTafPanel() {
               <CrosswindDisplay icao={icao} metarRaw={metarData[icao]} />
               {tafData[icao] && (
                 <div>
-                  <div style={{ color: "#c084fc", fontSize: "10px", fontWeight: 600, letterSpacing: "2px", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>TAF</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "12px", lineHeight: "1.7", color: "#cbd5e1", padding: "10px 14px", background: "rgba(0,0,0,0.3)", borderRadius: "6px", borderLeft: "3px solid rgba(192, 132, 252, 0.4)", whiteSpace: "pre-wrap" }}>
+                  <div style={{ color: "#c084fc", fontSize: FS.xs, fontWeight: 600, letterSpacing: "1px", marginBottom: "6px", fontFamily: "'JetBrains Mono', monospace" }}>TAF</div>
+                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: FS.sm, lineHeight: "1.7", color: "#cbd5e1", padding: "10px 14px", background: "rgba(0,0,0,0.3)", borderRadius: "6px", borderLeft: "3px solid rgba(192, 132, 252, 0.4)", whiteSpace: "pre-wrap" }}>
                     {tafData[icao]}
                   </div>
                 </div>
               )}
               {!metarData[icao] && !loading[icao] && (
-                <div style={{ color: "#64748b", fontSize: "12px", fontStyle: "italic" }}>REFRESHで取得</div>
+                <div style={{ color: C.textMuted, fontSize: FS.sm, fontStyle: "italic" }}>REFRESHで取得</div>
               )}
               <JmaAirportCharts icao={icao} />
             </div>
@@ -2480,18 +2483,18 @@ function HimawariTileView({ band }) {
       {!imgLoaded && (
         <div style={{
           position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-          color: "#334155", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px",
+          color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
         }}>
           {retryCount >= 6 ? "IMAGE NOT AVAILABLE" : "LOADING SATELLITE DATA..."}
         </div>
       )}
       {/* HUDオーバーレイ */}
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", boxShadow: "inset 0 0 80px rgba(0,0,0,0.5)" }} />
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none", }} />
       {/* タイムスタンプ */}
       <div style={{
         position: "absolute", bottom: "8px", right: "10px", pointerEvents: "none",
         background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: "2px",
-        color: "#334155", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
+        color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
       }}>
         {new Date().toISOString().slice(0, 10)} {displayTime}
       </div>
@@ -2501,7 +2504,7 @@ function HimawariTileView({ band }) {
         style={{
           position: "absolute", bottom: "8px", left: "10px", pointerEvents: "auto",
           background: "rgba(0,0,0,0.7)", padding: "2px 8px", borderRadius: "2px",
-          color: "#334155", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace",
+          color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace",
           textDecoration: "none", letterSpacing: "1px",
         }}
       >
@@ -2563,8 +2566,8 @@ function SatellitePanel() {
           background: "rgba(0,0,0,0.4)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", boxShadow: "0 0 8px #6ee7b7" }} />
-            <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", textShadow: "0 0 8px rgba(110,231,183,0.5)" }}>SATELLITE / HIMAWARI-9</span>
+            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", }} />
+            <span style={{ color: C.textSub, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", }}>SATELLITE / HIMAWARI-9</span>
           </div>
           <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
             {bands.map(b => (
@@ -2573,8 +2576,8 @@ function SatellitePanel() {
                 background: band === b.key ? `rgba(${rgbMap[b.color]}, 0.15)` : "transparent",
                 border: band === b.key ? `1px solid ${b.color}` : "1px solid rgba(110, 231, 183, 0.06)",
                 borderRadius: "2px",
-                color: band === b.key ? b.color : "#475569",
-                fontSize: "9px", cursor: "pointer",
+                color: band === b.key ? b.color : C.textMuted,
+                fontSize: FS.xs, cursor: "pointer",
                 fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.5px",
                 transition: "all 0.15s ease",
               }}>
@@ -2594,10 +2597,10 @@ function SatellitePanel() {
           borderTop: "1px solid rgba(110, 231, 183, 0.08)",
           display: "flex", alignItems: "flex-start", gap: "10px",
         }}>
-          <span style={{ fontSize: "18px" }}>{current.emoji}</span>
+          <span style={{ fontSize: FS.lg }}>{current.emoji}</span>
           <div>
-            <span style={{ color: current.color, fontSize: "10px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{current.label}</span>
-            <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: "11px", lineHeight: "1.6", fontFamily: "'JetBrains Mono', monospace" }}>{current.desc}</p>
+            <span style={{ color: current.color, fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{current.label}</span>
+            <p style={{ margin: "3px 0 0", color: C.textMuted, fontSize: FS.xs, lineHeight: "1.6", fontFamily: "'JetBrains Mono', monospace" }}>{current.desc}</p>
           </div>
         </div>
 
@@ -2628,10 +2631,10 @@ function SatellitePanel() {
             }}
           >
             <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
-              <span style={{ fontSize: "16px" }}>{b.emoji}</span>
-              <span style={{ color: b.color, fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{b.label}</span>
+              <span style={{ fontSize: FS.md }}>{b.emoji}</span>
+              <span style={{ color: b.color, fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{b.label}</span>
             </div>
-            <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.5" }}>{b.desc}</div>
+            <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.5" }}>{b.desc}</div>
           </div>
         ))}
         {/* 読み方ガイド */}
@@ -2643,11 +2646,11 @@ function SatellitePanel() {
         ].map(c => (
           <div key={c.label} style={{ padding: "10px 12px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.08)", borderRadius: "4px" }}>
             <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
-              <span style={{ fontSize: "16px" }}>{c.icon}</span>
-              <span style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{c.label}</span>
+              <span style={{ fontSize: FS.md }}>{c.icon}</span>
+              <span style={{ color: "#e2e8f0", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{c.label}</span>
             </div>
-            <div style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "2px" }}>{c.value}</div>
-            <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>{c.hint}</div>
+            <div style={{ color: "#6ee7b7", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", marginBottom: "2px" }}>{c.value}</div>
+            <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>{c.hint}</div>
           </div>
         ))}
       </div>
@@ -2690,8 +2693,8 @@ function RadarPanel() {
           background: "rgba(0,0,0,0.4)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", boxShadow: "0 0 8px #6ee7b7" }} />
-            <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>RADAR / SURFACE CONDITIONS</span>
+            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", }} />
+            <span style={{ color: C.textSub, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>RADAR / SURFACE CONDITIONS</span>
           </div>
           <div style={{ display: "flex", gap: "4px" }}>
             {types.map(t => (
@@ -2700,8 +2703,8 @@ function RadarPanel() {
                 background: radarType === t.key ? "rgba(110, 231, 183, 0.12)" : "transparent",
                 border: radarType === t.key ? "1px solid rgba(110, 231, 183, 0.5)" : "1px solid rgba(110, 231, 183, 0.06)",
                 borderRadius: "2px",
-                color: radarType === t.key ? "#6ee7b7" : "#475569",
-                fontSize: "9px", cursor: "pointer",
+                color: radarType === t.key ? "#6ee7b7" : C.textMuted,
+                fontSize: FS.xs, cursor: "pointer",
                 fontFamily: "'JetBrains Mono', monospace",
                 transition: "all 0.15s ease",
               }}>
@@ -2721,12 +2724,12 @@ function RadarPanel() {
             loading="lazy"
             allow="autoplay"
           />
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", boxShadow: "inset 0 0 60px rgba(0,0,0,0.4)" }} />
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", }} />
         </div>
 
         {/* Echo scale */}
         <div style={{ padding: "10px 14px", background: "rgba(0,0,0,0.5)", borderTop: "1px solid rgba(110, 231, 183, 0.08)" }}>
-          <div style={{ color: "#334155", fontSize: "9px", letterSpacing: "2px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "6px" }}>ECHO INTENSITY (mm/h)</div>
+          <div style={{ color: C.textMuted, fontSize: FS.xs, letterSpacing: "1px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "6px" }}>ECHO INTENSITY (mm/h)</div>
           <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
             {[
               { color: "#a3d4ff", val: "〜1" }, { color: "#4da6ff", val: "1-5" },
@@ -2736,12 +2739,12 @@ function RadarPanel() {
             ].map((item, i) => (
               <div key={i} style={{ textAlign: "center" }}>
                 <div style={{ width: "32px", height: "12px", background: item.color, borderRadius: "1px" }} />
-                <span style={{ color: "#334155", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace" }}>{item.val}</span>
+                <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>{item.val}</span>
               </div>
             ))}
             <div style={{ marginLeft: "12px", display: "flex", gap: "8px" }}>
-              <span style={{ color: "#f87171", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>⚠ &gt;30mm/h = ヘビーレイン</span>
-              <span style={{ color: "#fbbf24", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>⚠ &gt;50mm/h = 猛烈な雨</span>
+              <span style={{ color: "#f87171", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>⚠ &gt;30mm/h = ヘビーレイン</span>
+              <span style={{ color: "#fbbf24", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>⚠ &gt;50mm/h = 猛烈な雨</span>
             </div>
           </div>
         </div>
@@ -2758,18 +2761,18 @@ function RadarPanel() {
 
       {/* Hazard checklist */}
       <div>
-        <div style={{ fontSize: "9px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", marginBottom: "8px" }}>AVIATION HAZARD CHECKLIST</div>
+        <div style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", marginBottom: "8px" }}>AVIATION HAZARD CHECKLIST</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "8px" }}>
           {hazards.map(h => (
             <div key={h.label} style={{ padding: "12px", background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.08)", borderRadius: "4px" }}>
               <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "6px" }}>
-                <span style={{ fontSize: "16px" }}>{h.icon}</span>
-                <span style={{ color: "#e2e8f0", fontSize: "10px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{h.label}</span>
+                <span style={{ fontSize: FS.md }}>{h.icon}</span>
+                <span style={{ color: "#e2e8f0", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{h.label}</span>
               </div>
               {h.steps.map((s, i) => (
                 <div key={i} style={{ display: "flex", gap: "6px", alignItems: "flex-start", marginBottom: "3px" }}>
-                  <span style={{ color: "#334155", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginTop: "1px" }}>{i + 1}.</span>
-                  <span style={{ color: "#64748b", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.5" }}>{s}</span>
+                  <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", marginTop: "1px" }}>{i + 1}.</span>
+                  <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.5" }}>{s}</span>
                 </div>
               ))}
             </div>
@@ -2866,12 +2869,12 @@ function AnalysisPanel() {
   };
 
   const headerLabel = {
-    color: "#6ee7b7",
-    fontSize: "10px",
+    color: C.textSub,
+    fontSize: FS.xs,
     fontWeight: 700,
-    letterSpacing: "3px",
+    letterSpacing: "1px",
     fontFamily: "'JetBrains Mono', monospace",
-    textShadow: "0 0 8px rgba(110, 231, 183, 0.5)",
+    
   };
 
   return (
@@ -2891,7 +2894,7 @@ function AnalysisPanel() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
           <div>
             <div style={headerLabel}>◈ JMA 三十分大気解析 / 30-MIN ATMOSPHERIC ANALYSIS</div>
-            <div style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", marginTop: "3px" }}>
+            <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", marginTop: "3px" }}>
               SOURCE: data.jma.go.jp/airinfo — REAL-TIME IMAGE FEED
             </div>
           </div>
@@ -2902,8 +2905,8 @@ function AnalysisPanel() {
                 padding: "5px 14px",
                 background: viewMode === m.key ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
                 border: `1px solid ${viewMode === m.key ? "rgba(110, 231, 183, 0.5)" : "rgba(148, 163, 184, 0.15)"}`,
-                borderRadius: "6px", color: viewMode === m.key ? "#6ee7b7" : "#64748b",
-                fontSize: "11px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+                borderRadius: "6px", color: viewMode === m.key ? "#6ee7b7" : C.textMuted,
+                fontSize: FS.xs, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
                 transition: "all 0.15s ease",
               }}>{m.label}</button>
             ))}
@@ -2914,30 +2917,30 @@ function AnalysisPanel() {
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
           <button onClick={() => goTs(1)} disabled={tsIndex >= tsList.length - 1} style={{
             padding: "4px 10px", background: "rgba(30, 41, 59, 0.8)", border: "1px solid rgba(148, 163, 184, 0.2)",
-            borderRadius: "4px", color: "#94a3b8", fontSize: "12px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+            borderRadius: "4px", color: "#94a3b8", fontSize: FS.sm, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
           }}>◀ PREV</button>
           <div style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(110, 231, 183, 0.3)", borderRadius: "6px", padding: "4px 16px" }}>
-            <span style={{ color: "#6ee7b7", fontSize: "13px", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+            <span style={{ color: "#6ee7b7", fontSize: FS.sm, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
               {tsLabel ? `${tsLabel} UTC` : "Loading..."}
             </span>
           </div>
           <button onClick={() => goTs(-1)} disabled={tsIndex <= 0} style={{
             padding: "4px 10px", background: "rgba(30, 41, 59, 0.8)", border: "1px solid rgba(148, 163, 184, 0.2)",
-            borderRadius: "4px", color: "#94a3b8", fontSize: "12px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+            borderRadius: "4px", color: "#94a3b8", fontSize: FS.sm, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
           }}>NEXT ▶</button>
-          <div style={{ color: "#475569", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>
+          <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
             {tsIndex + 1} / {tsList.length}
           </div>
           <button onClick={() => fetchTimestamps(true)} disabled={refreshing} style={{
             padding: "4px 10px", background: "rgba(30, 41, 59, 0.8)", border: "1px solid rgba(148, 163, 184, 0.2)",
-            borderRadius: "4px", color: refreshing ? "#6ee7b7" : "#94a3b8", fontSize: "12px", cursor: refreshing ? "wait" : "pointer",
+            borderRadius: "4px", color: refreshing ? "#6ee7b7" : "#94a3b8", fontSize: FS.sm, cursor: refreshing ? "wait" : "pointer",
             fontFamily: "'JetBrains Mono', monospace", transition: "all 0.15s ease",
           }}>
             <span style={{ display: "inline-block", animation: refreshing ? "spin 1s linear infinite" : "none" }}>↻</span>
             {refreshing ? " UPDATING…" : " REFRESH"}
           </button>
           {lastRefresh && (
-            <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>
+            <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
               {lastRefresh.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </div>
           )}
@@ -2949,9 +2952,9 @@ function AnalysisPanel() {
                   padding: "4px 10px",
                   background: planeLevel === lv.code ? "rgba(110, 231, 183, 0.15)" : "rgba(15, 23, 42, 0.6)",
                   border: `1px solid ${planeLevel === lv.code ? "rgba(110, 231, 183, 0.4)" : "rgba(148, 163, 184, 0.1)"}`,
-                  borderRadius: "4px", color: planeLevel === lv.code ? "#6ee7b7" : "#64748b",
-                  fontSize: "11px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
-                }}>{lv.label} <span style={{ fontSize: "9px", opacity: 0.6 }}>{lv.hPa}</span></button>
+                  borderRadius: "4px", color: planeLevel === lv.code ? "#6ee7b7" : C.textMuted,
+                  fontSize: FS.xs, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+                }}>{lv.label} <span style={{ fontSize: FS.xs, opacity: 0.6 }}>{lv.hPa}</span></button>
               ))}
             </div>
           )}
@@ -2967,11 +2970,11 @@ function AnalysisPanel() {
                 borderRadius: "8px", overflow: "hidden",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", background: "rgba(0,0,0,0.6)", borderBottom: "1px solid rgba(110, 231, 183, 0.15)" }}>
-                  <span style={{ color: "#6ee7b7", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>{lon.label}</span>
-                  <a href={imageUrl(lon.code)} target="_blank" rel="noopener noreferrer" style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>↗ JMA</a>
+                  <span style={{ color: C.textSub, fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{lon.label}</span>
+                  <a href={imageUrl(lon.code)} target="_blank" rel="noopener noreferrer" style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>↗ JMA</a>
                 </div>
                 {imgError[lon.code] ? (
-                  <div style={{ height: "220px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+                  <div style={{ height: "220px", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
                     NO DATA FOR {tsLabel}
                   </div>
                 ) : (
@@ -2997,17 +3000,17 @@ function AnalysisPanel() {
           <div style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(110, 231, 183, 0.2)", borderRadius: "8px", overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", background: "rgba(0,0,0,0.6)", borderBottom: "1px solid rgba(110, 231, 183, 0.15)" }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-                <span style={{ color: "#6ee7b7", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>
+                <span style={{ color: C.textSub, fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>
                   {PLANE_LEVELS.find((l) => l.code === planeLevel)?.label} PLANE VIEW
                 </span>
-                <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>
+                <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
                   {PLANE_LEVELS.find((l) => l.code === planeLevel)?.hPa} / {PLANE_LEVELS.find((l) => l.code === planeLevel)?.ft}
                 </span>
               </div>
-              <a href={planeUrl(planeLevel)} target="_blank" rel="noopener noreferrer" style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>↗ JMA</a>
+              <a href={planeUrl(planeLevel)} target="_blank" rel="noopener noreferrer" style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>↗ JMA</a>
             </div>
             {imgError["plane"] ? (
-              <div style={{ height: "300px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+              <div style={{ height: "300px", display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
                 NO DATA FOR {tsLabel}
               </div>
             ) : (
@@ -3078,11 +3081,11 @@ function AnalysisPanel() {
           },
         ].map((s, i) => (
           <div key={i} style={{ padding: "16px", background: "rgba(15, 23, 42, 0.4)", border: "1px solid rgba(148, 163, 184, 0.08)", borderRadius: "10px" }}>
-            <div style={{ color: "#e2e8f0", fontSize: "13px", fontWeight: 600, marginBottom: "4px" }}>{s.title}</div>
-            <div style={{ color: "#64748b", fontSize: "11px", marginBottom: "10px" }}>{s.desc}</div>
+            <div style={{ color: "#e2e8f0", fontSize: FS.sm, fontWeight: 600, marginBottom: "4px" }}>{s.title}</div>
+            <div style={{ color: C.textMuted, fontSize: FS.xs, marginBottom: "10px" }}>{s.desc}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
               {s.links.map((l, j) => (
-                <a key={j} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", fontSize: "12px", textDecoration: "none", fontFamily: "'JetBrains Mono', monospace" }}>→ {l.label}</a>
+                <a key={j} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", fontSize: FS.sm, textDecoration: "none", fontFamily: "'JetBrains Mono', monospace" }}>→ {l.label}</a>
               ))}
             </div>
           </div>
@@ -3106,10 +3109,10 @@ function AnalysisPanel() {
             display: "flex", alignItems: "center", justifyContent: "space-between",
             width: "100%", maxWidth: "95vw", padding: "8px 4px", marginBottom: "8px",
           }}>
-            <span style={{ color: "#6ee7b7", fontSize: "12px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>
+            <span style={{ color: C.text, fontSize: FS.sm, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>
               {zoomImg.label}
             </span>
-            <span style={{ color: "#64748b", fontSize: "20px", fontFamily: "'JetBrains Mono', monospace", padding: "4px 12px" }}>✕</span>
+            <span style={{ color: C.textMuted, fontSize: FS.lg, fontFamily: "'JetBrains Mono', monospace", padding: "4px 12px" }}>✕</span>
           </div>
           {/* 画像 */}
           <div style={{
@@ -3136,286 +3139,6 @@ function AnalysisPanel() {
 
 
 /* ========== WX CHARTS — 気象チャート一覧 ========== */
-function WxChartsPanel() {
-  const [surfaceCharts, setSurfaceCharts] = useState(null);
-  const [imgError, setImgError] = useState({});
-  const [zoomImg, setZoomImg] = useState(null);
-
-  const WM_BASE = "https://www.jma.go.jp/bosai/weather_map/data/png/";
-
-  // list.json から地上天気図ファイル名を取得
-  useEffect(() => {
-    fetch("https://www.jma.go.jp/bosai/weather_map/data/list.json")
-      .then((r) => r.json())
-      .then((data) => {
-        // ファイル名からUTC時刻を抽出する helper
-        const extractTime = (fname) => {
-          const m = fname.match(/_(\d{12})_MET/);
-          if (!m) return "";
-          const t = m[1]; // YYYYMMDDHHmmss → YYYYMMDDHHMMSS
-          return `${t.slice(4,6)}/${t.slice(6,8)} ${t.slice(8,10)}:${t.slice(10,12)}z`;
-        };
-
-        setSurfaceCharts({
-          spas: { file: data.near?.now?.slice(-1)[0], label: "SPAS 実況 (日本付近)", time: extractTime(data.near?.now?.slice(-1)[0] || "") },
-          asas: { file: data.asia?.now?.slice(-1)[0], label: "ASAS 実況 (アジア広域)", time: extractTime(data.asia?.now?.slice(-1)[0] || "") },
-          fsas24: { file: data.near?.ft24?.[0], label: "FSAS 24h 予想", time: extractTime(data.near?.ft24?.[0] || "") },
-          fsas48: { file: data.near?.ft48?.[0], label: "FSAS 48h 予想", time: extractTime(data.near?.ft48?.[0] || "") },
-        });
-      })
-      .catch(() => {});
-  }, []);
-
-  // FBJP URLs — 国内悪天予想図 + 12h予想図（最新初期値自動選択）
-  const FBJP_URL = "https://www.data.jma.go.jp/airinfo/data/pict/fbjp/fbjp.png";
-  const fbjp112BaseTime = (() => {
-    const utcH = new Date().getUTCHours();
-    // 初期値は3h毎（00,03,...,21）、約2.5h後に掲載 → 直近の掲載済みを選択
-    const available = utcH >= 2 ? Math.floor((utcH - 2) / 3) * 3 : 21;
-    return String(available).padStart(2, "0");
-  })();
-  const FBJP112_URL = `https://www.data.jma.go.jp/airinfo/data/pict/nwp/fbjp112_${fbjp112BaseTime}.png`;
-  const fbjp112VT = (() => {
-    const bt = parseInt(fbjp112BaseTime, 10);
-    return String((bt + 12) % 24).padStart(2, "0");
-  })();
-
-  // AUPQ PDF — 現在のUTCに応じて00z/12z
-  const aupqSuffix = new Date().getUTCHours() >= 12 ? "_12" : "_00";
-
-  // カテゴリデータ
-  const LINK_CATEGORIES = [
-    {
-      title: "高層天気図 (UPPER AIR)",
-      icon: "📐",
-      desc: "500/300hPa, 850/700hPa 高層解析",
-      items: [
-        { label: "AUPQ78 500/300hPa", desc: "ジェット気流・トラフ位置", url: `https://www.jma.go.jp/bosai/numericmap/data/nwpmap/aupq78${aupqSuffix}.pdf`, type: "pdf" },
-        { label: "AUPQ35 850/700hPa", desc: "暖気寒気移流・降水域", url: `https://www.jma.go.jp/bosai/numericmap/data/nwpmap/aupq35${aupqSuffix}.pdf`, type: "pdf" },
-        { label: "数値予報天気図一覧", desc: "JMA全チャート", url: "https://www.jma.go.jp/bosai/numericmap/", type: "link" },
-      ],
-    },
-    {
-      title: "国際 SIGWX",
-      icon: "⚠️",
-      desc: "Significant Weather / AWC",
-      items: [
-        { label: "AWC SIGWX Chart", desc: "国際悪天予想図", url: "https://aviationweather.gov/gfa/#area=other", type: "link" },
-        { label: "AWC Turbulence", desc: "乱気流予想", url: "https://aviationweather.gov/gfa/#obs=turb", type: "link" },
-        { label: "AWC Icing", desc: "着氷予想", url: "https://aviationweather.gov/gfa/#obs=ice", type: "link" },
-      ],
-    },
-    {
-      title: "Wind / Temp",
-      icon: "💨",
-      desc: "上層風・気温チャート",
-      items: [
-        { label: "Windy 250hPa Wind", desc: "FL350-410 ジェット気流", url: "https://www.windy.com/-Wind-250hPa-wind250h?wind250h,36,137,5", type: "link" },
-        { label: "Windy 850hPa Temp", desc: "下層気温分布", url: "https://www.windy.com/-Temperature-temp?temp,36,137,5", type: "link" },
-        { label: "JMA WINDAS", desc: "ウィンドプロファイラ", url: "https://www.jma.go.jp/bosai/windprofiler/", type: "link" },
-      ],
-    },
-    {
-      title: "火山灰 (VAAC)",
-      icon: "🌋",
-      desc: "火山灰情報・降灰予報",
-      items: [
-        { label: "Tokyo VAAC", desc: "火山灰拡散予測", url: "https://ds.data.jma.go.jp/svd/vaac/data/", type: "link" },
-        { label: "気象庁 降灰予報", desc: "降灰予報", url: "https://www.jma.go.jp/bosai/ashfall/", type: "link" },
-      ],
-    },
-  ];
-
-  // 画像カードコンポーネント
-  const ChartImageCard = ({ src, label, time, chartKey }) => (
-    <div style={{
-      background: "rgba(0,0,0,0.5)",
-      border: `1px solid ${imgError[chartKey] ? "rgba(248,113,113,0.3)" : "rgba(110,231,183,0.2)"}`,
-      borderRadius: "8px", overflow: "hidden",
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", background: "rgba(0,0,0,0.6)", borderBottom: "1px solid rgba(110,231,183,0.15)" }}>
-        <div>
-          <span style={{ color: "#6ee7b7", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{label}</span>
-          {time && <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginLeft: "8px" }}>{time}</span>}
-        </div>
-        <a href={src} target="_blank" rel="noopener noreferrer" style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>↗ JMA</a>
-      </div>
-      {imgError[chartKey] ? (
-        <div style={{ height: "200px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
-          NO DATA
-        </div>
-      ) : (
-        <div
-          style={{ background: "#ffffff", borderRadius: "4px", overflow: "hidden", cursor: "pointer" }}
-          onClick={() => setZoomImg({ src, label: `${label} — ${time}` })}
-        >
-          <img
-            src={src}
-            alt={label}
-            onError={() => setImgError((prev) => ({ ...prev, [chartKey]: true }))}
-            style={{ width: "100%", display: "block" }}
-          />
-        </div>
-      )}
-    </div>
-  );
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-      {/* 地上天気図 */}
-      <div style={{
-        background: "rgba(15, 23, 42, 0.5)",
-        border: "1px solid rgba(148, 163, 184, 0.1)",
-        borderRadius: "12px",
-        padding: "20px",
-      }}>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "3px", marginBottom: "4px", textShadow: "0 0 12px rgba(110,231,183,0.6)" }}>
-          ◈ WX CHARTS / WEATHER CHARTS
-        </div>
-        <div style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "16px" }}>
-          SOURCE: jma.go.jp — SURFACE ANALYSIS / FORECAST
-        </div>
-
-        {/* 地上天気図 2×2グリッド */}
-        {surfaceCharts ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px" }}>
-            {["spas", "asas", "fsas24", "fsas48"].map((key) => {
-              const chart = surfaceCharts[key];
-              if (!chart?.file) return null;
-              return <ChartImageCard key={key} src={`${WM_BASE}${chart.file}`} label={chart.label} time={chart.time} chartKey={key} />;
-            })}
-          </div>
-        ) : (
-          <div style={{ height: "200px", display: "flex", alignItems: "center", justifyContent: "center", color: "#475569", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
-            LOADING CHART LIST...
-          </div>
-        )}
-      </div>
-
-      {/* 悪天予想図 */}
-      <div style={{
-        background: "rgba(15, 23, 42, 0.5)",
-        border: "1px solid rgba(148, 163, 184, 0.1)",
-        borderRadius: "12px",
-        padding: "20px",
-      }}>
-        <div style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", marginBottom: "4px" }}>
-          ⚡ 悪天予想図 (SEVERE WEATHER PROGNOSIS)
-        </div>
-        <div style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "12px" }}>
-          FBJP 国内悪天 / FBJP 12h予想 / FBFE 下層悪天
-        </div>
-
-        {/* FBJP + FBJP112 画像 2枚並び */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
-          <ChartImageCard src={FBJP_URL} label="FBJP 国内悪天予想図" time="CAT/ICE/CB FL別" chartKey="fbjp" />
-          <ChartImageCard src={FBJP112_URL} label="FBJP 12h悪天予想" time={`BT ${fbjp112BaseTime}Z → VT ${fbjp112VT}Z`} chartKey="fbjp112" />
-        </div>
-
-        {/* FBFE + 関連リンク */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "8px" }}>
-          {[
-            { label: "FBFE 下層悪天予想図", desc: "FL100以下 ICE/TURB/VIS", url: "https://www.data.jma.go.jp/airinfo/data/awfo_low-level_sigwx.html" },
-            { label: "下層悪天 詳細版", desc: "より詳細な下層悪天情報", url: "https://www.data.jma.go.jp/airinfo/data/awfo_low-level_detailed-sigwx.html" },
-            { label: "FBJP 12h全時刻", desc: "他の初期値時刻を参照", url: "https://www.data.jma.go.jp/airinfo/awfo_fbjp112/awfo_fbjp112.html" },
-            { label: "空域悪天情報一覧", desc: "JMA 航空気象情報", url: "https://www.data.jma.go.jp/airinfo/data/awfo_maiji.html" },
-          ].map((item, i) => (
-            <a key={i} href={item.url} target="_blank" rel="noopener noreferrer" style={{
-              display: "block", padding: "10px 12px",
-              background: "rgba(0,0,0,0.4)",
-              border: "1px solid rgba(110,231,183,0.1)",
-              borderRadius: "6px",
-              textDecoration: "none",
-            }}>
-              <div style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>→ {item.label}</div>
-              <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{item.desc}</div>
-            </a>
-          ))}
-        </div>
-      </div>
-
-      {/* リンクカテゴリグリッド */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
-        {LINK_CATEGORIES.map((cat) => (
-          <div key={cat.title} style={{
-            padding: "16px",
-            background: "rgba(5,10,20,0.8)",
-            border: "1px solid rgba(110,231,183,0.12)",
-            borderRadius: "8px",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-              <span style={{ fontSize: "14px" }}>{cat.icon}</span>
-              <span style={{ color: "#e2e8f0", fontSize: "12px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{cat.title}</span>
-            </div>
-            <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginBottom: "10px" }}>{cat.desc}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              {cat.items.map((item, j) => (
-                <a key={j} href={item.url} target="_blank" rel="noopener noreferrer" style={{
-                  display: "flex", alignItems: "center", gap: "8px",
-                  padding: "8px 10px",
-                  background: "rgba(0,0,0,0.3)",
-                  border: "1px solid rgba(110,231,183,0.06)",
-                  borderRadius: "4px",
-                  textDecoration: "none",
-                  transition: "border-color 0.15s ease",
-                }}>
-                  <span style={{ color: item.type === "pdf" ? "#f97316" : "#60a5fa", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>
-                    {item.type === "pdf" ? "PDF" : "↗"}
-                  </span>
-                  <div>
-                    <div style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{item.label}</div>
-                    <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>{item.desc}</div>
-                  </div>
-                </a>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ズームオーバーレイ */}
-      {zoomImg && (
-        <div
-          onClick={() => setZoomImg(null)}
-          style={{
-            position: "fixed", inset: 0, zIndex: 9999,
-            background: "rgba(0,0,0,0.92)",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            cursor: "pointer",
-            padding: "env(safe-area-inset-top, 10px) env(safe-area-inset-right, 10px) env(safe-area-inset-bottom, 10px) env(safe-area-inset-left, 10px)",
-          }}
-        >
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            width: "100%", maxWidth: "95vw", padding: "8px 4px", marginBottom: "8px",
-          }}>
-            <span style={{ color: "#6ee7b7", fontSize: "12px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>
-              {zoomImg.label}
-            </span>
-            <span style={{ color: "#64748b", fontSize: "20px", fontFamily: "'JetBrains Mono', monospace", padding: "4px 12px" }}>✕</span>
-          </div>
-          <div style={{
-            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-            width: "100%", maxWidth: "95vw", overflow: "auto", WebkitOverflowScrolling: "touch",
-          }}>
-            <img
-              src={zoomImg.src}
-              alt={zoomImg.label}
-              style={{
-                maxWidth: "100%", maxHeight: "85vh", objectFit: "contain",
-                borderRadius: "4px",
-                background: "#ffffff",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 /* ========== OPS WEATHER BRIEFING ========== */
 
 const OPS_AIRPORTS = [
@@ -3490,8 +3213,8 @@ function SevereWxPanel() {
           <button key={s.key} onClick={() => setActiveSection(s.key)} style={{
             padding: "6px 16px", background: activeSection === s.key ? "rgba(110,231,183,0.12)" : "transparent",
             border: `1px solid ${activeSection === s.key ? "rgba(110,231,183,0.4)" : "rgba(148,163,184,0.12)"}`,
-            borderRadius: "4px", color: activeSection === s.key ? "#6ee7b7" : "#64748b",
-            fontSize: "12px", fontWeight: activeSection === s.key ? 700 : 400, cursor: "pointer",
+            borderRadius: "4px", color: activeSection === s.key ? "#6ee7b7" : C.textMuted,
+            fontSize: FS.sm, fontWeight: activeSection === s.key ? 700 : 400, cursor: "pointer",
             fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
           }}>
             {s.icon} {s.label}
@@ -3505,7 +3228,7 @@ function SevereWxPanel() {
           <div style={{ display: "flex", gap: "4px", padding: "12px 16px", borderBottom: "1px solid rgba(110,231,183,0.08)", flexWrap: "wrap" }}>
             {SEVERE_OVERLAYS.map(o => (
               <button key={o.key} onClick={() => setOverlayKey(o.key)} style={{
-                padding: "4px 10px", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace",
+                padding: "4px 10px", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace",
                 background: overlayKey === o.key ? "rgba(110,231,183,0.15)" : "transparent",
                 border: `1px solid ${overlayKey === o.key ? "rgba(110,231,183,0.4)" : "rgba(148,163,184,0.1)"}`,
                 borderRadius: "3px", color: overlayKey === o.key ? "#6ee7b7" : "#94a3b8", cursor: "pointer",
@@ -3515,7 +3238,7 @@ function SevereWxPanel() {
             ))}
           </div>
           {/* Overlay説明 */}
-          <div style={{ padding: "6px 16px", color: "#475569", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>
+          <div style={{ padding: "6px 16px", color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
             {SEVERE_OVERLAYS.find(o => o.key === overlayKey)?.desc}
           </div>
           {/* Windy iframe */}
@@ -3527,14 +3250,14 @@ function SevereWxPanel() {
               title={`Severe WX - ${overlayKey}`}
               loading="lazy"
             />
-            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", boxShadow: "inset 0 0 40px rgba(0,0,0,0.4)" }} />
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", }} />
           </div>
           {/* リスク判定基準 */}
           <div style={{ display: "flex", gap: "8px", padding: "10px 16px", flexWrap: "wrap", borderTop: "1px solid rgba(110,231,183,0.08)" }}>
-            <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", alignSelf: "center" }}>RISK:</span>
+            <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", alignSelf: "center" }}>RISK:</span>
             {RISK_CRITERIA.map((r, i) => (
               <span key={i} style={{
-                fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", padding: "2px 6px",
+                fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", padding: "2px 6px",
                 border: `1px solid ${r.color}33`, borderRadius: "3px", color: r.color,
               }}>
                 {r.condition} = {r.level}
@@ -3560,8 +3283,8 @@ function SevereWxPanel() {
             background: isTyphoonSeason ? "rgba(251,191,36,0.06)" : "transparent",
           }}>
             <span style={{
-              fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
-              color: isTyphoonSeason ? "#fbbf24" : "#334155",
+              fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
+              color: isTyphoonSeason ? "#fbbf24" : C.textMuted,
             }}>
               {isTyphoonSeason ? "TYPHOON SEASON ACTIVE (JUN-NOV) — 台風情報を定期的に確認" : "OFF-SEASON — 台風発生は稀ですが監視継続"}
             </span>
@@ -3574,7 +3297,7 @@ function SevereWxPanel() {
               title="Typhoon Wind"
               loading="lazy"
             />
-            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", boxShadow: "inset 0 0 40px rgba(0,0,0,0.4)" }} />
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", }} />
           </div>
           {/* 台風関連リンク */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px", padding: "12px 16px" }}>
@@ -3585,10 +3308,10 @@ function SevereWxPanel() {
                 border: `1px solid ${link.accent ? "rgba(110,231,183,0.25)" : "rgba(148,163,184,0.08)"}`,
                 borderRadius: "4px", textDecoration: "none",
               }}>
-                <div style={{ color: link.accent ? "#6ee7b7" : "#e2e8f0", fontSize: "11px", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
-                  {link.label} <span style={{ fontSize: "9px", opacity: 0.5 }}>↗</span>
+                <div style={{ color: link.accent ? "#6ee7b7" : "#e2e8f0", fontSize: FS.xs, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>
+                  {link.label} <span style={{ fontSize: FS.xs, opacity: 0.5 }}>↗</span>
                 </div>
-                <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{link.desc}</div>
+                <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{link.desc}</div>
               </a>
             ))}
           </div>
@@ -3735,8 +3458,8 @@ function OpsWxPanel() {
           background: "rgba(0,0,0,0.4)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", boxShadow: "0 0 8px #6ee7b7" }} />
-            <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", textShadow: "0 0 8px rgba(110,231,183,0.5)" }}>UPPER-AIR / OPS DISPLAY</span>
+            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", }} />
+            <span style={{ color: C.textSub, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", }}>UPPER-AIR / OPS DISPLAY</span>
           </div>
           <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
             {OPS_OVERLAYS.map(o => (
@@ -3745,10 +3468,10 @@ function OpsWxPanel() {
                 background: overlayKey === o.key ? "rgba(110, 231, 183, 0.12)" : "transparent",
                 border: overlayKey === o.key ? "1px solid rgba(110, 231, 183, 0.5)" : "1px solid rgba(110, 231, 183, 0.06)",
                 borderRadius: "2px",
-                color: overlayKey === o.key ? "#6ee7b7" : "#475569",
-                fontSize: "9px", cursor: "pointer",
+                color: overlayKey === o.key ? "#6ee7b7" : C.textMuted,
+                fontSize: FS.xs, cursor: "pointer",
                 fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.5px",
-                textShadow: overlayKey === o.key ? "0 0 8px rgba(110,231,183,0.5)" : "none",
+                
                 transition: "all 0.15s ease",
               }}>
                 {o.icon} {o.label}
@@ -3767,7 +3490,7 @@ function OpsWxPanel() {
             loading="lazy"
             allow="autoplay"
           />
-          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", boxShadow: "inset 0 0 60px rgba(0,0,0,0.4)" }} />
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", }} />
         </div>
 
         {/* オーバーレイ説明 */}
@@ -3776,9 +3499,9 @@ function OpsWxPanel() {
           borderTop: "1px solid rgba(110, 231, 183, 0.08)",
           display: "flex", alignItems: "center", gap: "10px",
         }}>
-          <span style={{ fontSize: "16px" }}>{currentOverlay.icon}</span>
-          <span style={{ color: "#6ee7b7", fontSize: "10px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{currentOverlay.label}</span>
-          <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>{currentOverlay.desc}</span>
+          <span style={{ fontSize: FS.md }}>{currentOverlay.icon}</span>
+          <span style={{ color: "#6ee7b7", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>{currentOverlay.label}</span>
+          <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>{currentOverlay.desc}</span>
         </div>
       </PanelFrame>
 
@@ -3797,18 +3520,18 @@ function OpsWxPanel() {
               <div style={{
                 width: "5px", height: "5px", borderRadius: "50%",
                 background: dataLoading ? "#fbbf24" : dataError ? "#f87171" : "#6ee7b7",
-                boxShadow: `0 0 8px ${dataLoading ? "#fbbf24" : dataError ? "#f87171" : "#6ee7b7"}`,
+                
               }} />
-              <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>
+              <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>
                 {dataLoading ? "FETCHING..." : dataError ? "DATA ERROR" : "OPEN-METEO ECMWF"}
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              {lastFetch && <span style={{ color: "#334155", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace" }}>UPD {lastFetch.toISOString().slice(11, 16)}Z</span>}
+              {lastFetch && <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>UPD {lastFetch.toISOString().slice(11, 16)}Z</span>}
               <button onClick={() => fetchRef.current()} style={{
                 padding: "3px 8px", background: "rgba(110,231,183,0.06)",
                 border: "1px solid rgba(110,231,183,0.15)", borderRadius: "2px",
-                color: "#6ee7b7", fontSize: "8px", cursor: "pointer",
+                color: "#6ee7b7", fontSize: FS.xs, cursor: "pointer",
                 fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
               }}>REFRESH</button>
             </div>
@@ -3822,8 +3545,8 @@ function OpsWxPanel() {
                   {["ICAO", "300hPa WIND", "250hPa WIND", "850T (℃)", "CAPE (J/kg)"].map((h, i) => (
                     <th key={h} style={{
                       padding: "8px 10px", textAlign: i === 0 ? "left" : "right",
-                      color: (isWinter && h.includes("850T")) ? "#60a5fa" : (isSummer && h.includes("CAPE")) ? "#fbbf24" : "#334155",
-                      fontSize: "8px", letterSpacing: "1.5px", fontWeight: 700,
+                      color: (isWinter && h.includes("850T")) ? "#60a5fa" : (isSummer && h.includes("CAPE")) ? "#fbbf24" : C.textMuted,
+                      fontSize: FS.xs, letterSpacing: "1px", fontWeight: 700,
                       background: (isWinter && h.includes("850T")) ? "rgba(96,165,250,0.06)" : (isSummer && h.includes("CAPE")) ? "rgba(251,191,36,0.06)" : "transparent",
                     }}>{h}</th>
                   ))}
@@ -3837,24 +3560,24 @@ function OpsWxPanel() {
                       borderBottom: "1px solid rgba(110,231,183,0.05)",
                       background: ri % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent",
                     }}>
-                      <td style={{ padding: "8px 10px", fontSize: "11px", fontWeight: 700, color: "#6ee7b7", textShadow: "0 0 6px rgba(110,231,183,0.3)" }}>
-                        {ap.icao}<span style={{ marginLeft: "6px", fontSize: "9px", color: "#334155", fontWeight: 400 }}>{ap.name}</span>
+                      <td style={{ padding: "8px 10px", fontSize: FS.xs, fontWeight: 700, color: "#6ee7b7", }}>
+                        {ap.icao}<span style={{ marginLeft: "6px", fontSize: FS.xs, color: C.textMuted, fontWeight: 400 }}>{ap.name}</span>
                       </td>
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "11px", color: jetColor(d.wind300spd) }}>{fmtWind(d.wind300dir, d.wind300spd)}</td>
-                      <td style={{ padding: "8px 10px", textAlign: "right", fontSize: "11px", color: jetColor(d.wind250spd) }}>{fmtWind(d.wind250dir, d.wind250spd)}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontSize: FS.xs, color: jetColor(d.wind300spd) }}>{fmtWind(d.wind300dir, d.wind300spd)}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", fontSize: FS.xs, color: jetColor(d.wind250spd) }}>{fmtWind(d.wind250dir, d.wind250spd)}</td>
                       <td style={{
-                        padding: "8px 10px", textAlign: "right", fontSize: "11px",
+                        padding: "8px 10px", textAlign: "right", fontSize: FS.xs,
                         fontWeight: isWinter ? 700 : 400, color: temp850Color(d.temp850),
                         background: isWinter ? "rgba(96,165,250,0.04)" : "transparent",
-                        textShadow: (isWinter && d.temp850 != null && d.temp850 <= -6) ? "0 0 8px rgba(96,165,250,0.5)" : "none",
+                        
                       }}>
                         {d.temp850 != null ? `${d.temp850 > 0 ? "+" : ""}${d.temp850}` : "---"}
                       </td>
                       <td style={{
-                        padding: "8px 10px", textAlign: "right", fontSize: "11px",
+                        padding: "8px 10px", textAlign: "right", fontSize: FS.xs,
                         fontWeight: isSummer ? 700 : 400, color: capeColor(d.cape),
                         background: isSummer ? "rgba(251,191,36,0.04)" : "transparent",
-                        textShadow: (isSummer && d.cape != null && d.cape >= 1000) ? "0 0 8px rgba(251,191,36,0.5)" : "none",
+                        
                       }}>
                         {d.cape != null ? d.cape : "---"}
                       </td>
@@ -3870,19 +3593,19 @@ function OpsWxPanel() {
             display: "flex", gap: "10px", padding: "8px 14px", flexWrap: "wrap",
             borderTop: "1px solid rgba(110,231,183,0.05)", background: "rgba(0,0,0,0.3)",
           }}>
-            <span style={{ fontSize: "8px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>JET:</span>
+            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>JET:</span>
             {[{ l: ">120kt", c: "#f87171" }, { l: "80-120", c: "#fbbf24" }, { l: "50-80", c: "#6ee7b7" }, { l: "<50", c: "#94a3b8" }].map(x => (
               <div key={x.l} style={{ display: "flex", alignItems: "center", gap: "3px" }}>
                 <div style={{ width: "4px", height: "4px", borderRadius: "50%", background: x.c }} />
-                <span style={{ fontSize: "7px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>{x.l}</span>
+                <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>{x.l}</span>
               </div>
             ))}
-            <span style={{ color: "#1e293b", fontSize: "8px" }}>|</span>
-            <span style={{ fontSize: "8px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>850T:</span>
+            <span style={{ color: C.textMuted, fontSize: FS.xs }}>|</span>
+            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>850T:</span>
             {[{ l: "<-15℃", c: "#c084fc" }, { l: "<-6℃", c: "#60a5fa" }, { l: "<0℃", c: "#93c5fd" }].map(x => (
               <div key={x.l} style={{ display: "flex", alignItems: "center", gap: "3px" }}>
                 <div style={{ width: "4px", height: "4px", borderRadius: "50%", background: x.c }} />
-                <span style={{ fontSize: "7px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>{x.l}</span>
+                <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>{x.l}</span>
               </div>
             ))}
           </div>
@@ -3898,13 +3621,13 @@ function OpsWxPanel() {
             borderRadius: "4px",
           }}>
             <div style={{
-              fontSize: "9px",
+              fontSize: FS.xs,
               color: isWinter ? "#60a5fa" : isSummer ? "#fbbf24" : "#6ee7b7",
-              fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", fontWeight: 700, marginBottom: "4px",
+              fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", fontWeight: 700, marginBottom: "4px",
             }}>
               {isWinter ? "❄️ WINTER OPS FOCUS" : isSummer ? "⚡ SUMMER OPS FOCUS" : "🌤️ SEASONAL FOCUS"}
             </div>
-            <div style={{ fontSize: "10px", color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.6" }}>
+            <div style={{ fontSize: FS.xs, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.6" }}>
               {isWinter ? "寒気(850T)を重点監視。-6℃以下で平地降雪、-12℃以下で大雪域拡大。JPCZに注意。"
                 : isSummer ? "CAPE値を重点監視。300J/kg以上で孤立Cb、1000J/kg以上で組織化した雷雲。午後の急発達に注意。"
                 : "春秋はジェット気流と前線の動向を優先監視。"}
@@ -3924,10 +3647,10 @@ function OpsWxPanel() {
                   textDecoration: "none", transition: "all 0.15s ease",
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ color: "#6ee7b7", fontSize: "10px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{chart.title}</span>
-                    <span style={{ fontSize: "9px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>↗</span>
+                    <span style={{ color: "#6ee7b7", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{chart.title}</span>
+                    <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>↗</span>
                   </div>
-                  <div style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{chart.desc}</div>
+                  <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", marginTop: "2px" }}>{chart.desc}</div>
                 </a>
               ))}
             </div>
@@ -3944,7 +3667,7 @@ function OpsWxPanel() {
 
       {/* パイロット判読ガイド */}
       <div>
-        <div style={{ fontSize: "9px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px", marginBottom: "8px" }}>PILOT INTERPRETATION GUIDE</div>
+        <div style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", marginBottom: "8px" }}>PILOT INTERPRETATION GUIDE</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "8px" }}>
           {PILOT_GUIDE.map((section, si) => (
             <div key={si} onClick={() => setGuideOpen(guideOpen === si ? null : si)} style={{
@@ -3954,16 +3677,16 @@ function OpsWxPanel() {
               borderRadius: "4px", cursor: "pointer", transition: "all 0.15s ease",
             }}>
               <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: guideOpen === si ? "8px" : "0" }}>
-                <span style={{ fontSize: "16px" }}>{section.icon}</span>
-                <span style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{section.title}</span>
-                <span style={{ marginLeft: "auto", color: "#334155", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", transition: "transform 0.15s ease", transform: guideOpen === si ? "rotate(90deg)" : "none" }}>▶</span>
+                <span style={{ fontSize: FS.md }}>{section.icon}</span>
+                <span style={{ color: "#e2e8f0", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{section.title}</span>
+                <span style={{ marginLeft: "auto", color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", transition: "transform 0.15s ease", transform: guideOpen === si ? "rotate(90deg)" : "none" }}>▶</span>
               </div>
               {guideOpen === si && (
                 <div style={{ paddingLeft: "28px" }}>
                   {section.items.map((item, ii) => (
                     <div key={ii} style={{ display: "flex", gap: "6px", alignItems: "flex-start", marginBottom: "4px" }}>
-                      <span style={{ color: "#334155", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginTop: "1px", flexShrink: 0 }}>{">"}</span>
-                      <span style={{ color: "#64748b", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.6" }}>{item}</span>
+                      <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", marginTop: "1px", flexShrink: 0 }}>{">"}</span>
+                      <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", lineHeight: "1.6" }}>{item}</span>
                     </div>
                   ))}
                 </div>
@@ -4047,18 +3770,18 @@ function JmaWeatherTicker() {
               <div style={{
                 width: "5px", height: "5px", borderRadius: "50%",
                 background: row.color,
-                boxShadow: `0 0 8px ${row.color}, 0 0 16px ${row.color}60`,
+                
                 flexShrink: 0,
               }} />
               <span style={{
-                fontSize: "10px", fontWeight: 700,
+                fontSize: FS.xs, fontWeight: 700,
                 color: row.color,
                 fontFamily: "'JetBrains Mono', monospace",
-                letterSpacing: "2px",
-                textShadow: `0 0 10px ${row.color}`,
+                letterSpacing: "1px",
+                
               }}>{row.short}</span>
               <span style={{
-                fontSize: "9px", color: `${row.color}90`,
+                fontSize: FS.xs, color: `${row.color}90`,
                 fontFamily: "'JetBrains Mono', monospace",
                 fontWeight: 500,
               }}>{row.name}</span>
@@ -4070,11 +3793,11 @@ function JmaWeatherTicker() {
                 whiteSpace: "nowrap",
                 animation: `${animName} ${row.speed}s linear infinite`,
                 paddingLeft: "100%",
-                fontSize: "11px",
+                fontSize: FS.xs,
                 color: isEven ? "#e2e8f0" : "#cbd5e1",
                 fontFamily: "'JetBrains Mono', monospace",
                 letterSpacing: "0.5px",
-                textShadow: `0 0 12px ${row.color}30`,
+                
               }}>
                 {row.text}
               </div>
@@ -4277,7 +4000,7 @@ function DutySchedulePanel() {
   if (events.length === 0) {
     return (
       <div style={{ padding: "20px" }}>
-        <div style={{ fontSize: "11px", color: "#6ee7b7", letterSpacing: "2px", marginBottom: "16px", fontFamily: "'JetBrains Mono', monospace" }}>
+        <div style={{ fontSize: FS.xs, color: C.textSub, letterSpacing: "1px", marginBottom: "16px", fontFamily: "'JetBrains Mono', monospace" }}>
           ▸ DUTY SCHEDULE — CREWACCESS ICS IMPORT
         </div>
         <div
@@ -4296,10 +4019,10 @@ function DutySchedulePanel() {
           }}
         >
           <div style={{ fontSize: "36px", marginBottom: "12px" }}>📋</div>
-          <div style={{ color: "#94a3b8", fontSize: "13px", marginBottom: "8px" }}>
+          <div style={{ color: "#94a3b8", fontSize: FS.sm, marginBottom: "8px" }}>
             CrewAccess の .ics ファイルをここにドロップ
           </div>
-          <div style={{ color: "#475569", fontSize: "11px" }}>
+          <div style={{ color: C.textMuted, fontSize: FS.xs }}>
             またはクリックしてファイルを選択
           </div>
           <input ref={fileRef} type="file" accept=".ics" onChange={handleFile} style={{ display: "none" }} />
@@ -4343,16 +4066,16 @@ function DutySchedulePanel() {
     <div style={{ padding: "20px" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-        <div style={{ fontSize: "11px", color: "#6ee7b7", letterSpacing: "2px", fontFamily: "'JetBrains Mono', monospace" }}>
+        <div style={{ fontSize: FS.xs, color: C.textSub, letterSpacing: "1px", fontFamily: "'JetBrains Mono', monospace" }}>
           ▸ DUTY SCHEDULE — {events.length} EVENTS LOADED
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
           <button onClick={() => fileRef.current?.click()}
-            style={{ background: "rgba(110,231,183,0.15)", border: "1px solid rgba(110,231,183,0.3)", color: "#6ee7b7", padding: "4px 10px", borderRadius: "3px", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>
+            style={{ background: "rgba(110,231,183,0.15)", border: "1px solid rgba(110,231,183,0.3)", color: "#6ee7b7", padding: "4px 10px", borderRadius: "3px", fontSize: FS.xs, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>
             ↑ RELOAD
           </button>
           <button onClick={clearData}
-            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", padding: "4px 10px", borderRadius: "3px", fontSize: "10px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>
+            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", padding: "4px 10px", borderRadius: "3px", fontSize: FS.xs, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace" }}>
             ✕ CLEAR
           </button>
           <input ref={fileRef} type="file" accept=".ics" onChange={handleFile} style={{ display: "none" }} />
@@ -4363,70 +4086,70 @@ function DutySchedulePanel() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "20px" }}>
         {/* Current Status */}
         <div style={{ background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px", padding: "14px" }}>
-          <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "8px" }}>CURRENT STATUS</div>
+          <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", marginBottom: "8px" }}>CURRENT STATUS</div>
           {currentEvent ? (
             <>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: DUTY_COLORS[currentEvent.type] || "#94a3b8", boxShadow: `0 0 8px ${DUTY_COLORS[currentEvent.type]}`, animation: "statusBlink 2s ease infinite" }} />
-                <span style={{ background: DUTY_COLORS[currentEvent.type] || "#94a3b8", color: currentEvent.type === "OFF" ? "#e2e8f0" : "#030810", padding: "2px 8px", borderRadius: "3px", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: DUTY_COLORS[currentEvent.type] || "#94a3b8", animation: "statusBlink 2s ease infinite" }} />
+                <span style={{ background: DUTY_COLORS[currentEvent.type] || "#94a3b8", color: currentEvent.type === "OFF" ? "#e2e8f0" : "#030810", padding: "2px 8px", borderRadius: "3px", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
                   {currentEvent.type}
                 </span>
               </div>
               {currentEvent.route.length > 0 && (
-                <div style={{ color: "#e2e8f0", fontSize: "16px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ color: "#e2e8f0", fontSize: FS.md, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
                   {currentEvent.route.join(" → ")}
                 </div>
               )}
-              {currentEvent.type === "NON-FLY" && <div style={{ color: "#fbbf24", fontSize: "14px", fontWeight: 600 }}>STAY: {currentEvent.summary.match(/\(([^)]+)\)/)?.[1] || ""}</div>}
-              {currentEvent.type === "OFF" && <div style={{ color: "#94a3b8", fontSize: "14px" }}>REST DAY</div>}
-              {currentEvent.type === "STANDBY" && <div style={{ color: "#c4b5fd", fontSize: "14px" }}>STANDBY</div>}
-              <div style={{ color: "#64748b", fontSize: "10px", marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>
+              {currentEvent.type === "NON-FLY" && <div style={{ color: "#fbbf24", fontSize: FS.md, fontWeight: 600 }}>STAY: {currentEvent.summary.match(/\(([^)]+)\)/)?.[1] || ""}</div>}
+              {currentEvent.type === "OFF" && <div style={{ color: "#94a3b8", fontSize: FS.md }}>REST DAY</div>}
+              {currentEvent.type === "STANDBY" && <div style={{ color: "#c4b5fd", fontSize: FS.md }}>STANDBY</div>}
+              <div style={{ color: C.textMuted, fontSize: FS.xs, marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>
                 {fmtZ(currentEvent.start)} – {fmtZ(currentEvent.end)} ({fmtJST(currentEvent.start)} – {fmtJST(currentEvent.end)} JST)
               </div>
             </>
           ) : (
-            <div style={{ color: "#475569", fontSize: "12px", marginTop: "4px" }}>NO ACTIVE DUTY</div>
+            <div style={{ color: C.textMuted, fontSize: FS.sm, marginTop: "4px" }}>NO ACTIVE DUTY</div>
           )}
         </div>
 
         {/* Next Flight */}
         <div style={{ background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px", padding: "14px" }}>
-          <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "8px" }}>NEXT FLIGHT</div>
+          <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", marginBottom: "8px" }}>NEXT FLIGHT</div>
           {nextFly ? (
             <>
-              <div style={{ color: "#e2e8f0", fontSize: "16px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" }}>
+              <div style={{ color: "#e2e8f0", fontSize: FS.md, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: "4px" }}>
                 {nextFly.route.join(" → ")}
               </div>
-              <div style={{ color: "#6ee7b7", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
+              <div style={{ color: "#6ee7b7", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
                 {fmtDate(nextFly.start)} {fmtZ(nextFly.start)}
               </div>
-              <div style={{ color: "#64748b", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace" }}>
+              <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
                 ({fmtJST(nextFly.start)} JST)
               </div>
               {countdown(nextFly) && (
-                <div style={{ color: "#fbbf24", fontSize: "20px", fontWeight: 700, marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ color: "#fbbf24", fontSize: FS.lg, fontWeight: 700, marginTop: "6px", fontFamily: "'JetBrains Mono', monospace" }}>
                   T-{countdown(nextFly)}
                 </div>
               )}
             </>
           ) : (
-            <div style={{ color: "#475569", fontSize: "12px", marginTop: "4px" }}>NO UPCOMING FLIGHTS</div>
+            <div style={{ color: C.textMuted, fontSize: FS.sm, marginTop: "4px" }}>NO UPCOMING FLIGHTS</div>
           )}
         </div>
 
         {/* Monthly Summary */}
         <div style={{ background: "rgba(5,10,20,0.8)", border: "1px solid rgba(110,231,183,0.12)", borderRadius: "4px", padding: "14px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-            <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px" }}>MONTHLY SUMMARY</div>
+            <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px" }}>MONTHLY SUMMARY</div>
             <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
               <button onClick={() => setSummaryMonth(p => { const d = new Date(p); d.setMonth(d.getMonth() - 1); return d; })} style={{
-                background: "none", border: "none", color: "#64748b", fontSize: "10px", cursor: "pointer", padding: "0 4px", fontFamily: "'JetBrains Mono', monospace",
+                background: "none", border: "none", color: C.textMuted, fontSize: FS.xs, cursor: "pointer", padding: "0 4px", fontFamily: "'JetBrains Mono', monospace",
               }}>◀</button>
-              <span style={{ color: "#94a3b8", fontSize: "10px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", minWidth: "60px", textAlign: "center" }}>
+              <span style={{ color: "#94a3b8", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", minWidth: "60px", textAlign: "center" }}>
                 {summaryMonth.getFullYear()}/{String(summaryMonth.getMonth() + 1).padStart(2, "0")}
               </span>
               <button onClick={() => setSummaryMonth(p => { const d = new Date(p); d.setMonth(d.getMonth() + 1); return d; })} style={{
-                background: "none", border: "none", color: "#64748b", fontSize: "10px", cursor: "pointer", padding: "0 4px", fontFamily: "'JetBrains Mono', monospace",
+                background: "none", border: "none", color: C.textMuted, fontSize: FS.xs, cursor: "pointer", padding: "0 4px", fontFamily: "'JetBrains Mono', monospace",
               }}>▶</button>
             </div>
           </div>
@@ -4447,31 +4170,31 @@ function DutySchedulePanel() {
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                 {total === 0 ? (
-                  <div style={{ color: "#334155", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", textAlign: "center", padding: "8px 0" }}>NO DATA</div>
+                  <div style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", textAlign: "center", padding: "8px 0" }}>NO DATA</div>
                 ) : (<>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>FLY LEGS</span>
-                  <span style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{flyCount}</span>
+                  <span style={{ color: "#6ee7b7", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>FLY LEGS</span>
+                  <span style={{ color: "#e2e8f0", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{flyCount}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#6ee7b7", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>DUTY TIME</span>
-                  <span style={{ color: "#e2e8f0", fontSize: "11px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{flyH}h{flyM}m</span>
+                  <span style={{ color: "#6ee7b7", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>DUTY TIME</span>
+                  <span style={{ color: "#e2e8f0", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{flyH}h{flyM}m</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#475569", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>OFF DAYS</span>
-                  <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{offCount}</span>
+                  <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>OFF DAYS</span>
+                  <span style={{ color: "#94a3b8", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>{offCount}</span>
                 </div>
                 {stbyCount > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#c4b5fd", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>STANDBY</span>
-                  <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{stbyCount}</span>
+                  <span style={{ color: "#c4b5fd", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>STANDBY</span>
+                  <span style={{ color: "#94a3b8", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>{stbyCount}</span>
                 </div>}
                 {gndCount > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#67e8f9", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>GROUND</span>
-                  <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{gndCount}</span>
+                  <span style={{ color: "#67e8f9", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>GROUND</span>
+                  <span style={{ color: "#94a3b8", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>{gndCount}</span>
                 </div>}
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#fbbf24", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace" }}>STAYS</span>
-                  <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>{nonFlyCount}</span>
+                  <span style={{ color: "#fbbf24", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>STAYS</span>
+                  <span style={{ color: "#94a3b8", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>{nonFlyCount}</span>
                 </div>
                 </>)}
               </div>
@@ -4481,7 +4204,7 @@ function DutySchedulePanel() {
       </div>
 
       {/* 7-Day Timeline */}
-      <div style={{ fontSize: "9px", color: "#64748b", letterSpacing: "1px", marginBottom: "10px" }}>7-DAY SCHEDULE</div>
+      <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px", marginBottom: "10px" }}>7-DAY SCHEDULE</div>
       {days.map((day, di) => {
         const isToday = di === 0;
         // Get trip summaries that start on this day
@@ -4500,7 +4223,7 @@ function DutySchedulePanel() {
               borderRadius: "2px",
             }}>
               <span style={{
-                color: isToday ? "#6ee7b7" : "#94a3b8", fontSize: "11px", fontWeight: 700,
+                color: isToday ? "#6ee7b7" : "#94a3b8", fontSize: FS.xs, fontWeight: 700,
                 fontFamily: "'JetBrains Mono', monospace", minWidth: "110px",
               }}>
                 {isToday ? "▶ " : "  "}{fmtDate(day.date)}
@@ -4514,7 +4237,7 @@ function DutySchedulePanel() {
                       <span key={t} style={{
                         background: DUTY_COLORS[t] || "#94a3b8",
                         color: t === "OFF" ? "#e2e8f0" : "#030810",
-                        padding: "1px 6px", borderRadius: "2px", fontSize: "8px", fontWeight: 700,
+                        padding: "1px 6px", borderRadius: "2px", fontSize: FS.xs, fontWeight: 700,
                         fontFamily: "'JetBrains Mono', monospace", opacity: 0.8,
                       }}>{t}</span>
                     ));
@@ -4524,7 +4247,7 @@ function DutySchedulePanel() {
             </div>
             {/* Events */}
             {day.events.length === 0 ? (
-              <div style={{ padding: "4px 12px 4px 24px", color: "#1e293b", fontSize: "10px" }}>—</div>
+              <div style={{ padding: "4px 12px 4px 24px", color: C.textMuted, fontSize: FS.xs }}>—</div>
             ) : (
               day.events.map((ev, ei) => {
                 const col = DUTY_COLORS[ev.type] || "#94a3b8";
@@ -4543,30 +4266,30 @@ function DutySchedulePanel() {
                   }}>
                     {/* Current indicator */}
                     {isCurrent ? (
-                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", boxShadow: "0 0 8px #6ee7b7", animation: "statusBlink 2s ease infinite", flexShrink: 0 }} />
+                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", animation: "statusBlink 2s ease infinite", flexShrink: 0 }} />
                     ) : (
                       <div style={{ width: "6px", flexShrink: 0 }} />
                     )}
                     {/* Time UTC */}
-                    <span style={{ color: "#64748b", fontSize: "10px", fontFamily: "'JetBrains Mono', monospace", minWidth: "95px" }}>
+                    <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", minWidth: "95px" }}>
                       {fmtZ(ev.start)}–{fmtZ(ev.end)}
                     </span>
                     {/* Time JST */}
-                    <span style={{ color: "#334155", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", minWidth: "75px" }}>
+                    <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", minWidth: "75px" }}>
                       {fmtJST(ev.start)}-{fmtJST(ev.end)}L
                     </span>
                     {/* Duration */}
-                    <span style={{ color: "#475569", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", minWidth: "40px" }}>
+                    <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", minWidth: "40px" }}>
                       {durStr(ev.start, ev.end)}
                     </span>
                     {/* Type badge */}
                     <span style={{
                       background: col, color: ev.type === "OFF" ? "#e2e8f0" : "#030810",
-                      padding: "2px 8px", borderRadius: "2px", fontSize: "9px", fontWeight: 700,
+                      padding: "2px 8px", borderRadius: "2px", fontSize: FS.xs, fontWeight: 700,
                       fontFamily: "'JetBrains Mono', monospace", minWidth: "58px", textAlign: "center",
                     }}>{ev.type}</span>
                     {/* Route / Location */}
-                    <span style={{ color: "#e2e8f0", fontSize: "12px", fontWeight: ev.type === "FLY" ? 700 : 400, fontFamily: "'JetBrains Mono', monospace" }}>
+                    <span style={{ color: "#e2e8f0", fontSize: FS.sm, fontWeight: ev.type === "FLY" ? 700 : 400, fontFamily: "'JetBrains Mono', monospace" }}>
                       {ev.type === "FLY" && ev.route.length > 0
                         ? ev.route.join(" → ")
                         : ev.type === "NON-FLY"
@@ -4578,7 +4301,7 @@ function DutySchedulePanel() {
                     </span>
                     {/* Leg indicator for multi-leg trips */}
                     {isMultiLeg && ev.type === "FLY" && (
-                      <span style={{ color: "#334155", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace", marginLeft: "auto" }}>
+                      <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", marginLeft: "auto" }}>
                         LEG {tripEvts.filter(e => e.type === "FLY").indexOf(ev) + 1}/{tripEvts.filter(e => e.type === "FLY").length}
                       </span>
                     )}
@@ -4653,17 +4376,17 @@ function LiveCameraPanel() {
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <div>
-              <span style={{ color: "#e2e8f0", fontSize: "10px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>
+              <span style={{ color: "#e2e8f0", fontSize: FS.xs, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>
                 {cam.name}
               </span>
-              <span style={{ color: "#6ee7b7", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginLeft: "6px" }}>
+              <span style={{ color: "#6ee7b7", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", marginLeft: "6px" }}>
                 {cam.code}
               </span>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 6px #ef4444", animation: "livePulse 2s ease infinite" }} />
-            <span style={{ fontSize: "8px", color: "#ef4444", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>LIVE</span>
+            <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#ef4444", animation: "livePulse 2s ease infinite" }} />
+            <span style={{ fontSize: FS.xs, color: "#ef4444", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>LIVE</span>
           </div>
         </div>
 
@@ -4678,48 +4401,32 @@ function LiveCameraPanel() {
             />
           ) : (
             <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-              <span style={{ fontSize: "24px", opacity: 0.3 }}>📷</span>
-              <span style={{ fontSize: "9px", color: "#334155", fontFamily: "'JetBrains Mono', monospace" }}>NO FEED</span>
+              <span style={{ fontSize: FS.xl, opacity: 0.3 }}>📷</span>
+              <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>NO FEED</span>
             </div>
           )}
-          {/* コーナーブラケット */}
-          {[[0, 0], [0, 1], [1, 0], [1, 1]].map(([t, l], i) => (
-            <div key={i} style={{
-              position: "absolute",
-              top: t ? "auto" : "4px", bottom: t ? "4px" : "auto",
-              left: l ? "auto" : "4px", right: l ? "4px" : "auto",
-              width: "10px", height: "10px",
-              borderTop: t ? "none" : "1px solid rgba(110,231,183,0.35)",
-              borderBottom: t ? "1px solid rgba(110,231,183,0.35)" : "none",
-              borderLeft: l ? "none" : "1px solid rgba(110,231,183,0.35)",
-              borderRight: l ? "1px solid rgba(110,231,183,0.35)" : "none",
-              pointerEvents: "none",
-            }} />
-          ))}
           {/* タイムスタンプ */}
-          <div style={{ position: "absolute", bottom: "4px", left: "6px", fontSize: "8px", color: "rgba(255,255,255,0.6)", fontFamily: "'JetBrains Mono', monospace", textShadow: "0 1px 3px #000" }}>
+          <div style={{ position: "absolute", bottom: "4px", left: "6px", fontSize: FS.xs, color: "rgba(255,255,255,0.6)", fontFamily: "'JetBrains Mono', monospace", }}>
             {new Date().toISOString().slice(11, 16)}z — JAL/WNI
           </div>
-          {/* スキャンライン */}
-          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px)" }} />
         </div>
 
         {/* フッター：リンク＋日出没 */}
-        <div style={{ padding: "5px 8px", background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: "6px" }}>
+        <div style={{ padding: "5px 8px", background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "4px 8px" }}>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
             <a href={`https://www.youtube.com/results?search_query=${cam.ytSearch}`} target="_blank" rel="noopener noreferrer"
-              style={{ padding: "2px 8px", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "2px", color: "#ef4444", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>
+              style={{ padding: "2px 8px", background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "2px", color: "#ef4444", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>
               ▶ YT LIVE
             </a>
             <a href={`https://www.flightradar24.com/${cam.code}/airport`} target="_blank" rel="noopener noreferrer"
-              style={{ padding: "2px 8px", background: "rgba(110,231,183,0.08)", border: "1px solid rgba(110,231,183,0.2)", borderRadius: "2px", color: "#6ee7b7", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>
+              style={{ padding: "2px 8px", background: "rgba(110,231,183,0.08)", border: "1px solid rgba(110,231,183,0.2)", borderRadius: "2px", color: "#6ee7b7", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace", textDecoration: "none" }}>
               ↗ FR24
             </a>
           </div>
           {sun && (
-            <div style={{ display: "flex", gap: "8px", fontSize: "8px", fontFamily: "'JetBrains Mono', monospace" }}>
+            <div style={{ display: "flex", gap: "8px", fontSize: FS.xs, fontFamily: "'JetBrains Mono', monospace" }}>
               <span style={{ color: "#fbbf24" }}>↑{sun.rise}z</span>
-              <span style={{ color: "#64748b" }}>↓{sun.set}z</span>
+              <span style={{ color: C.textMuted }}>↓{sun.set}z</span>
             </div>
           )}
         </div>
@@ -4734,16 +4441,16 @@ function LiveCameraPanel() {
       {/* ヘッダー */}
       <div style={{ marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div style={{ fontSize: "10px", color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "3px", fontWeight: 700, textShadow: "0 0 8px rgba(110,231,183,0.5)" }}>
+          <div style={{ fontSize: FS.xs, color: C.textSub, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", fontWeight: 700, }}>
             ◈ AIRPORT SURVEILLANCE MONITOR
           </div>
-          <div style={{ fontSize: "9px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", marginTop: "3px" }}>
+          <div style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", marginTop: "3px" }}>
             JAL/WeatherNews LIVE FEED — 60s AUTO REFRESH
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-          <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 8px #ef4444", animation: "livePulse 2s ease infinite" }} />
-          <span style={{ fontSize: "9px", color: "#ef4444", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px" }}>REC</span>
+          <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#ef4444", animation: "livePulse 2s ease infinite" }} />
+          <span style={{ fontSize: FS.xs, color: "#ef4444", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>REC</span>
         </div>
       </div>
 
@@ -4854,17 +4561,17 @@ function SystemStatusIndicator({ sysStatus }) {
     <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
       {items.map((s) => (
         <div key={s.label} style={{ textAlign: "center", position: "relative" }}>
-          <div style={{ fontSize: "8px", color: "#334155", letterSpacing: "1.5px" }}>{s.label}</div>
+          <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px" }}>{s.label}</div>
           <div style={{ display: "flex", alignItems: "center", gap: "4px", justifyContent: "center" }}>
             <div style={{
               width: "5px", height: "5px", borderRadius: "50%",
               background: s.color,
-              boxShadow: `0 0 6px ${s.color}, 0 0 12px ${s.color}60`,
+              
               animation: s.state === "OFFLINE" ? "statusBlink 1s ease infinite" : "none",
             }} />
             <span style={{
-              fontSize: "10px", fontWeight: 700, color: s.color,
-              letterSpacing: "1px", textShadow: `0 0 8px ${s.color}`,
+              fontSize: FS.xs, fontWeight: 700, color: s.color,
+              letterSpacing: "1px", 
               fontFamily: "'JetBrains Mono', monospace",
             }}>{s.state}</span>
           </div>
@@ -4873,10 +4580,10 @@ function SystemStatusIndicator({ sysStatus }) {
       {/* 総合ステータス区切り線 + overall */}
       <div style={{ width: "1px", height: "24px", background: "rgba(110,231,183,0.15)", margin: "0 2px" }} />
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: "8px", color: "#334155", letterSpacing: "1.5px" }}>SYSTEM</div>
+        <div style={{ fontSize: FS.xs, color: C.textMuted, letterSpacing: "1px" }}>SYSTEM</div>
         <div style={{
-          fontSize: "10px", fontWeight: 700, color: overall.color,
-          letterSpacing: "1px", textShadow: `0 0 8px ${overall.color}`,
+          fontSize: FS.xs, fontWeight: 700, color: overall.color,
+          letterSpacing: "1px", 
           fontFamily: "'JetBrains Mono', monospace",
         }}>{overall.state}</div>
       </div>
@@ -5054,25 +4761,25 @@ function WeatherAlertBanner() {
                   width: "18px", height: "10px", borderRadius: "1px",
                   background: on ? barColor(lv) : "rgba(110,231,183,0.06)",
                   border: levelKnown ? `1px solid ${on ? barColor(lv) : "rgba(110,231,183,0.08)"}` : `1px dashed ${threat.border}80`,
-                  boxShadow: on ? `0 0 6px ${barColor(lv)}60` : "none",
+                  
                   transition: "all 0.3s ease",
                 }} />
               );
             })}
           </div>
           <span role="status" style={{
-            fontSize: "11px", fontWeight: 700,
+            fontSize: FS.xs, fontWeight: 700,
             color: threat.text,
             fontFamily: mono,
-            letterSpacing: "2px",
-            textShadow: `0 0 10px ${threat.glow}`,
+            letterSpacing: "1px",
+            
           }}>{threat.label}{levelKnown && maxLevel > 0 && !fullyConfirmed ? "（一部未確認）" : ""}</span>
           {levelKnown && (
-            <span style={{ fontSize: "11px", color: "#cbd5e1", fontFamily: mono }}>{alerts.length}件</span>
+            <span style={{ fontSize: FS.xs, color: "#cbd5e1", fontFamily: mono }}>{alerts.length}件</span>
           )}
-          {attempting && <span style={{ fontSize: "11px", color: "#94a3b8", fontFamily: mono }}>更新中…</span>}
+          {attempting && <span style={{ fontSize: FS.xs, color: "#94a3b8", fontFamily: mono }}>更新中…</span>}
         </div>
-        <div style={{ fontSize: "10px", color: "#94a3b8", fontFamily: mono, letterSpacing: "0.5px" }}>
+        <div style={{ fontSize: FS.xs, color: "#94a3b8", fontFamily: mono, letterSpacing: "0.5px" }}>
           JMA 警報・注意報 / {ALERT_WATCH_AREAS.map((a) => a.name).join("・")}
         </div>
       </div>
@@ -5081,7 +4788,7 @@ function WeatherAlertBanner() {
       {!initial && (
         <div style={{
           display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px 14px",
-          padding: "0 24px 6px", fontSize: "11px", fontFamily: mono, color: "#94a3b8",
+          padding: "0 24px 6px", fontSize: FS.xs, fontFamily: mono, color: "#94a3b8",
         }}>
           <span style={{ color: failed.length ? "#fcd34d" : "#94a3b8" }}>
             取得 {confirmed.length}/{entries.length}地域{failed.length > 0 && ` · 失敗: ${failedNames}`}
@@ -5099,7 +4806,7 @@ function WeatherAlertBanner() {
           <button onClick={() => runRef.current?.()} disabled={attempting} aria-label="警報・注意報を再取得" style={{
             padding: "2px 10px", borderRadius: "3px", cursor: attempting ? "default" : "pointer",
             background: "transparent", border: `1px solid ${failed.length ? "rgba(245,158,11,0.6)" : "rgba(148,163,184,0.4)"}`,
-            color: failed.length ? "#fcd34d" : "#cbd5e1", fontSize: "11px", fontFamily: mono,
+            color: failed.length ? "#fcd34d" : "#cbd5e1", fontSize: FS.xs, fontFamily: mono,
           }}>{failed.length ? "再取得" : "更新"}</button>
         </div>
       )}
@@ -5120,7 +4827,7 @@ function WeatherAlertBanner() {
           }}>
             {alerts.map((a, i) => (
               <span key={i} style={{
-                fontSize: "11px",
+                fontSize: FS.xs,
                 fontFamily: mono,
                 color: a.textColor,
                 marginRight: "32px",
@@ -5136,14 +4843,14 @@ function WeatherAlertBanner() {
 
       {/* 警報なし・未確認・取得不能時のメッセージ */}
       {levelKnown && alerts.length === 0 && (
-        <div style={{ padding: "0 24px 6px", fontSize: "11px", fontFamily: mono, color: fullyConfirmed ? "#94a3b8" : "#fcd34d" }}>
+        <div style={{ padding: "0 24px 6px", fontSize: FS.xs, fontFamily: mono, color: fullyConfirmed ? "#94a3b8" : "#fcd34d" }}>
           {fullyConfirmed
             ? "NO ACTIVE WARNINGS — 監視6地域すべて確認済み・警報/注意報なし"
             : `確認できた${confirmed.filter((e) => !staleAreas.includes(e)).length}地域に警報・注意報なし／${[...new Set([...failed, ...staleAreas].map((e) => e.name))].join("・")} は未確認`}
         </div>
       )}
       {allUnknown && (
-        <div style={{ padding: "0 24px 6px", fontSize: "11px", fontFamily: mono, color: "#fcd34d" }}>
+        <div style={{ padding: "0 24px 6px", fontSize: FS.xs, fontFamily: mono, color: "#fcd34d" }}>
           6地域すべてで取得に失敗しました（{failed[0]?.st?.error || "通信エラー"}）。警報の有無は不明です — 公式情報で確認してください
         </div>
       )}
@@ -5250,13 +4957,13 @@ function EventLog() {
         background: "rgba(0,0,0,0.4)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ color: "#334155", fontSize: "8px", letterSpacing: "2px" }}>EVENT LOG</span>
-          <span style={{ color: "#1e293b", fontSize: "8px" }}>|</span>
-          <span style={{ color: "#334155", fontSize: "8px" }}>{logs.length} ENTRIES</span>
+          <span style={{ color: C.textMuted, fontSize: FS.xs, letterSpacing: "1px" }}>EVENT LOG</span>
+          <span style={{ color: C.textMuted, fontSize: FS.xs }}>|</span>
+          <span style={{ color: C.textMuted, fontSize: FS.xs }}>{logs.length} ENTRIES</span>
         </div>
         <button onClick={() => setExpanded(e => !e)} style={{
-          background: "none", border: "none", color: "#475569",
-          fontSize: "9px", cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
+          background: "none", border: "none", color: C.textMuted,
+          fontSize: FS.xs, cursor: "pointer", fontFamily: "'JetBrains Mono', monospace",
           letterSpacing: "1px",
         }}>{expanded ? "▼ COLLAPSE" : "▲ EXPAND"}</button>
       </div>
@@ -5277,18 +4984,18 @@ function EventLog() {
               padding: "2px 0",
               borderBottom: "1px solid rgba(110,231,183,0.02)",
             }}>
-              <span style={{ color: "#1e293b", fontSize: "9px", flexShrink: 0, minWidth: "60px" }}>{log.ts}z</span>
-              <span style={{ fontSize: "9px", flexShrink: 0 }}>{cfg.icon}</span>
+              <span style={{ color: C.textMuted, fontSize: FS.xs, flexShrink: 0, minWidth: "60px" }}>{log.ts}z</span>
+              <span style={{ fontSize: FS.xs, flexShrink: 0 }}>{cfg.icon}</span>
               <span style={{
-                fontSize: "9px", fontWeight: 700, color: cfg.color,
+                fontSize: FS.xs, fontWeight: 700, color: cfg.color,
                 letterSpacing: "1px", flexShrink: 0, minWidth: "44px",
               }}>{log.type}</span>
-              <span style={{ fontSize: "9px", color: "#64748b" }}>{log.message}</span>
+              <span style={{ fontSize: FS.xs, color: C.textMuted }}>{log.message}</span>
             </div>
           );
         })}
         {logs.length === 0 && (
-          <div style={{ color: "#1e293b", fontSize: "9px", padding: "8px 0", textAlign: "center" }}>
+          <div style={{ color: C.textMuted, fontSize: FS.xs, padding: "8px 0", textAlign: "center" }}>
             AWAITING EVENTS...
           </div>
         )}
@@ -5357,13 +5064,13 @@ function BootSequence({ onComplete, sysStatus }) {
         <div style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: "52px", height: "52px", border: "2px solid #6ee7b7", borderRadius: "4px",
-          fontSize: "28px", boxShadow: "0 0 24px rgba(110,231,183,0.35)", marginBottom: "14px",
+          fontSize: FS.xl, marginBottom: "14px",
         }}>✈</div>
-        <div style={{ fontSize: "20px", fontWeight: 700, letterSpacing: "5px", color: "#e2e8f0" }}>PRE-FLIGHT WX BRIEFING</div>
+        <div style={{ fontSize: FS.lg, fontWeight: 700, letterSpacing: "1px", color: "#e2e8f0" }}>PRE-FLIGHT WX BRIEFING</div>
 
         <div style={{ marginTop: "22px", display: "grid", gap: "6px", textAlign: "left" }}>
           {rows.map((r) => (
-            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", fontSize: FS.sm }}>
               <span style={{ color: "#94a3b8" }}>{r.label}</span>
               <span style={{ color: r.color, fontWeight: 700 }}>{r.state === "CHECKING" ? "CHECKING…" : r.state}</span>
             </div>
@@ -5374,13 +5081,13 @@ function BootSequence({ onComplete, sysStatus }) {
           <div style={{
             marginTop: "16px", padding: "8px 10px", borderRadius: "4px",
             border: "1px solid rgba(245,158,11,0.5)", background: "rgba(245,158,11,0.1)",
-            color: "#f59e0b", fontSize: "12px", fontWeight: 700, letterSpacing: "1px",
+            color: "#f59e0b", fontSize: FS.sm, fontWeight: 700, letterSpacing: "1px",
           }}>
             CACHED DATA MODE — オフラインのため保存済みデータを表示します
           </div>
         )}
 
-        <div style={{ marginTop: "18px", color: "#94a3b8", fontSize: "11px" }}>タップまたは任意のキーでスキップ</div>
+        <div style={{ marginTop: "18px", color: "#94a3b8", fontSize: FS.xs }}>タップまたは任意のキーでスキップ</div>
       </div>
     </div>
   );
@@ -5517,7 +5224,7 @@ export default function WeatherBriefing() {
     satellite: <SatellitePanel />,
     radar: <RadarPanel />,
     analysis: <AnalysisPanel />,
-    charts: <WxChartsPanel />,
+    charts: <WxChartsGallery />,
     opswx: <OpsWxPanel />,
     livecam: <LiveCameraPanel />,
     duty: <DutySchedulePanel />,
@@ -5612,13 +5319,13 @@ export default function WeatherBriefing() {
             borderRadius: "6px",
             padding: "28px 36px",
             maxWidth: "420px",
-            boxShadow: "0 0 40px rgba(110,231,183,0.1)",
+            
           }} onClick={e => e.stopPropagation()}>
             <div style={{
-              fontSize: "12px", fontWeight: 700, color: "#6ee7b7",
+              fontSize: FS.sm, fontWeight: 700, color: C.text,
               fontFamily: "'JetBrains Mono', monospace",
-              letterSpacing: "3px", marginBottom: "20px",
-              textShadow: "0 0 10px rgba(110,231,183,0.5)",
+              letterSpacing: "1px", marginBottom: "20px",
+              
             }}>◈ KEYBOARD SHORTCUTS</div>
             {[
               { keys: "1-9", desc: "タブ切り替え（METAR / 衛星 / レーダー / 解析 / CHARTS / OPS / CAM / DUTY / SEVERE）" },
@@ -5639,36 +5346,26 @@ export default function WeatherBriefing() {
                   background: "rgba(110,231,183,0.08)",
                   border: "1px solid rgba(110,231,183,0.25)",
                   borderRadius: "3px",
-                  color: "#6ee7b7", fontSize: "11px", fontWeight: 700,
+                  color: "#6ee7b7", fontSize: FS.xs, fontWeight: 700,
                   fontFamily: "'JetBrains Mono', monospace",
                   letterSpacing: "1px",
                   minWidth: "52px", textAlign: "center",
                 }}>{s.keys}</span>
                 <span style={{
-                  color: "#94a3b8", fontSize: "11px",
+                  color: "#94a3b8", fontSize: FS.xs,
                   fontFamily: "'JetBrains Mono', monospace",
                 }}>{s.desc}</span>
               </div>
             ))}
             <div style={{
               marginTop: "16px", textAlign: "center",
-              color: "#334155", fontSize: "9px",
+              color: C.textMuted, fontSize: FS.xs,
               fontFamily: "'JetBrains Mono', monospace",
               letterSpacing: "1px",
             }}>PRESS ? OR ESC TO CLOSE</div>
           </div>
         </div>
       )}
-      {/* Scanline overlay */}
-      <div style={{
-        position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999,
-        backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px)",
-      }} />
-      {/* Radial vignette */}
-      <div style={{
-        position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9998,
-        background: "radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.5) 100%)",
-      }} />
 
       {/* ===== HEADER ===== */}
       <div style={{
@@ -5687,19 +5384,19 @@ export default function WeatherBriefing() {
             border: "2px solid #6ee7b7",
             borderRadius: "3px",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "20px",
-            boxShadow: "0 0 16px rgba(110,231,183,0.3), inset 0 0 16px rgba(110,231,183,0.05)",
+            fontSize: FS.lg,
+            
           }}>✈</div>
           <div>
             <div style={{
-              fontSize: "18px", fontWeight: 700,
-              letterSpacing: "4px", color: "#e2e8f0",
-              textShadow: "0 0 20px rgba(226,232,240,0.3)",
+              fontSize: FS.lg, fontWeight: 700,
+              letterSpacing: "1px", color: "#e2e8f0",
+              
               fontFamily: "'JetBrains Mono', monospace",
             }}>PRE-FLIGHT WX BRIEFING</div>
             <div style={{
-              fontSize: "9px", color: "#334155",
-              letterSpacing: "3px", fontFamily: "'JetBrains Mono', monospace",
+              fontSize: FS.xs, color: C.textMuted,
+              letterSpacing: "1px", fontFamily: "'JetBrains Mono', monospace",
               marginTop: "2px",
             }}>◈ WEATHER INTELLIGENCE DASHBOARD · OPERATIONAL USE ONLY</div>
           </div>
@@ -5721,10 +5418,10 @@ export default function WeatherBriefing() {
               border: "1px solid rgba(251, 191, 36, 0.4)",
               borderRadius: "3px",
             }}>
-              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#fbbf24", boxShadow: "0 0 6px #fbbf24" }} />
-              <span style={{ fontSize: "9px", color: "#fbbf24", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, letterSpacing: "1px" }}>OFFLINE</span>
+              <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#fbbf24", }} />
+              <span style={{ fontSize: FS.xs, color: "#fbbf24", fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, letterSpacing: "1px" }}>OFFLINE</span>
               {cacheInfo && (
-                <span style={{ fontSize: "8px", color: "#92702a", fontFamily: "'JetBrains Mono', monospace" }}>
+                <span style={{ fontSize: FS.xs, color: "#92702a", fontFamily: "'JetBrains Mono', monospace" }}>
                   {new Date(cacheInfo.ts).toISOString().slice(11,16)}z
                 </span>
               )}
@@ -5740,8 +5437,8 @@ export default function WeatherBriefing() {
               background: cacheState === "done" ? "rgba(110,231,183,0.15)" : cacheState === "caching" ? "rgba(251,191,36,0.1)" : "rgba(110,231,183,0.06)",
               border: `1px solid ${cacheState === "done" ? "rgba(110,231,183,0.5)" : cacheState === "caching" ? "rgba(251,191,36,0.3)" : "rgba(110,231,183,0.2)"}`,
               borderRadius: "3px",
-              color: cacheState === "done" ? "#6ee7b7" : cacheState === "caching" ? "#fbbf24" : "#64748b",
-              fontSize: "9px", fontWeight: 700,
+              color: cacheState === "done" ? "#6ee7b7" : cacheState === "caching" ? "#fbbf24" : C.textMuted,
+              fontSize: FS.xs, fontWeight: 700,
               fontFamily: "'JetBrains Mono', monospace",
               letterSpacing: "1px",
               cursor: cacheState === "caching" || isOffline ? "default" : "pointer",
@@ -5761,7 +5458,7 @@ export default function WeatherBriefing() {
                 border: "1px solid rgba(239,68,68,0.2)",
                 borderRadius: "3px",
                 color: "#ef4444",
-                fontSize: "9px", fontWeight: 700,
+                fontSize: FS.xs, fontWeight: 700,
                 fontFamily: "'JetBrains Mono', monospace",
                 cursor: "pointer",
               }}
@@ -5802,7 +5499,7 @@ export default function WeatherBriefing() {
       {/* ===== TAB BAR ===== */}
       <div style={{
         padding: "0 24px",
-        borderBottom: "1px solid rgba(110, 231, 183, 0.15)",
+        borderBottom: `1px solid ${C.border}`,
         background: "rgba(3, 8, 16, 0.9)",
         backdropFilter: "blur(8px)",
         position: "sticky", top: 0, zIndex: 100,
@@ -5834,11 +5531,11 @@ export default function WeatherBriefing() {
             background: displayMode === "multi" ? "rgba(96,165,250,0.10)" : "transparent",
             border: "none",
             borderBottom: displayMode === "multi" ? "2px solid #60a5fa" : "2px solid transparent",
-            color: displayMode === "multi" ? "#60a5fa" : "#64748b",
-            fontSize: "12px", fontWeight: displayMode === "multi" ? 700 : 500,
+            color: displayMode === "multi" ? "#60a5fa" : C.textMuted,
+            fontSize: FS.sm, fontWeight: displayMode === "multi" ? 700 : 500,
             cursor: "pointer",
-            fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1.5px",
-            textShadow: displayMode === "multi" ? "0 0 8px rgba(96,165,250,0.5)" : "none",
+            fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
+            
             display: "flex", alignItems: "center", gap: "8px",
             transition: "all 0.15s ease",
             flexShrink: 0,
@@ -5854,7 +5551,7 @@ export default function WeatherBriefing() {
               ))}
             </span>
             MULTI
-            <span style={{ fontSize: "8px", color: displayMode === "multi" ? "#60a5fa80" : "#334155", fontFamily: "'JetBrains Mono', monospace" }}>M</span>
+            <span style={{ fontSize: FS.xs, color: displayMode === "multi" ? "#60a5fa80" : C.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>M</span>
           </button>
         </div>
       </div>
@@ -5906,17 +5603,17 @@ export default function WeatherBriefing() {
                       position: "sticky", top: 0, zIndex: 10,
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: "8px", color: "#334155", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>MONITOR {idx + 1}</span>
-                        <span style={{ color: "#475569", fontSize: "8px" }}>|</span>
-                        <span style={{ fontSize: "10px" }}>{tabInfo.icon}</span>
-                        <span style={{ fontSize: "9px", color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", fontWeight: 700 }}>{tabInfo.label}</span>
+                        <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>MONITOR {idx + 1}</span>
+                        <span style={{ color: C.textMuted, fontSize: FS.xs }}>|</span>
+                        <span style={{ fontSize: FS.xs }}>{tabInfo.icon}</span>
+                        <span style={{ fontSize: FS.xs, color: "#6ee7b7", fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px", fontWeight: 700 }}>{tabInfo.label}</span>
                       </div>
                       <button onClick={() => cycleMultiPanel(idx)} style={{
                         padding: "2px 8px",
                         background: "rgba(110,231,183,0.06)",
                         border: "1px solid rgba(110,231,183,0.15)",
                         borderRadius: "2px",
-                        color: "#475569", fontSize: "8px", cursor: "pointer",
+                        color: C.textMuted, fontSize: FS.xs, cursor: "pointer",
                         fontFamily: "'JetBrains Mono', monospace",
                         letterSpacing: "1px",
                       }}>SWITCH ▶</button>
@@ -5944,8 +5641,8 @@ export default function WeatherBriefing() {
       <div style={{
         padding: "12px 24px",
         borderTop: "1px solid rgba(110, 231, 183, 0.08)",
-        textAlign: "center", color: "#1e293b", fontSize: "9px",
-        fontFamily: "'JetBrains Mono', monospace", letterSpacing: "2px",
+        textAlign: "center", color: C.textMuted, fontSize: FS.xs,
+        fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
       }}>
         ◈ FOR REFERENCE ONLY — ALWAYS VERIFY WITH OFFICIAL SOURCES — NOT FOR OPERATIONAL USE WITHOUT CROSS-CHECK ◈
       </div>

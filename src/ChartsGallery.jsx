@@ -1,6 +1,6 @@
 /* ============================================================
    図の一覧（カード）と全画面ビューア
-   WX CHARTS（地上・上空）、SIG WX の国内悪天予想図、ENROUTE の断面図で共用。
+   WX CHARTS（地上・国内悪天・上空）、SIG WX の国内悪天予想図、ENROUTE の断面図で共用。
    タップで全画面（←→キー／左右スワイプで次の図、夜間用の減光）。データは気象庁の公開ソース
    ============================================================ */
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -68,23 +68,28 @@ export function useDimPref() {
 /* ---------- 図の定義 ----------
    kind: wm＝気象庁の天気図一覧（list.json）、png＝固定URLの画像、
          cycle3h＝3時間毎の初期値の画像（urlFor）、pdf＝数値予報天気図の PDF（画像化して表示）
-   ft: 予想時間（無ければ解析図）、aspect: カードの縦横比 */
+   ft: 予想時間（無ければ解析図）、aspect: カードの縦横比
+   cat にない分類（例 "sev"）の図は「すべて」だけに出る。hideInAll の図は分類を選んだときだけ出る */
 const WX_CATS = [
   { key: "all", label: "すべて" },
   { key: "sfc", label: "地上" },
   { key: "upper", label: "上空" },
 ];
 
+const FBJP_CHART = { key: "fbjp", title: "国内悪天予想図", code: "FBJP", kind: "png", url: FBJP_URL };
+
+// 並び：地上天気図 → 国内悪天予想図 → 高層天気図（低い高度から）
 const WX_CHARTS = [
   { key: "spas", cat: "sfc", title: "地上 実況", code: "SPAS", kind: "wm", region: "near", sel: "now" },
   { key: "fsas24", cat: "sfc", title: "24時間 予想", code: "FSAS24", kind: "wm", region: "near", sel: "ft24" },
   { key: "fsas48", cat: "sfc", title: "48時間 予想", code: "FSAS48", kind: "wm", region: "near", sel: "ft48" },
   { key: "asas", cat: "sfc", title: "アジア 実況", code: "ASAS", kind: "wm", region: "asia", sel: "now" },
-  { key: "aupq78", cat: "upper", title: "500/300hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78" },
+  { ...FBJP_CHART, cat: "sev" }, // その日の悪天の全体像（「すべて」だけに表示。SIG WX にも同じ図）
   { key: "aupq35", cat: "upper", title: "850/700hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35" },
-  { key: "aupa25", cat: "upper", title: "250hPa 解析", code: "AUPA25", kind: "pdf", file: "aupa25" },
-  { key: "fupa252", cat: "upper", title: "250hPa 24時間予想", code: "FUPA252", kind: "pdf", file: "fupa252", ft: [24] },
   { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48] },
+  { key: "aupq78", cat: "upper", title: "500/300hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78" },
+  { key: "aupa25", cat: "upper", title: "250hPa 解析", code: "AUPA25", kind: "pdf", file: "aupa25" },
+  { key: "fupa252", cat: "upper", title: "250hPa 24時間予想", code: "FUPA252", kind: "pdf", file: "fupa252", ft: [24], hideInAll: true },
 ];
 
 const WX_LINKS = [
@@ -101,7 +106,7 @@ const WX_LINKS = [
 
 // SIG WX：国内悪天予想図
 const PROG_CHARTS = [
-  { key: "fbjp", title: "国内悪天予想図", code: "FBJP", kind: "png", url: FBJP_URL },
+  FBJP_CHART,
   { key: "fbjp112", title: "国内悪天 12時間予想", code: "FBJP112", kind: "cycle3h", urlFor: fbjp112Url, ft: [12] },
 ];
 const PROG_LINKS = [
@@ -419,7 +424,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
     return () => { clearInterval(auto); clearInterval(clock); };
   }, []);
 
-  const visible = charts.filter((c) => filter === "all" || c.cat === filter);
+  const visible = charts.filter((c) => (filter === "all" ? !c.hideInAll : c.cat === filter));
   const items = visible.map((c) => {
     const d = data[c.key] || {};
     return {
@@ -488,7 +493,7 @@ export default function WxChartsGallery() {
   return (
     <ChartGallery
       title="天気図一覧" charts={WX_CHARTS} cats={WX_CATS} filterKey={FILTER_KEY} links={WX_LINKS}
-      note="出典: 気象庁（天気図・数値予報天気図）。数値予報天気図は PDF を画像化して表示"
+      note="出典: 気象庁（天気図・数値予報天気図・航空気象情報）。数値予報天気図は PDF を画像化して表示。250hPa 24時間予想は「上空」に表示"
     />
   );
 }

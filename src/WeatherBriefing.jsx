@@ -1008,13 +1008,121 @@ function crosswindSeverity(xwKt) {
   return "#f87171";
 }
 
-const IATA_TO_ICAO = {
-  HND: "RJTT", NRT: "RJAA", CTS: "RJCC", OBO: "RJCB", AKJ: "RJEC",
-  AOJ: "RJSA", OKJ: "RJOB", MYJ: "RJOM", FUK: "RJFF", ITM: "RJOO",
-  NGO: "RJGG", NGS: "RJFU", TAK: "RJOT", KMI: "RJFM", KMQ: "RJNK",
-  OIT: "RJFO", TPE: "RCTP",
-};
-function iataToIcao(iata) { return IATA_TO_ICAO[iata?.toUpperCase()] || null; }
+// 空港コード表 [IATA, ICAO, 名称] — 国内の定期便就航空港 ＋ 主要な近隣国際空港
+const AIRPORT_CODE_TABLE = [
+  // 北海道
+  ["CTS", "RJCC", "新千歳"], ["OKD", "RJCO", "札幌丘珠"], ["HKD", "RJCH", "函館"], ["AKJ", "RJEC", "旭川"],
+  ["OBO", "RJCB", "帯広"], ["KUH", "RJCK", "釧路"], ["MMB", "RJCM", "女満別"], ["SHB", "RJCN", "中標津"],
+  ["WKJ", "RJCW", "稚内"], ["MBE", "RJEB", "紋別"], ["RIS", "RJER", "利尻"], ["OIR", "RJEO", "奥尻"],
+  // 東北
+  ["AOJ", "RJSA", "青森"], ["MSJ", "RJSM", "三沢"], ["HNA", "RJSI", "花巻"], ["SDJ", "RJSS", "仙台"],
+  ["AXT", "RJSK", "秋田"], ["ONJ", "RJSR", "大館能代"], ["GAJ", "RJSC", "山形"], ["SYO", "RJSY", "庄内"],
+  ["FKS", "RJSF", "福島"],
+  // 関東・伊豆諸島
+  ["HND", "RJTT", "東京/羽田"], ["NRT", "RJAA", "成田"], ["IBR", "RJAH", "茨城"], ["OIM", "RJTO", "大島"],
+  ["MYE", "RJTQ", "三宅島"], ["HAC", "RJTH", "八丈島"],
+  // 中部・北陸
+  ["NGO", "RJGG", "中部"], ["NKM", "RJNA", "名古屋(小牧)"], ["KIJ", "RJSN", "新潟"], ["TOY", "RJNT", "富山"],
+  ["KMQ", "RJNK", "小松"], ["NTQ", "RJNW", "能登"], ["FSZ", "RJNS", "静岡"], ["MMJ", "RJAF", "松本"],
+  // 関西
+  ["ITM", "RJOO", "伊丹"], ["KIX", "RJBB", "関西"], ["UKB", "RJBE", "神戸"], ["SHM", "RJBD", "南紀白浜"],
+  ["TJH", "RJBT", "但馬"],
+  // 中国・四国
+  ["OKJ", "RJOB", "岡山"], ["HIJ", "RJOA", "広島"], ["UBJ", "RJDC", "山口宇部"], ["IWK", "RJOI", "岩国"],
+  ["IZO", "RJOC", "出雲"], ["YGJ", "RJOH", "米子"], ["TTJ", "RJOR", "鳥取"], ["IWJ", "RJOW", "石見"],
+  ["OKI", "RJNO", "隠岐"], ["TAK", "RJOT", "高松"], ["TKS", "RJOS", "徳島"], ["MYJ", "RJOM", "松山"],
+  ["KCZ", "RJOK", "高知"],
+  // 九州・奄美
+  ["FUK", "RJFF", "福岡"], ["KKJ", "RJFR", "北九州"], ["HSG", "RJFS", "佐賀"], ["NGS", "RJFU", "長崎"],
+  ["KMJ", "RJFT", "熊本"], ["OIT", "RJFO", "大分"], ["KMI", "RJFM", "宮崎"], ["KOJ", "RJFK", "鹿児島"],
+  ["TSJ", "RJDT", "対馬"], ["IKI", "RJDB", "壱岐"], ["FUJ", "RJFE", "五島福江"], ["AXJ", "RJDA", "天草"],
+  ["TNE", "RJFG", "種子島"], ["KUM", "RJFC", "屋久島"], ["KKX", "RJKI", "喜界"], ["ASJ", "RJKA", "奄美"],
+  ["TKN", "RJKN", "徳之島"], ["OKE", "RJKB", "沖永良部"], ["RNJ", "RORY", "与論"],
+  // 沖縄
+  ["OKA", "ROAH", "那覇"], ["UEO", "ROKJ", "久米島"], ["MMY", "ROMY", "宮古"], ["SHI", "RORS", "下地島"],
+  ["ISG", "ROIG", "石垣"], ["OGN", "ROYN", "与那国"], ["KTD", "RORK", "北大東"], ["MMD", "ROMD", "南大東"],
+  ["TRA", "RORT", "多良間"],
+  // 近隣の国際空港
+  ["ICN", "RKSI", "仁川"], ["GMP", "RKSS", "金浦"], ["PUS", "RKPK", "釜山"], ["TPE", "RCTP", "台北桃園"],
+  ["TSA", "RCSS", "台北松山"], ["KHH", "RCKH", "高雄"], ["HKG", "VHHH", "香港"], ["PVG", "ZSPD", "上海浦東"],
+  ["SHA", "ZSSS", "上海虹橋"], ["PEK", "ZBAA", "北京首都"], ["PKX", "ZBAD", "北京大興"], ["BKK", "VTBS", "バンコク"],
+  ["SIN", "WSSS", "シンガポール"], ["MNL", "RPLL", "マニラ"], ["GUM", "PGUM", "グアム"], ["HNL", "PHNL", "ホノルル"],
+];
+const IATA_TO_ICAO = Object.fromEntries(AIRPORT_CODE_TABLE.map(([iata, icao]) => [iata, icao]));
+const AIRPORT_NAME_BY_ICAO = Object.fromEntries(AIRPORT_CODE_TABLE.map(([, icao, name]) => [icao, name]));
+
+// 表にない空港は利用者が ICAO を登録できる（localStorage に保存）
+const IATA_OVERRIDE_KEY = "wx-dashboard-iata-icao";
+const IATA_OVERRIDE_EVENT = "wx-iata-override";
+function loadIataOverrides() {
+  try { return JSON.parse(localStorage.getItem(IATA_OVERRIDE_KEY) || "{}") || {}; } catch { return {}; }
+}
+function saveIataOverride(iata, icao) {
+  const map = loadIataOverrides();
+  map[iata] = icao;
+  try { localStorage.setItem(IATA_OVERRIDE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+  window.dispatchEvent(new CustomEvent(IATA_OVERRIDE_EVENT, { detail: { iata, icao } }));
+}
+function iataToIcao(code) {
+  const c = code?.trim().toUpperCase();
+  if (!c) return null;
+  const override = loadIataOverrides()[c];
+  if (override) return override;
+  if (IATA_TO_ICAO[c]) return IATA_TO_ICAO[c];
+  if (/^[A-Z]{4}$/.test(c)) return c; // ICAO がそのまま書かれている場合
+  return null;
+}
+
+// ICAO が分からない勤務空港を知らせ、その場で ICAO を登録できる
+function UnknownIataFix({ codes }) {
+  const [inputs, setInputs] = useState({});
+  const [invalid, setInvalid] = useState({});
+  if (!codes || codes.length === 0) return null;
+  const mono = "'JetBrains Mono', monospace";
+  const save = (iata) => {
+    const v = (inputs[iata] || "").trim().toUpperCase();
+    if (!/^[A-Z]{4}$/.test(v)) { setInvalid((p) => ({ ...p, [iata]: true })); return; }
+    setInvalid((p) => ({ ...p, [iata]: false }));
+    saveIataOverride(iata, v);
+  };
+  return (
+    <div role="alert" style={{
+      display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 12px",
+      marginTop: "8px", padding: "8px 12px", borderRadius: "4px",
+      border: "1px solid rgba(245,158,11,0.45)", background: "rgba(245,158,11,0.08)",
+    }}>
+      <span style={{ color: "#fcd34d", fontSize: "12px", fontWeight: 700, fontFamily: mono }}>
+        ⚠ ICAO不明の空港があり、気象情報の対象から外れています
+      </span>
+      {codes.map((iata) => (
+        <span key={iata} style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+          <span style={{ color: "#fcd34d", fontSize: "13px", fontWeight: 700, fontFamily: mono }}>{iata}</span>
+          <span style={{ color: "#94a3b8", fontSize: "11px", fontFamily: mono }}>→</span>
+          <input
+            value={inputs[iata] || ""}
+            onChange={(e) => setInputs((p) => ({ ...p, [iata]: e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4) }))}
+            onKeyDown={(e) => { if (e.key === "Enter") save(iata); }}
+            placeholder="ICAO"
+            aria-label={`${iata} の ICAO コード`}
+            maxLength={4}
+            style={{
+              width: "70px", padding: "6px 8px", borderRadius: "3px",
+              background: "rgba(15,23,42,0.8)", color: "#e2e8f0", outline: "none",
+              border: `1px solid ${invalid[iata] ? "#f87171" : "rgba(148,163,184,0.3)"}`,
+              fontSize: "13px", fontFamily: mono, letterSpacing: "2px",
+            }}
+          />
+          <button onClick={() => save(iata)} style={{
+            padding: "6px 12px", borderRadius: "3px", cursor: "pointer",
+            background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.5)",
+            color: "#fcd34d", fontSize: "12px", fontFamily: mono,
+          }}>登録</button>
+          {invalid[iata] && <span style={{ color: "#f87171", fontSize: "11px", fontFamily: mono }}>英字4文字で入力</span>}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -1652,10 +1760,15 @@ function TodayDutyBar() {
       setNow(new Date());
       setTodayEvents(getTodayDutyEvents());
     }, 10000);
-    return () => clearInterval(iv);
+    // ICAO が登録されたら即座に表示を更新
+    const onOverride = () => setTodayEvents(getTodayDutyEvents());
+    window.addEventListener(IATA_OVERRIDE_EVENT, onOverride);
+    return () => { clearInterval(iv); window.removeEventListener(IATA_OVERRIDE_EVENT, onOverride); };
   }, []);
 
   if (todayEvents.length === 0) return null;
+  const unknownCodes = getUnknownDutyCodes(todayEvents);
+  const isUnknownCode = (c) => unknownCodes.includes(String(c).trim().toUpperCase());
 
   const currentEvent = todayEvents.find(e => now >= e.start && now < e.end);
   const flyEvents = todayEvents.filter(e => e.type === "FLY");
@@ -1746,10 +1859,11 @@ function TodayDutyBar() {
             {fullRoute.map((code, i) => (
               <span key={i} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 {i > 0 && <span style={{ color: "#334155", fontSize: "10px" }}>→</span>}
-                <span style={{
-                  color: currentEvent?.type === "FLY" && currentEvent.route?.includes(code) ? "#6ee7b7" : "#e2e8f0",
+                <span title={isUnknownCode(code) ? "ICAO不明（気象情報の対象外）" : undefined} style={{
+                  color: isUnknownCode(code) ? "#fcd34d"
+                    : currentEvent?.type === "FLY" && currentEvent.route?.includes(code) ? "#6ee7b7" : "#e2e8f0",
                   fontSize: "13px", fontWeight: 700, fontFamily: mono,
-                }}>{code}</span>
+                }}>{isUnknownCode(code) ? `⚠${code}` : code}</span>
               </span>
             ))}
           </div>
@@ -1822,6 +1936,7 @@ function TodayDutyBar() {
           </div>
         )}
       </div>
+      <UnknownIataFix codes={unknownCodes} />
     </div>
   );
 }
@@ -1962,6 +2077,18 @@ function MetarTafPanel() {
     const iv = setInterval(() => { fetchAllRef.current(); }, 90000);
     return () => clearInterval(iv);
   }, [autoRefresh]);
+
+  // 勤務空港の ICAO が登録されたら、その空港を一覧に加えて取得する
+  useEffect(() => {
+    const onOverride = (e) => {
+      const icao = e.detail?.icao;
+      if (!icao) return;
+      setSelectedAirports((prev) => (prev.includes(icao) ? prev : [...prev, icao]));
+      fetchMetar(icao);
+    };
+    window.addEventListener(IATA_OVERRIDE_EVENT, onOverride);
+    return () => window.removeEventListener(IATA_OVERRIDE_EVENT, onOverride);
+  }, [fetchMetar]);
 
   // 変化ハイライトを5秒後にクリア
   useEffect(() => {
@@ -2105,28 +2232,41 @@ function MetarTafPanel() {
         {/* DUTY ROUTE indicator */}
         {(() => {
           const todayEvts = getTodayDutyEvents();
-          const dutyIcaos = getDutyRouteIcaoCodes(todayEvts);
-          if (dutyIcaos.length === 0) return null;
           const flyEvts = todayEvts.filter(e => e.type === "FLY");
           const route = [];
           for (const ev of flyEvts) {
             if (ev.route) ev.route.forEach(c => { if (route.length === 0 || route[route.length - 1] !== c) route.push(c); });
           }
+          // ICAO に変換できない空港があっても隠さずに表示する
+          if (route.length === 0) return null;
+          const dutyIcaos = getDutyRouteIcaoCodes(todayEvts);
+          const unknownCodes = getUnknownDutyCodes(todayEvts);
+          const mono = "'JetBrains Mono', monospace";
           return (
-            <div style={{
-              display: "flex", alignItems: "center", gap: "8px",
-              padding: "5px 12px", marginTop: "6px",
-              background: "rgba(251,191,36,0.06)",
-              border: "1px solid rgba(251,191,36,0.2)",
-              borderRadius: "4px",
-            }}>
-              <span style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px" }}>DUTY ROUTE</span>
-              <span style={{ color: "#e2e8f0", fontSize: "11px", fontFamily: "'JetBrains Mono', monospace" }}>
-                {route.join(" → ")}
-              </span>
-              <span style={{ color: "#64748b", fontSize: "9px", fontFamily: "'JetBrains Mono', monospace", marginLeft: "auto" }}>
-                ICAO: {dutyIcaos.join(", ")}
-              </span>
+            <div style={{ marginTop: "6px" }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
+                padding: "5px 12px",
+                background: "rgba(251,191,36,0.06)",
+                border: "1px solid rgba(251,191,36,0.2)",
+                borderRadius: "4px",
+              }}>
+                <span style={{ color: "#fbbf24", fontSize: "9px", fontWeight: 700, fontFamily: mono, letterSpacing: "1px" }}>DUTY ROUTE</span>
+                <span style={{ fontSize: "11px", fontFamily: mono }}>
+                  {route.map((c, i) => (
+                    <span key={i}>
+                      {i > 0 && <span style={{ color: "#64748b" }}> → </span>}
+                      <span style={{ color: unknownCodes.includes(c.trim().toUpperCase()) ? "#fcd34d" : "#e2e8f0", fontWeight: unknownCodes.includes(c.trim().toUpperCase()) ? 700 : 400 }}>
+                        {unknownCodes.includes(c.trim().toUpperCase()) ? `⚠${c}` : c}
+                      </span>
+                    </span>
+                  ))}
+                </span>
+                <span style={{ color: "#64748b", fontSize: "9px", fontFamily: mono, marginLeft: "auto" }}>
+                  ICAO: {dutyIcaos.length ? dutyIcaos.join(", ") : "—"}
+                </span>
+              </div>
+              <UnknownIataFix codes={unknownCodes} />
             </div>
           );
         })()}
@@ -2134,7 +2274,8 @@ function MetarTafPanel() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {selectedAirports.map((icao) => {
-          const apInfo = AIRPORTS.find((a) => a.icao === icao);
+          const apInfo = AIRPORTS.find((a) => a.icao === icao)
+            || (AIRPORT_NAME_BY_ICAO[icao] ? { icao, name: AIRPORT_NAME_BY_ICAO[icao] } : null);
           const hasChanged = !!changedFields[icao];
           return (
             <div key={icao} style={{
@@ -4022,9 +4163,18 @@ function getDutyRouteIcaoCodes(events) {
   const icaos = [];
   for (const iata of iataSet) {
     const icao = iataToIcao(iata);
-    if (icao) icaos.push(icao);
+    if (icao && !icaos.includes(icao)) icaos.push(icao);
   }
   return icaos;
+}
+
+// 勤務ルートのうち ICAO に変換できない空港コード
+function getUnknownDutyCodes(events) {
+  const codes = new Set();
+  for (const ev of events) {
+    if (ev.type === "FLY" && ev.route) ev.route.forEach((c) => { if (c && !iataToIcao(c)) codes.add(c.trim().toUpperCase()); });
+  }
+  return [...codes];
 }
 
 function DutySchedulePanel() {
@@ -4736,166 +4886,229 @@ function SystemStatusIndicator({ sysStatus }) {
 }
 
 /* ========== WEATHER ALERT BANNER — 気象庁警報・注意報 ========== */
+// 警報・注意報コード（気象庁 電文形式 別表3 準拠。2026年の「危険警報」「土砂災害」区分を含む）
+const JMA_WARNING_NAMES = {
+  "02": "暴風雪警報", "03": "大雨警報", "04": "洪水警報", "05": "暴風警報", "06": "大雪警報",
+  "07": "波浪警報", "08": "高潮警報", "09": "土砂災害警報",
+  "10": "大雨注意報", "12": "大雪注意報", "13": "風雪注意報", "14": "雷注意報", "15": "強風注意報",
+  "16": "波浪注意報", "17": "融雪注意報", "18": "洪水注意報", "19": "高潮注意報", "20": "濃霧注意報",
+  "21": "乾燥注意報", "22": "なだれ注意報", "23": "低温注意報", "24": "霜注意報", "25": "着氷注意報",
+  "26": "着雪注意報", "27": "その他の注意報", "29": "土砂災害注意報",
+  "32": "暴風雪特別警報", "33": "大雨特別警報", "35": "暴風特別警報", "36": "大雪特別警報",
+  "37": "波浪特別警報", "38": "高潮特別警報", "39": "土砂災害特別警報",
+  "43": "大雨危険警報", "48": "高潮危険警報", "49": "土砂災害危険警報",
+};
+const ALERT_LEVELS = {
+  5: { level: 5, borderColor: "#7c3aed", textColor: "#c4b5fd", icon: "🟣", label: "CRITICAL" },
+  4: { level: 4, borderColor: "#dc2626", textColor: "#fca5a5", icon: "🔴", label: "WARNING" },
+  3: { level: 3, borderColor: "#d97706", textColor: "#fde68a", icon: "🟡", label: "ADVISORY" },
+};
+// コードから段階を決める（30番台=特別警報、02-09・40番台=警報/危険警報、その他=注意報）
+const alertLevelOfCode = (code) => {
+  const n = parseInt(code, 10);
+  if (n >= 30 && n < 40) return ALERT_LEVELS[5];
+  if ((n >= 2 && n <= 9) || (n >= 40 && n < 50)) return ALERT_LEVELS[4];
+  return ALERT_LEVELS[3];
+};
+
+// 監視地域と一次細分区域の名称（気象庁 area.json の class10s より）
+const ALERT_WATCH_AREAS = [
+  { code: "130000", name: "東京", sub: { "130010": "東京地方", "130020": "伊豆諸島北部", "130030": "伊豆諸島南部", "130040": "小笠原諸島" } },
+  { code: "270000", name: "大阪", sub: { "270000": "大阪府" } },
+  { code: "016000", name: "北海道", sub: { "016010": "石狩地方", "016020": "空知地方", "016030": "後志地方" } },
+  { code: "400000", name: "福岡", sub: { "400010": "福岡地方", "400020": "北九州地方", "400030": "筑豊地方", "400040": "筑後地方" } },
+  { code: "471000", name: "沖縄", sub: { "471010": "本島中南部", "471020": "本島北部", "471030": "久米島" } },
+  { code: "230000", name: "愛知", sub: { "230010": "西部", "230020": "東部" } },
+];
+const ALERT_STALE_MS = 15 * 60 * 1000;
+
+async function fetchAreaAlerts(area) {
+  const r = await fetch(`https://www.jma.go.jp/bosai/warning/data/warning/${area.code}.json`, { signal: fetchTimeout(8000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const data = await r.json();
+  // 一次細分区域（areaTypes[0]）だけを使う。市町村（areaTypes[1]）まで数えると同じ警報が重複する
+  const regions = data.areaTypes?.[0]?.areas;
+  if (!Array.isArray(regions)) throw new Error("形式不明");
+  const alerts = [];
+  const seen = new Set();
+  for (const region of regions) {
+    for (const w of region.warnings ?? []) {
+      if (w.status !== "発表" && w.status !== "継続") continue;
+      const code = String(w.code ?? "");
+      const kind = JMA_WARNING_NAMES[code] ?? `警報・注意報(${code})`;
+      const key = `${region.code}|${code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      alerts.push({ area: area.name, region: area.sub[region.code] ?? region.code, kind, status: w.status, ...alertLevelOfCode(code) });
+    }
+  }
+  return { alerts, reportAt: data.reportDatetime ? new Date(data.reportDatetime) : null };
+}
+
 function WeatherAlertBanner() {
-  const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // 警報レベル定義
-  const LEVEL_MAP = {
-    "特別警報": { level: 5, color: "#1e0a2e", borderColor: "#7c3aed", textColor: "#c4b5fd", icon: "🟣", label: "CRITICAL" },
-    "警報":     { level: 4, color: "#2a0a0a", borderColor: "#dc2626", textColor: "#fca5a5", icon: "🔴", label: "WARNING" },
-    "注意報":   { level: 3, color: "#2a1a00", borderColor: "#d97706", textColor: "#fde68a", icon: "🟡", label: "ADVISORY" },
-  };
-
-  // 対象地域
-  const WATCH_AREAS = [
-    { code: "130000", name: "東京" },
-    { code: "270000", name: "大阪" },
-    { code: "016000", name: "北海道" },
-    { code: "400000", name: "福岡" },
-    { code: "471000", name: "沖縄" },
-    { code: "230000", name: "愛知" },
-  ];
+  // 地域ごとの状態: { ok, alerts, lastOkAt, reportAt, error }
+  const [areaState, setAreaState] = useState({});
+  const [lastAttemptAt, setLastAttemptAt] = useState(null);
+  const [attempting, setAttempting] = useState(false);
+  const [, setTick] = useState(0);
+  const runRef = useRef(null);
 
   useEffect(() => {
-    const fetchAlerts = async () => {
-      setLoading(true);
-      const results = [];
-      for (const area of WATCH_AREAS) {
-        try {
-          const r = await fetch(
-            `https://www.jma.go.jp/bosai/warning/data/warning/${area.code}.json`,
-            { signal: fetchTimeout(8000) }
-          );
-          if (!r.ok) continue;
-          const data = await r.json();
-          // areaTypesからwarning情報を抽出
-          const areaTypes = data.areaTypes ?? [];
-          for (const at of areaTypes) {
-            for (const region of (at.areas ?? [])) {
-              for (const w of (region.warnings ?? [])) {
-                if (w.status === "発表" || w.status === "継続") {
-                  const kindName = w.code ? getWarningName(w.code) : "不明";
-                  const levelInfo = getWarningLevel(kindName);
-                  results.push({
-                    area: area.name,
-                    region: region.name,
-                    kind: kindName,
-                    status: w.status,
-                    ...levelInfo,
-                  });
-                }
-              }
-            }
+    let alive = true;
+    const run = async () => {
+      setAttempting(true);
+      const results = await Promise.allSettled(ALERT_WATCH_AREAS.map(fetchAreaAlerts));
+      if (!alive) return;
+      const at = new Date();
+      setAreaState((prev) => {
+        const next = { ...prev };
+        ALERT_WATCH_AREAS.forEach((a, i) => {
+          const r = results[i];
+          if (r.status === "fulfilled") {
+            next[a.code] = { ok: true, alerts: r.value.alerts, reportAt: r.value.reportAt, lastOkAt: at, error: null };
+          } else {
+            // 失敗しても前回取得できた内容は残す（「警報なし」に化けさせない）
+            const p = prev[a.code] || { alerts: [], reportAt: null, lastOkAt: null };
+            next[a.code] = { ...p, ok: false, error: r.reason?.name === "TimeoutError" ? "タイムアウト" : (r.reason?.message || "取得失敗") };
           }
-        } catch {
-          // skip failed area
-        }
-      }
-      // レベル降順でソート
-      results.sort((a, b) => b.level - a.level);
-      setAlerts(results);
-      setLoading(false);
+        });
+        return next;
+      });
+      setLastAttemptAt(at);
+      setAttempting(false);
     };
-
-    fetchAlerts();
-    const iv = setInterval(fetchAlerts, 300000); // 5分毎
-    return () => clearInterval(iv);
+    runRef.current = run;
+    run();
+    const iv = setInterval(run, 300000); // 5分毎
+    const tick = setInterval(() => setTick((t) => t + 1), 60000); // 経過時間の表示更新
+    return () => { alive = false; clearInterval(iv); clearInterval(tick); };
   }, []);
 
-  // 警報コード→名前
-  function getWarningName(code) {
-    const map = {
-      "33": "大雨特別警報", "03": "大雨警報", "10": "大雨注意報",
-      "35": "暴風特別警報", "05": "暴風警報", "15": "強風注意報",
-      "32": "暴風雪特別警報", "04": "暴風雪警報", "13": "風雪注意報",
-      "36": "大雪特別警報", "06": "大雪警報", "12": "大雪注意報",
-      "37": "波浪特別警報", "07": "波浪警報", "16": "波浪注意報",
-      "38": "高潮特別警報", "08": "高潮警報", "19": "高潮注意報",
-      "02": "洪水警報", "18": "洪水注意報",
-      "14": "雷注意報", "17": "融雪注意報",
-      "20": "濃霧注意報", "21": "乾燥注意報",
-      "22": "なだれ注意報", "23": "低温注意報",
-      "24": "霜注意報", "25": "着氷注意報",
-      "26": "着雪注意報",
-    };
-    return map[String(code)] ?? `警報(${code})`;
-  }
+  const mono = "'JetBrains Mono', monospace";
+  const nowMs = Date.now();
+  const entries = ALERT_WATCH_AREAS.map((a) => ({ ...a, st: areaState[a.code] }));
+  const initial = !lastAttemptAt;
+  const confirmed = entries.filter((e) => e.st?.ok);
+  const failed = entries.filter((e) => e.st && !e.st.ok);
+  const withData = entries.filter((e) => e.st?.lastOkAt);
+  const staleAreas = withData.filter((e) => nowMs - e.st.lastOkAt.getTime() > ALERT_STALE_MS);
+  const alerts = withData
+    .flatMap((e) => e.st.alerts.map((a) => ({ ...a, retained: !e.st.ok })))
+    .sort((a, b) => b.level - a.level);
+  const maxLevel = alerts.length ? Math.max(...alerts.map((a) => a.level)) : 0;
+  const allUnknown = !initial && withData.length === 0;
+  const fullyConfirmed = !initial && confirmed.length === entries.length && staleAreas.length === 0;
+  const latestReport = withData.map((e) => e.st.reportAt).filter(Boolean).sort((a, b) => b - a)[0] || null;
+  // 失敗した地域について、前回成功した時刻（残している前回データの時刻）
+  const failedLastOk = failed.map((e) => e.st.lastOkAt).filter(Boolean).sort((a, b) => a - b)[0] || null;
+  const failedNeverOk = failed.filter((e) => !e.st.lastOkAt);
 
-  // 名前→レベル情報
-  function getWarningLevel(name) {
-    if (name.includes("特別警報")) return LEVEL_MAP["特別警報"];
-    if (name.includes("警報")) return LEVEL_MAP["警報"];
-    return LEVEL_MAP["注意報"];
-  }
+  const fmtZ = (d) => `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}Z`;
+  const fmtJst = (d) => {
+    const j = new Date(d.getTime() + 9 * 3600e3);
+    return `${String(j.getUTCMonth() + 1).padStart(2, "0")}/${String(j.getUTCDate()).padStart(2, "0")} ${String(j.getUTCHours()).padStart(2, "0")}:${String(j.getUTCMinutes()).padStart(2, "0")} JST`;
+  };
+  const ago = (d) => {
+    const m = Math.max(0, Math.round((nowMs - d.getTime()) / 60000));
+    return m < 60 ? `${m}分前` : `${Math.floor(m / 60)}時間${m % 60}分前`;
+  };
 
-  // 最高脅威レベル
-  const maxLevel = alerts.length > 0 ? Math.max(...alerts.map(a => a.level)) : 0;
-  const threatConfig = maxLevel >= 5
-    ? { bg: "rgba(124,58,237,0.08)", border: "#7c3aed", text: "THREAT LEVEL: CRITICAL", glow: "rgba(124,58,237,0.4)" }
+  // 表示する状態
+  const amber = { bar: "#d97706", border: "#f59e0b", text: "#fcd34d", bg: "rgba(245,158,11,0.06)", glow: "rgba(245,158,11,0.3)" };
+  const threat = initial
+    ? { label: "THREAT LEVEL: CHECKING…", border: "#94a3b8", text: "#cbd5e1", bg: "rgba(148,163,184,0.04)", glow: "transparent" }
+    : allUnknown
+    ? { label: "THREAT LEVEL: UNKNOWN — 警報データを取得できません", ...amber }
+    : maxLevel >= 5
+    ? { label: "THREAT LEVEL: CRITICAL", border: "#7c3aed", text: "#c4b5fd", bg: "rgba(124,58,237,0.08)", glow: "rgba(124,58,237,0.4)" }
     : maxLevel >= 4
-    ? { bg: "rgba(220,38,38,0.06)", border: "#dc2626", text: "THREAT LEVEL: ELEVATED", glow: "rgba(220,38,38,0.4)" }
+    ? { label: "THREAT LEVEL: ELEVATED", border: "#dc2626", text: "#fca5a5", bg: "rgba(220,38,38,0.06)", glow: "rgba(220,38,38,0.4)" }
     : maxLevel >= 3
-    ? { bg: "rgba(217,119,6,0.05)", border: "#d97706", text: "THREAT LEVEL: GUARDED", glow: "rgba(217,119,6,0.3)" }
-    : { bg: "rgba(110,231,183,0.03)", border: "#6ee7b7", text: "THREAT LEVEL: NORMAL", glow: "rgba(110,231,183,0.2)" };
+    ? { label: "THREAT LEVEL: GUARDED", border: "#d97706", text: "#fde68a", bg: "rgba(217,119,6,0.05)", glow: "rgba(217,119,6,0.3)" }
+    : fullyConfirmed
+    ? { label: "THREAT LEVEL: NORMAL", border: "#6ee7b7", text: "#6ee7b7", bg: "rgba(110,231,183,0.03)", glow: "rgba(110,231,183,0.2)" }
+    : { label: "THREAT LEVEL: UNCONFIRMED", ...amber };
+  const levelKnown = !initial && !allUnknown;
+  const barColor = (lv) => (lv >= 5 ? "#7c3aed" : lv >= 4 ? "#dc2626" : lv >= 3 ? "#d97706" : "#6ee7b7");
+  const failedNames = failed.map((e) => e.name).join("・");
 
   return (
     <div style={{
-      background: threatConfig.bg,
-      borderBottom: `2px solid ${threatConfig.border}40`,
+      background: threat.bg,
+      borderBottom: `2px solid ${threat.border}40`,
       position: "relative",
       overflow: "hidden",
     }}>
       {/* 脅威レベルバー */}
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px 12px",
         padding: "6px 24px",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {/* DEFCON風レベルインジケータ */}
-          <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
-            {[5, 4, 3, 2, 1].map(lv => (
-              <div key={lv} style={{
-                width: "18px", height: "10px", borderRadius: "1px",
-                background: lv <= maxLevel
-                  ? lv >= 5 ? "#7c3aed" : lv >= 4 ? "#dc2626" : lv >= 3 ? "#d97706" : "#6ee7b7"
-                  : "rgba(110,231,183,0.06)",
-                border: `1px solid ${lv <= maxLevel
-                  ? lv >= 5 ? "#7c3aed" : lv >= 4 ? "#dc2626" : lv >= 3 ? "#d97706" : "#6ee7b7"
-                  : "rgba(110,231,183,0.08)"}`,
-                boxShadow: lv <= maxLevel ? `0 0 6px ${lv >= 5 ? "#7c3aed" : lv >= 4 ? "#dc2626" : lv >= 3 ? "#d97706" : "#6ee7b7"}60` : "none",
-                transition: "all 0.3s ease",
-              }} />
-            ))}
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          {/* レベルインジケータ（未確定時は破線） */}
+          <div style={{ display: "flex", gap: "3px", alignItems: "center" }} aria-hidden="true">
+            {[5, 4, 3, 2, 1].map(lv => {
+              const on = levelKnown && lv <= maxLevel;
+              return (
+                <div key={lv} style={{
+                  width: "18px", height: "10px", borderRadius: "1px",
+                  background: on ? barColor(lv) : "rgba(110,231,183,0.06)",
+                  border: levelKnown ? `1px solid ${on ? barColor(lv) : "rgba(110,231,183,0.08)"}` : `1px dashed ${threat.border}80`,
+                  boxShadow: on ? `0 0 6px ${barColor(lv)}60` : "none",
+                  transition: "all 0.3s ease",
+                }} />
+              );
+            })}
           </div>
-          <span style={{
-            fontSize: "10px", fontWeight: 700,
-            color: threatConfig.border,
-            fontFamily: "'JetBrains Mono', monospace",
+          <span role="status" style={{
+            fontSize: "11px", fontWeight: 700,
+            color: threat.text,
+            fontFamily: mono,
             letterSpacing: "2px",
-            textShadow: `0 0 10px ${threatConfig.glow}`,
-          }}>{threatConfig.text}</span>
-          <span style={{
-            fontSize: "9px", color: "#475569",
-            fontFamily: "'JetBrains Mono', monospace",
-          }}>
-            {loading ? "SCANNING..." : `${alerts.length} ACTIVE`}
-          </span>
+            textShadow: `0 0 10px ${threat.glow}`,
+          }}>{threat.label}{levelKnown && maxLevel > 0 && !fullyConfirmed ? "（一部未確認）" : ""}</span>
+          {levelKnown && (
+            <span style={{ fontSize: "11px", color: "#cbd5e1", fontFamily: mono }}>{alerts.length}件</span>
+          )}
+          {attempting && <span style={{ fontSize: "11px", color: "#94a3b8", fontFamily: mono }}>更新中…</span>}
         </div>
-        <div style={{
-          fontSize: "8px", color: "#334155",
-          fontFamily: "'JetBrains Mono', monospace",
-          letterSpacing: "1px",
-        }}>
-          JMA WARNING MONITOR
+        <div style={{ fontSize: "10px", color: "#94a3b8", fontFamily: mono, letterSpacing: "0.5px" }}>
+          JMA 警報・注意報 / {ALERT_WATCH_AREAS.map((a) => a.name).join("・")}
         </div>
       </div>
+
+      {/* 取得状況・鮮度 */}
+      {!initial && (
+        <div style={{
+          display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px 14px",
+          padding: "0 24px 6px", fontSize: "11px", fontFamily: mono, color: "#94a3b8",
+        }}>
+          <span style={{ color: failed.length ? "#fcd34d" : "#94a3b8" }}>
+            取得 {confirmed.length}/{entries.length}地域{failed.length > 0 && ` · 失敗: ${failedNames}`}
+          </span>
+          <span>最終取得 {fmtZ(lastAttemptAt)}</span>
+          {failedLastOk && <span style={{ color: "#fcd34d" }}>失敗地域は {fmtZ(failedLastOk)}（{ago(failedLastOk)}）のデータを表示中</span>}
+          {failedNeverOk.length > 0 && <span style={{ color: "#fcd34d" }}>{failedNeverOk.map((e) => e.name).join("・")} は未取得</span>}
+          {latestReport && <span>JMA最終発表 {fmtJst(latestReport)}</span>}
+          {staleAreas.length > 0 && (
+            <span style={{
+              padding: "1px 6px", borderRadius: "2px", fontWeight: 700,
+              color: "#fcd34d", border: "1px solid rgba(245,158,11,0.6)", background: "rgba(245,158,11,0.12)",
+            }}>STALE: {staleAreas.map((e) => e.name).join("・")} は15分以上更新なし</span>
+          )}
+          <button onClick={() => runRef.current?.()} disabled={attempting} aria-label="警報・注意報を再取得" style={{
+            padding: "2px 10px", borderRadius: "3px", cursor: attempting ? "default" : "pointer",
+            background: "transparent", border: `1px solid ${failed.length ? "rgba(245,158,11,0.6)" : "rgba(148,163,184,0.4)"}`,
+            color: failed.length ? "#fcd34d" : "#cbd5e1", fontSize: "11px", fontFamily: mono,
+          }}>{failed.length ? "再取得" : "更新"}</button>
+        </div>
+      )}
 
       {/* アラート一覧（ティッカー） */}
       {alerts.length > 0 && (
         <div style={{
           overflow: "hidden", height: "22px",
-          borderTop: `1px solid ${threatConfig.border}20`,
+          borderTop: `1px solid ${threat.border}20`,
           background: "rgba(0,0,0,0.3)",
         }}>
           <div style={{
@@ -4907,13 +5120,13 @@ function WeatherAlertBanner() {
           }}>
             {alerts.map((a, i) => (
               <span key={i} style={{
-                fontSize: "10px",
-                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: "11px",
+                fontFamily: mono,
                 color: a.textColor,
                 marginRight: "32px",
                 letterSpacing: "0.5px",
               }}>
-                {a.icon} {a.area}/{a.region} — {a.kind} [{a.label}]
+                {a.icon} {a.area}/{a.region} — {a.kind} [{a.label}]{a.retained ? "（未更新）" : ""}
               </span>
             ))}
           </div>
@@ -4921,14 +5134,17 @@ function WeatherAlertBanner() {
         </div>
       )}
 
-      {/* NORMAL時のメッセージ */}
-      {!loading && alerts.length === 0 && (
-        <div style={{
-          padding: "0 24px 6px",
-          fontSize: "9px", color: "#334155",
-          fontFamily: "'JetBrains Mono', monospace",
-        }}>
-          NO ACTIVE WARNINGS — ALL WATCH AREAS CLEAR
+      {/* 警報なし・未確認・取得不能時のメッセージ */}
+      {levelKnown && alerts.length === 0 && (
+        <div style={{ padding: "0 24px 6px", fontSize: "11px", fontFamily: mono, color: fullyConfirmed ? "#94a3b8" : "#fcd34d" }}>
+          {fullyConfirmed
+            ? "NO ACTIVE WARNINGS — 監視6地域すべて確認済み・警報/注意報なし"
+            : `確認できた${confirmed.filter((e) => !staleAreas.includes(e)).length}地域に警報・注意報なし／${[...new Set([...failed, ...staleAreas].map((e) => e.name))].join("・")} は未確認`}
+        </div>
+      )}
+      {allUnknown && (
+        <div style={{ padding: "0 24px 6px", fontSize: "11px", fontFamily: mono, color: "#fcd34d" }}>
+          6地域すべてで取得に失敗しました（{failed[0]?.st?.error || "通信エラー"}）。警報の有無は不明です — 公式情報で確認してください
         </div>
       )}
     </div>

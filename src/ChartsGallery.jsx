@@ -78,15 +78,16 @@ const WX_CATS = [
 
 const FBJP_CHART = { key: "fbjp", title: "国内悪天予想図", code: "FBJP", kind: "png", url: FBJP_URL };
 
-// 並び：地上天気図 → 国内悪天予想図 → 高層天気図（低い高度から）
+// 並び：地上天気図 → 国内悪天予想図 → 850hPa 相当温位 → 高層天気図の解析（低い高度から）
+// 3列表示の「すべて」で、2段目が FBJP と相当温位、3段目が解析3枚になる
 const WX_CHARTS = [
   { key: "spas", cat: "sfc", title: "地上 実況", code: "SPAS", kind: "wm", region: "near", sel: "now" },
   { key: "fsas24", cat: "sfc", title: "24時間 予想", code: "FSAS24", kind: "wm", region: "near", sel: "ft24" },
   { key: "fsas48", cat: "sfc", title: "48時間 予想", code: "FSAS48", kind: "wm", region: "near", sel: "ft48" },
   { key: "asas", cat: "sfc", title: "アジア 実況", code: "ASAS", kind: "wm", region: "asia", sel: "now" },
   { ...FBJP_CHART, cat: "sev" }, // その日の悪天の全体像（「すべて」だけに表示。SIG WX にも同じ図）
-  { key: "aupq35", cat: "upper", title: "850/700hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35" },
   { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48] },
+  { key: "aupq35", cat: "upper", title: "850/700hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35" },
   { key: "aupq78", cat: "upper", title: "500/300hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78" },
   { key: "aupa25", cat: "upper", title: "250hPa 解析", code: "AUPA25", kind: "pdf", file: "aupa25" },
   { key: "fupa252", cat: "upper", title: "250hPa 24時間予想", code: "FUPA252", kind: "pdf", file: "fupa252", ft: [24], hideInAll: true },

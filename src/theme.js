@@ -14,3 +14,9 @@ export const C = {
 
 // 文字サイズは5段（11 / 13 / 15 / 20 / 28px）
 export const FS = { xs: "11px", sm: "13px", md: "15px", lg: "20px", xl: "28px" };
+
+// フォント：画面の文字はゴシック体、電文（METAR/TAF・SIGMET）・時刻・ICAO・数値の表は等幅
+export const FONT = {
+  ui: "'IBM Plex Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', system-ui, sans-serif",
+  data: "'JetBrains Mono', 'IBM Plex Sans JP', 'Hiragino Sans', monospace",
+};

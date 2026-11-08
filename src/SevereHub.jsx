@@ -4,7 +4,7 @@
    ============================================================ */
 import { useState, useEffect } from "react";
 import { PanelFrame, ExtLink } from "./ui.jsx";
-import { C, FS } from "./theme.js";
+import { C, FS, FONT } from "./theme.js";
 import {
   TileMap, projectPct, BASEMAP, COASTLINE, CciView, ChartImg, Caption, WORKER_URL,
   FBJP_URL, sigmetUrl, fxjp106Url, fxjp106Bases, cmntUrl, SIGMET_AREAS, CMNT_AREAS, pad,
@@ -279,7 +279,7 @@ function SigmetView() {
               {move && <span style={{ fontSize: FS.xs, color: C.textSub }}>{move}</span>}
               {s.chng && <span style={{ fontSize: FS.xs, color: C.textSub }}>{s.chng}{CHANGE[s.chng] ? `（${CHANGE[s.chng]}）` : ""}</span>}
             </div>
-            <pre style={{ margin: 0, fontFamily: "'JetBrains Mono', monospace", fontSize: FS.sm, lineHeight: 1.6, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            <pre style={{ margin: 0, fontFamily: FONT.data, fontSize: FS.sm, lineHeight: 1.6, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
               {(s.rawSigmet || "").trim()}
             </pre>
           </article>

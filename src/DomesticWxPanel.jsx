@@ -6,9 +6,9 @@
    ============================================================ */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PanelFrame, ExtLink } from "./ui.jsx";
-import { C, FS } from "./theme.js";
+import { C, FS, FONT } from "./theme.js";
 
-const MONO = "'JetBrains Mono', monospace";
+const MONO = FONT.ui;
 const GREEN = "#6ee7b7";
 
 const JMA = "https://www.jma.go.jp";
@@ -91,7 +91,7 @@ function StepBar({ index, count, setIndex, label, sub, playing, setPlaying }) {
         onChange={(e) => go(+e.target.value)}
         style={{ flex: "1 1 160px", accentColor: GREEN, minWidth: "120px" }}
       />
-      <div style={{ fontFamily: MONO, minWidth: "150px", textAlign: "right" }}>
+      <div style={{ fontFamily: FONT.data, minWidth: "150px", textAlign: "right" }}>
         <div style={{ color: GREEN, fontSize: FS.xs, fontWeight: 700 }}>{label}</div>
         {sub && <div style={{ color: C.textMuted, fontSize: FS.xs }}>{sub}</div>}
       </div>
@@ -1250,7 +1250,7 @@ export function EmagramSection({ refresh = 0 }) {
   const ice = rows ? icingLayers(rows) : [];
   const stName = SONDE_STATIONS.find((s) => s.id === station)?.name;
   const stdLevels = [1000, 925, 850, 700, 500, 400, 300, 250, 200];
-  const cell = { padding: "3px 8px", textAlign: "right", fontFamily: MONO, fontSize: FS.xs, color: "#cbd5e1", borderBottom: "1px solid rgba(148,163,184,0.08)" };
+  const cell = { padding: "3px 8px", textAlign: "right", fontFamily: FONT.data, fontSize: FS.xs, color: "#cbd5e1", borderBottom: "1px solid rgba(148,163,184,0.08)" };
 
   return (
     <PanelFrame title="EMAGRAM / エマグラム（高層観測）" code="DOM-04" style={{ padding: 0 }}>

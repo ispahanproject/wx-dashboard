@@ -1,5 +1,5 @@
 /* 共通UIパーツ（WeatherBriefing / DomesticWxPanel で共用） */
-import { C, FS } from "./theme.js";
+import { C, FS, FONT } from "./theme.js";
 
 // パネルの枠。見出しは枠線の上に重ねて表示する（四隅の装飾・セクション番号は廃止）
 // `code` は互換のため受け取るが表示しない
@@ -19,7 +19,7 @@ export function PanelFrame({ children, title, style = {} }) {
           background: C.bg,
           padding: "0 8px",
           color: C.textSub, fontSize: FS.xs, fontWeight: 700,
-          fontFamily: "'JetBrains Mono', monospace", letterSpacing: "1px",
+          fontFamily: FONT.ui, letterSpacing: "1px",
           lineHeight: "18px",
         }}>{title}</div>
       )}
@@ -36,7 +36,7 @@ export function ExtLink({ href, children, accent, amber }) {
     <a href={href} target="_blank" rel="noopener noreferrer" style={{
       display: "inline-flex", alignItems: "center", gap: "6px", padding: "7px 14px",
       background: c.bg, border: `1px solid ${c.border}`, borderRadius: "6px", color: c.color,
-      fontSize: FS.xs, textDecoration: "none", fontFamily: "'JetBrains Mono', monospace",
+      fontSize: FS.xs, textDecoration: "none", fontFamily: FONT.ui,
       transition: "all 0.15s ease", cursor: "pointer", letterSpacing: "0.5px",
     }}>
       {children}<span style={{ fontSize: FS.xs, opacity: 0.6 }}>↗</span>

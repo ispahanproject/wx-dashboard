@@ -18,11 +18,15 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <!-- 画面の文字は IBM Plex Sans JP、電文・時刻・数値は JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
         background: #030810;
+        font-family: 'IBM Plex Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', system-ui, sans-serif;
+        /* 数字の幅をそろえて、時刻や表の桁がずれないようにする */
+        font-variant-numeric: tabular-nums;
         /* iOS safe area padding for notch/home indicator */
         padding-top: env(safe-area-inset-top);
         padding-left: env(safe-area-inset-left);

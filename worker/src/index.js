@@ -13,6 +13,9 @@ const SOUNDING_PREFIX = "/sounding/";
 // 高層観測（ラジオゾンデ実測）: University of Wyoming CSV を中継
 const UPPER_AIR_PREFIX = "/upper-air/";
 const UWYO_SOUNDING = "https://weather.uwyo.edu/wsgi/sounding";
+// 東京 VAAC の火山灰情報（VAA）: 一覧ページから指定した火山の分を拾い、本文を JSON で返す
+const VAAC_PREFIX = "/vaac/";
+const VAAC_BASE = "https://ds.data.jma.go.jp/svd/vaac/data/";
 
 // Allowed origins (restrict to our dashboard)
 const ALLOWED_ORIGINS = [
@@ -69,6 +72,59 @@ async function handleUpperAir(url, origin) {
   return new Response(cached.body, { status: cached.status, headers });
 }
 
+// ページ本文を Cloudflare のキャッシュ付きで取得（キーは Origin に依存しない）
+async function cachedText(key, upstream, ttl) {
+  const cache = caches.default;
+  const cacheKey = new Request(`https://vaac.cache/${key}`);
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit.text();
+  const resp = await fetch(upstream, { headers: { "User-Agent": "wx-dashboard-proxy/1.0" } });
+  if (!resp.ok) throw new Error(`upstream ${resp.status}`);
+  const body = await resp.text();
+  await cache.put(cacheKey, new Response(body, { headers: { "Cache-Control": `public, max-age=${ttl}` } }));
+  return body;
+}
+
+// /vaac/?volcano=SAKURAJIMA,KIRISHIMA&hours=24
+// → { items: [{ time, volcano, area, number, text }], latest: { 指定名: { time, volcano, number } } }（latest は期間外も含む最新）
+async function handleVaac(url, origin) {
+  const names = (url.searchParams.get("volcano") || "").toUpperCase().split(",")
+    .map((n) => n.trim()).filter((n) => /^[A-Z][A-Z \-]{2,39}$/.test(n)).slice(0, 5);
+  const hours = Math.min(72, Math.max(1, Number(url.searchParams.get("hours")) || 24));
+  const headers = { ...corsHeaders(origin), "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=120" };
+  if (!names.length) return new Response(JSON.stringify({ error: "volcano required" }), { status: 400, headers });
+  try {
+    const list = await cachedText("list", `${VAAC_BASE}vaac_list.html`, 300);
+    const items = [];
+    const latest = {};
+    for (const m of list.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+      const row = m[1];
+      const link = (row.match(/href="(TextData\/\d{4}\/\w+_Text\.html)"/) || [])[1];
+      if (!link) continue;
+      const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => c[1].replace(/<[^>]+>/g, "").trim());
+      const t = (cells[0] || "").match(/^(\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2})/);
+      const volcano = cells[2] || "";
+      const name = t && names.find((n) => volcano.toUpperCase().includes(n));
+      if (!name) continue;
+      const time = Date.UTC(+t[1], +t[2] - 1, +t[3], +t[4], +t[5]);
+      const item = { time: new Date(time).toISOString(), volcano, area: cells[3] || "", number: cells[4] || "", link };
+      if (!latest[name]) latest[name] = { time: item.time, volcano, number: item.number };
+      if (Date.now() - time <= hours * 3600e3 && items.length < 6) items.push(item);
+    }
+    for (const it of items) {
+      try {
+        const html = await cachedText(it.link, VAAC_BASE + it.link, 86400);
+        const body = html.match(/<!-- VAA Text Start -->([\s\S]*?)<!-- VAA Text End -->/);
+        it.text = body ? body[1].replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").trim() : null;
+      } catch { it.text = null; }
+      delete it.link;
+    }
+    return new Response(JSON.stringify({ items, latest }), { headers });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 502, headers });
+  }
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -91,6 +147,9 @@ export default {
     if (path.startsWith(UPPER_AIR_PREFIX)) {
       // /upper-air/?id=47646&dt=2026110512  (dt = YYYYMMDDHH, HH は 00 or 12)
       return handleUpperAir(url, origin);
+    }
+    if (path.startsWith(VAAC_PREFIX)) {
+      return handleVaac(url, origin);
     }
 
     if (path.startsWith(SOUNDING_PREFIX)) {

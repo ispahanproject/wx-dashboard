@@ -6,6 +6,7 @@ import WxChartsGallery, { SigwxProgCharts, CrossSectionCharts } from "./ChartsGa
 import ImageryViewer from "./ImageryViewer.jsx";
 import { SigmetView, CmntView, CciPanel, LowLevelView } from "./SigWx.jsx";
 import { MaijiView } from "./EnrouteViews.jsx";
+import VolcanoInfo, { volcanoUrls } from "./VolcanoInfo.jsx";
 
 /* ============================================================
    AWC API BASE URL
@@ -2507,6 +2508,7 @@ function MetarTafPanel() {
                 <div style={{ color: C.textMuted, fontSize: FS.sm, fontStyle: "italic" }}>REFRESHで取得</div>
               )}
               <JmaAirportCharts icao={icao} />
+              <VolcanoInfo icao={icao} />
             </div>
           );
         })}
@@ -4667,6 +4669,8 @@ export default function WeatherBriefing() {
 
     // 図（WX CHARTS・ENROUTE・SIG WX）：天気図・数値予報天気図・悪天予想図・SIGMET・下層悪天・三十分大気解析
     try { urls.push(...await collectChartUrls()); } catch { /* skip */ }
+    // 火山（鹿児島・宮崎の噴火警報・降灰予報・VAA）
+    urls.push(...volcanoUrls());
 
     navigator.serviceWorker.controller.postMessage({ type: "PREFLIGHT_CACHE", urls: [...new Set(urls)] });
   };

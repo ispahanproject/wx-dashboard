@@ -1,7 +1,8 @@
 /* ============================================================
    TERMINAL — 乗務の目的地の発着便（自分の到着の前後1時間）
    - 便は AeroDataBox（RapidAPI）を Worker 経由で取る（/flights/）。回数に上限があるので Worker の KV に保存して使い回す
-   - 自分の到着便は、乗務の行程（前の空港 → この空港）と勤務時間から推定し、「便を変える」で選び直せる（端末に保存）
+   - 自分の到着便は、勤務予定（ICS の説明欄）の便名・出発空港・時刻で時刻表から探す。
+     見つからないときだけ、便か時刻を選べる（端末に保存）
    - 便が多すぎる大空港（羽田・成田・関西・伊丹・新千歳・福岡・那覇・中部）には出さない
    - 時刻表で十分（利用者の判断）。到着便は、出発空港での遅れ・離陸がわかればそれも添える
    ============================================================ */
@@ -12,16 +13,18 @@ import { WORKER_URL } from "./DomesticWxPanel.jsx";
 
 const JST = 9 * 3600e3;
 const MIN = 60e3;
-const HALF = 60 * MIN;            // 自分の到着の前後1時間
+const HOUR = 60 * MIN;
+const HALF = HOUR;                // 自分の到着の前後1時間
 const BIN = 15 * MIN;             // 発着の数を数える幅
 const BINS = (2 * HALF) / BIN;
-const MAX_WINDOW = 12 * 3600e3;   // AeroDataBox で1回に取れる幅
+const MAX_WINDOW = 12 * HOUR;     // AeroDataBox で1回に取れる幅
+const STEP = 30 * MIN;            // 取る時間帯の区切り（Worker の保存の単位）
+const MATCH_RANGE = 3 * HOUR;     // 勤務予定と時刻表の到着時刻のずれの許容（済んだ便は ICS の時刻が実績に変わるらしいので広め）
 const CLIENT_CACHE_MS = 10 * MIN;
 const LATE_MIN = 5;               // これ以上ずれたら見込み時刻を出す
 const DELAY_MIN = 15;             // 遅延として数える
 const SHOW_EACH_SIDE = 6;         // 一覧で、自分の到着の前と後にそれぞれ先に見せる便の数
 const LAYOUT_KEY = "traffic_layout";
-const AIRLINE_KEY = "traffic_airline";
 const PICKS_KEY = "traffic_picks";
 const SKY = "#7dd3fc", VIOLET = "#a5b4fc", AMBER = "#fcd34d", RED = "#fca5a5";
 // 便が多すぎて一覧にしても役に立たない大空港（2026-11-12 利用者の判断）
@@ -32,7 +35,6 @@ const hhmm = (t) => { const d = new Date(t + JST); return `${pad(d.getUTCHours()
 const hhmmZ = (t) => { const d = new Date(t); return `${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z`; };
 const localStr = (t) => new Date(t + JST).toISOString().slice(0, 16);
 const toMs = (iso) => (iso ? Date.parse(iso) : NaN);
-const airlineOf = (number) => (number || "").split(" ")[0];
 const load = (k, def) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? def; } catch { return def; } };
 const save = (k, v) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* 保存できなくても表示はする */ } };
 
@@ -63,45 +65,46 @@ function loadFlights(icao, from, to, fresh = false) {
   return promise;
 }
 
-// 取る時間帯：勤務の始まりから、終わりの1時間後まで（12時間を超えるときは区間に近い側を残す）
-function fetchWindow(leg) {
-  const STEP = 30 * MIN;
-  let from = Math.floor(leg.dutyStart / STEP) * STEP;
-  let to = Math.ceil((leg.dutyEnd + HALF) / STEP) * STEP;
-  if (to - from > MAX_WINDOW) {
-    if (leg.k === leg.n) from = to - MAX_WINDOW; else to = from + MAX_WINDOW;
-  }
-  return { from, to };
+// 取る時間帯：勤務予定の到着の2時間前から3時間後まで（遅れても前後1時間が入るように）
+function fetchWindow(arrs) {
+  return {
+    from: Math.floor((Math.min(...arrs) - 2 * HOUR) / STEP) * STEP,
+    to: Math.ceil((Math.max(...arrs) + 3 * HOUR) / STEP) * STEP,
+  };
 }
 
-/* ---------- 自分の便（選んだ便は端末に保存、推定した便はこの画面のあいだだけ） ----------
-   後の区間の推定に、前の区間の到着時刻を使う */
-const autoArr = new Map(); // legKey → 推定した到着時刻
-const bus = new EventTarget();
-const notify = () => bus.dispatchEvent(new Event("change"));
-function usePicksVersion() {
-  const [v, setV] = useState(0);
-  useEffect(() => {
-    const f = () => setV((x) => x + 1);
-    bus.addEventListener("change", f);
-    return () => bus.removeEventListener("change", f);
-  }, []);
-  return v;
-}
-const savedPick = (legKey) => (legKey ? load(PICKS_KEY, {})[legKey] || null : null);
+/* ---------- 自分の便 ---------- */
+// 選び直した便・時刻は、区間ごとに端末に保存する
+const savedPick = (legKey) => load(PICKS_KEY, {})[legKey] || null;
 function storePick(legKey, pick) {
   const all = load(PICKS_KEY, {});
   if (pick) all[legKey] = { ...pick, at: Date.now() }; else delete all[legKey];
   const keys = Object.keys(all).sort((a, b) => (all[a].at || 0) - (all[b].at || 0));
   while (keys.length > 30) delete all[keys.shift()];
   save(PICKS_KEY, all);
-  notify();
 }
-const prevArrival = (leg) => {
-  if (!leg.prevKey) return null;
-  const p = savedPick(leg.prevKey);
-  return p?.arr || autoArr.get(leg.prevKey) || null;
-};
+
+// 便名の数字（"JL 641" → "641"）。ICS の便名には会社コードがない
+const flightDigits = (s) => (String(s || "").match(/\d+/)?.[0] || "").replace(/^0+/, "");
+
+// 勤務予定の便：便名の数字と出発空港が同じで、到着時刻がいちばん近い便
+function findOwn(leg, flights) {
+  const no = flightDigits(leg.no);
+  if (!no) return null;
+  let best = null;
+  for (const f of flights) {
+    if (f.dir !== "ARR" || flightDigits(f.number) !== no || (f.other && f.other !== leg.from)) continue;
+    const gap = Math.abs(f.schedMs - leg.arr);
+    if (gap <= MATCH_RANGE && (!best || gap < Math.abs(best.schedMs - leg.arr))) best = f;
+  }
+  return best;
+}
+
+// 選び直すときの候補：同じ空港から、勤務予定の到着の前後3時間に着く便
+const findCandidates = (leg, flights) => flights
+  .filter((f) => f.dir === "ARR" && !f.cargo && f.other === leg.from && Math.abs(f.schedMs - leg.arr) <= MATCH_RANGE)
+  .sort((a, b) => a.schedMs - b.schedMs);
+const nearestTo = (t, list) => list.reduce((a, b) => (!a || Math.abs(b.schedMs - t) < Math.abs(a.schedMs - t) ? b : a), null);
 
 // 見込み時刻：この空港の見込み・実際の時刻 → なければ（到着便は）出発空港での遅れを足す
 function enrich(f) {
@@ -118,22 +121,6 @@ function enrich(f) {
     canceled: /^Canceled/.test(f.status),
     diverted: f.status === "Diverted",
   };
-}
-
-// 自分の到着便の候補：前の空港から、勤務時間のあいだに着く便
-function findCandidates(leg, flights) {
-  const prev = prevArrival(leg);
-  const lo = prev ? prev + 20 * MIN : leg.dutyStart - 10 * MIN;
-  return flights
-    .filter((f) => f.dir === "ARR" && !f.cargo && f.other === leg.from
-      && (!Number.isFinite(f.otherSchedMs) || f.otherSchedMs >= lo) && f.schedMs <= leg.dutyEnd + 15 * MIN)
-    .sort((a, b) => (a.otherSchedMs || a.schedMs) - (b.otherSchedMs || b.schedMs));
-}
-function guessOwn(leg, cands) {
-  if (!cands.length) return null;
-  if (cands.length === 1) return cands[0];
-  // 最後の区間は勤務の終わりに近い便、それ以外は早い便
-  return leg.k === leg.n ? cands.reduce((a, b) => (b.schedMs > a.schedMs ? b : a)) : cands[0];
 }
 
 /* ---------- 表示 ---------- */
@@ -250,32 +237,26 @@ function TrafficBars({ rows, start, center }) {
   );
 }
 
-function Chooser({ leg, cands, guess, ownNumber, onDone }) {
-  const pref = load(AIRLINE_KEY, null);
-  const [sel, setSel] = useState(ownNumber || guess?.number || cands[0]?.number || "");
-  const selAirline = airlineOf(sel);
-  // 一覧は、覚えている会社があればその会社の便だけ（「ほかの会社の便も表示」で全部）
-  const prefCands = pref ? cands.filter((c) => airlineOf(c.number) === pref) : [];
-  const [showAll, setShowAll] = useState(!prefCands.length);
-  const list = showAll ? cands : prefCands;
-  const [remember, setRemember] = useState(true);
+// 勤務予定の便が時刻表に見つからないときなどに、自分の到着便か到着時刻を選ぶ
+function Chooser({ leg, cands, matched, ownNumber, onDone }) {
+  const near = matched || nearestTo(leg.arr, cands);
+  const [sel, setSel] = useState(ownNumber || near?.number || "");
   const [manual, setManual] = useState("");
+  const saved = savedPick(leg.key);
 
   const confirm = () => {
     const f = cands.find((c) => c.number === sel);
     if (!f) return;
     storePick(leg.key, { number: f.number, arr: f.schedMs });
-    save(AIRLINE_KEY, remember ? airlineOf(f.number) : null);
     onDone();
   };
   const confirmManual = () => {
     const m = manual.match(/^(\d{2}):(\d{2})$/);
     if (!m) return;
-    // 勤務の始まりより後で、いちばん近いその時刻（JST）
-    const day = Math.floor((leg.dutyStart + JST) / 86400e3) * 86400e3 - JST;
-    let t = day + (+m[1] * 60 + +m[2]) * MIN;
-    if (t < leg.dutyStart - 2 * 3600e3) t += 86400e3;
-    storePick(leg.key, { manual: manual, arr: t });
+    // 勤務予定の到着にいちばん近いその時刻（JST）
+    let t = Math.floor((leg.arr + JST) / 86400e3) * 86400e3 - JST + (+m[1] * 60 + +m[2]) * MIN;
+    if (t - leg.arr > 12 * HOUR) t -= 86400e3; else if (leg.arr - t > 12 * HOUR) t += 86400e3;
+    storePick(leg.key, { manual, arr: t });
     onDone();
   };
   const reset = () => { storePick(leg.key, null); onDone(); };
@@ -285,12 +266,13 @@ function Chooser({ leg, cands, guess, ownNumber, onDone }) {
       <div>
         <div style={{ fontSize: FS.md, fontWeight: 700, color: C.text }}>自分の到着便を選んでください</div>
         <div style={{ fontSize: FS.sm, color: C.textSub, marginTop: "2px" }}>
-          乗務の行程 {leg.from} → {leg.to} と勤務時間 {hhmm(leg.dutyStart)}–{hhmm(leg.dutyEnd)} JST から、候補を出しています。
+          勤務予定では {leg.no}便 {leg.from} {hhmm(leg.dep)} → {leg.to} {hhmm(leg.arr)} JST です。
+          {matched ? "" : "時刻表にこの便名が見つからないので、"}{leg.from} から前後3時間に着く便を出しています。
         </div>
       </div>
       {cands.length > 0 ? (
         <div role="radiogroup" aria-label="到着便の候補" style={{ display: "flex", flexDirection: "column", gap: "6px", maxWidth: "680px" }}>
-          {list.map((c) => {
+          {cands.map((c) => {
             const on = c.number === sel;
             return (
               <button key={`${c.number}-${c.schedMs}`} type="button" role="radio" aria-checked={on} onClick={() => setSel(c.number)} style={{
@@ -306,24 +288,15 @@ function Chooser({ leg, cands, guess, ownNumber, onDone }) {
                   {leg.from} {Number.isFinite(c.otherSchedMs) ? hhmm(c.otherSchedMs) : "--:--"} → {leg.to} <b style={{ color: C.text }}>{hhmm(c.schedMs)}</b>
                   <span style={{ fontFamily: FONT.ui, fontSize: FS.xs, color: C.textMuted, marginLeft: "8px" }}>{shortModel(c.model)}</span>
                 </span>
-                <span style={{ fontSize: FS.xs, color: C.textSub, whiteSpace: "nowrap" }}>{guess && c.number === guess.number ? "勤務から推定" : ""}</span>
+                <span style={{ fontSize: FS.xs, color: C.textSub, whiteSpace: "nowrap" }}>
+                  {near && c.number === near.number ? (matched ? "勤務予定の便" : "勤務予定に近い") : ""}
+                </span>
               </button>
             );
           })}
         </div>
       ) : (
         <div style={{ fontSize: FS.sm, color: C.textSub }}>{leg.from} から {leg.to} に着く便が見つかりません。</div>
-      )}
-      {!showAll && (
-        <button type="button" onClick={() => setShowAll(true)} style={{ ...actionBtnStyle, alignSelf: "flex-start", height: "36px", fontSize: FS.xs }}>
-          ほかの会社の便も表示（{cands.length - prefCands.length}便）
-        </button>
-      )}
-      {cands.length > 0 && selAirline && (
-        <label style={{ display: "inline-flex", alignItems: "center", gap: "10px", minHeight: "40px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
-          次から {selAirline} の便だけを候補にする
-        </label>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         {cands.length > 0 && (
@@ -338,23 +311,21 @@ function Chooser({ leg, cands, guess, ownNumber, onDone }) {
           <span style={{ fontSize: FS.sm, color: C.textSub }}>JST</span>
           <button type="button" onClick={confirmManual} disabled={!manual} style={{ ...actionBtnStyle, opacity: manual ? 1 : 0.5 }}>この時刻で表示</button>
         </span>
-        {savedPick(leg.key) && <button type="button" onClick={reset} style={actionBtnStyle}>推定に戻す</button>}
+        {saved && <button type="button" onClick={reset} style={actionBtnStyle}>勤務予定の便に戻す</button>}
         <button type="button" onClick={onDone} style={actionBtnStyle}>やめる</button>
       </div>
-      <div style={{ fontSize: FS.xs, color: C.textMuted }}>選んだ便は端末に保存し、この勤務のあいだ使います。</div>
+      <div style={{ fontSize: FS.xs, color: C.textMuted }}>選んだ便・時刻は端末に保存し、この区間で使います。</div>
     </div>
   );
 }
 
-function LegTraffic({ icao, leg }) {
-  const win = useMemo(() => fetchWindow(leg), [leg.dutyStart, leg.dutyEnd, leg.k, leg.n]);
+function LegTraffic({ icao, leg, win }) {
   const [state, setState] = useState({ status: "loading", data: null, error: null });
   const [tick, setTick] = useState({ n: 0, fresh: false });
   const [choosing, setChoosing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const narrow = useNarrow();
   const [layout, setLayout] = useState(() => (load(LAYOUT_KEY, "dir") === "time" ? "time" : "dir"));
-  const picksVersion = usePicksVersion();
 
   useEffect(() => {
     let alive = true;
@@ -366,31 +337,20 @@ function LegTraffic({ icao, leg }) {
   }, [icao, win.from, win.to, tick]);
 
   const flights = useMemo(() => (state.data?.flights || []).map(enrich), [state.data]);
-  const pref = load(AIRLINE_KEY, null);
-  // picksVersion：前の区間の便が決まったら推定し直す
-  const allCands = useMemo(() => findCandidates(leg, flights), [leg, flights, picksVersion]);
-  const cands = pref && allCands.some((c) => airlineOf(c.number) === pref) ? allCands.filter((c) => airlineOf(c.number) === pref) : allCands;
-  const guess = guessOwn(leg, cands);
+  const matched = useMemo(() => findOwn(leg, flights), [leg, flights]);
   const saved = savedPick(leg.key);
   const own = saved?.number ? flights.find((f) => f.dir === "ARR" && f.number === saved.number && f.other === leg.from) || null
-    : saved?.manual ? null : guess;
-  // 選んだ便がデータにないとき（時刻を指定したときも）は、保存した到着時刻を使う
-  const center = own ? own.expMs : saved?.arr || null;
-
-  // 後の区間の推定のために、推定した便の定刻の到着時刻を知らせる（遅れていても次の便は同じ機材で遅れて出るため）
-  const chainArr = own ? own.schedMs : null;
-  useEffect(() => {
-    if (saved || !chainArr) return;
-    if (autoArr.get(leg.key) !== chainArr) { autoArr.set(leg.key, chainArr); notify(); }
-  }, [leg.key, chainArr, saved]);
+    : saved?.manual ? null : matched;
+  // 自分の便が時刻表にないとき（時刻を指定したときも）は、保存した時刻か勤務予定の到着時刻を使う
+  const center = own ? own.expMs : saved?.arr || leg.arr;
 
   const setLayoutSaved = (v) => { setLayout(v); save(LAYOUT_KEY, v); };
   const refresh = () => setTick((t) => ({ n: t.n + 1, fresh: true }));
 
-  const start = center ? center - HALF : null;
-  const rows = center ? flights
+  const start = center - HALF;
+  const rows = flights
     .filter((f) => (f.expMs >= start && f.expMs <= center + HALF) || (f.schedMs >= start && f.schedMs <= center + HALF))
-    .sort((a, b) => a.expMs - b.expMs || a.schedMs - b.schedMs) : [];
+    .sort((a, b) => a.expMs - b.expMs || a.schedMs - b.schedMs);
   const arr = rows.filter((f) => f.dir === "ARR");
   const dep = rows.filter((f) => f.dir === "DEP");
   const delayed = rows.filter((f) => !f.canceled && (f.status === "Delayed" || f.lateMin >= DELAY_MIN)).length;
@@ -403,21 +363,19 @@ function LegTraffic({ icao, leg }) {
   const cols = narrow
     ? (timeMode ? "40px 56px 26px 62px 32px minmax(0,1fr)" : "40px 56px 62px 32px minmax(0,1fr)")
     : (timeMode ? "42px 64px 28px 68px 34px minmax(0,1fr) auto" : "42px 64px 68px 34px minmax(0,1fr) auto");
-  let left = [], right = [], leftHead, rightHead;
-  if (center) {
-    if (timeMode) {
-      left = rows.filter((f) => f.expMs < center);
-      right = rows.filter((f) => f.expMs >= center);
-      leftHead = ["到着の前の1時間", `${hhmm(start)}–${hhmm(center)} · ${left.length}便`];
-      rightHead = ["到着の後の1時間", `${hhmm(center)}–${hhmm(center + HALF)} · ${right.length}便`];
-    } else {
-      left = arr;
-      right = dep;
-      leftHead = [`到着 ${arr.length}便`, "時刻順（遅れは見込み時刻）"];
-      rightHead = [`出発 ${dep.length}便`, "点線が自分の到着"];
-    }
+  let left, right, leftHead, rightHead;
+  if (timeMode) {
+    left = rows.filter((f) => f.expMs < center);
+    right = rows.filter((f) => f.expMs >= center);
+    leftHead = ["到着の前の1時間", `${hhmm(start)}–${hhmm(center)} · ${left.length}便`];
+    rightHead = ["到着の後の1時間", `${hhmm(center)}–${hhmm(center + HALF)} · ${right.length}便`];
+  } else {
+    left = arr;
+    right = dep;
+    leftHead = [`到着 ${arr.length}便`, "時刻順（遅れは見込み時刻）"];
+    rightHead = [`出発 ${dep.length}便`, "点線が自分の到着"];
   }
-  // 便が多い空港（羽田など）は、自分の到着に近い便だけを先に見せる
+  // 便が多い空港は、自分の到着に近い便だけを先に見せる
   const trim = (list) => {
     if (expanded) return { shown: list, hidden: 0 };
     const before = list.filter((f) => f.expMs < center);
@@ -437,7 +395,11 @@ function LegTraffic({ icao, leg }) {
   };
 
   const chip = (bg, border, color) => ({ fontSize: FS.xs, padding: "4px 10px", borderRadius: "6px", background: bg, border: `1px solid ${border}`, color });
-  const badge = saved?.number ? "選んだ便" : saved?.manual ? "時刻を指定" : cands.length > 1 ? `勤務から推定（候補 ${cands.length}便）` : "勤務から推定";
+  // 自分の便の出どころ（勤務予定の便名で見つけた／選び直した／見つからない）
+  const [badge, badgeColor, badgeBg] = saved?.number ? ["選んだ便", C.text, "rgba(148,163,184,0.16)"]
+    : saved?.manual ? ["時刻を指定", C.text, "rgba(148,163,184,0.16)"]
+    : own ? ["勤務予定の便", C.text, "rgba(148,163,184,0.16)"]
+    : ["時刻表に見つかりません", ...TONE.warn];
   const data = state.data;
 
   return (
@@ -448,7 +410,7 @@ function LegTraffic({ icao, leg }) {
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
         <span style={{ fontSize: FS.xs, fontWeight: 700, letterSpacing: "1px", color: SKY }}>発着便</span>
         <span style={{ fontSize: FS.xs, color: C.textMuted }}>
-          {center ? `${hhmm(start)}–${hhmm(center + HALF)} JST（自分の到着の前後1時間）` : "自分の到着の前後1時間"} · AeroDataBox
+          {hhmm(start)}–{hhmm(center + HALF)} JST（自分の到着の前後1時間） · AeroDataBox
         </span>
         <span style={{ marginLeft: "auto", fontSize: FS.xs, color: C.textMuted }}>
           {state.status === "loading" ? "読み込み中…" : state.status === "refreshing" ? "更新中…" : data ? `取得 ${hhmm(toMs(data.fetchedAt))}${data.usedToday ? ` · 今日の取得 ${data.usedToday}回` : ""}` : ""}
@@ -463,7 +425,7 @@ function LegTraffic({ icao, leg }) {
       )}
 
       {data && (choosing ? (
-        <Chooser leg={leg} cands={allCands} guess={guess} ownNumber={ownNumber} onDone={() => setChoosing(false)} />
+        <Chooser leg={leg} cands={findCandidates(leg, flights)} matched={matched} ownNumber={ownNumber} onDone={() => setChoosing(false)} />
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -476,66 +438,65 @@ function LegTraffic({ icao, leg }) {
                 {Math.abs(own.lateMin) >= LATE_MIN && <span style={{ fontFamily: FONT.data, fontSize: FS.sm, color: own.lateMin > 0 ? AMBER : SKY }}>見込み {hhmm(own.expMs)}{own.fromOrigin ? "頃" : ""}</span>}
                 <span style={{ fontSize: FS.xs, color: C.textSub }}>JST（{hhmmZ(own.schedMs)}）{own.model ? ` · ${shortModel(own.model)}` : ""}</span>
               </span>
-            ) : center ? (
-              <span style={{ fontFamily: FONT.data, fontSize: FS.md, fontWeight: 700, color: C.accent }}>{hhmm(center)} <span style={{ fontFamily: FONT.ui, fontSize: FS.xs, color: C.textSub, fontWeight: 400 }}>JST（{hhmmZ(center)}）</span></span>
             ) : (
-              <span style={{ fontSize: FS.sm, color: C.textSub }}>{leg.from} から {leg.to} に着く便が見つかりません</span>
+              <span style={{ display: "inline-flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap", padding: "7px 12px", borderRadius: "8px", background: "rgba(15,23,42,0.6)", border: `1px solid ${C.border}` }}>
+                <span style={{ fontFamily: FONT.data, fontSize: FS.md, fontWeight: 700 }}>{saved?.manual ? "到着" : saved?.number || `${leg.no}便`}</span>
+                {!saved?.manual && <span style={{ fontFamily: FONT.data, fontSize: FS.sm, color: C.textSub }}>{leg.from} {saved?.number ? "" : hhmm(leg.dep)} → {leg.to}</span>}
+                <span style={{ fontFamily: FONT.data, fontSize: FS.md, fontWeight: 700, color: C.accent }}>{hhmm(center)}</span>
+                <span style={{ fontSize: FS.xs, color: C.textSub }}>JST（{hhmmZ(center)}）</span>
+              </span>
             )}
-            {center && <span style={{ fontSize: FS.xs, fontWeight: 700, padding: "3px 8px", borderRadius: "4px", background: "rgba(148,163,184,0.16)", color: C.text }}>{badge}</span>}
-            <button type="button" onClick={() => setChoosing(true)} style={{ ...actionBtnStyle, height: "36px", fontSize: FS.xs }}>{center ? "便を変える" : "便・時刻を指定"}</button>
-            {center && (
-              <Segmented
-                options={[{ key: "dir", label: "到着と出発で分ける" }, { key: "time", label: "到着の前と後で分ける" }]}
-                value={layout} onChange={setLayoutSaved} label="並べ方" height={36} style={{ marginLeft: "auto" }}
-              />
+            <span style={{ fontSize: FS.xs, fontWeight: 700, padding: "3px 8px", borderRadius: "4px", background: badgeBg, color: badgeColor }}>{badge}</span>
+            {(saved || !own) && (
+              <button type="button" onClick={() => setChoosing(true)} style={{ ...actionBtnStyle, height: "36px", fontSize: FS.xs }}>{saved ? "便を変える" : "便・時刻を指定"}</button>
             )}
+            <Segmented
+              options={[{ key: "dir", label: "到着と出発で分ける" }, { key: "time", label: "到着の前と後で分ける" }]}
+              value={layout} onChange={setLayoutSaved} label="並べ方" height={36} style={{ marginLeft: "auto" }}
+            />
           </div>
 
-          {center && (
-            <>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: "20px", flexWrap: "wrap" }}>
-                <TrafficBars rows={rows} start={start} center={center} />
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingBottom: "18px" }}>
-                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: FS.xs, color: C.textSub }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "10px", height: "8px", borderRadius: "2px", background: SKY }} />到着（線の上）</span>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "10px", height: "8px", borderRadius: "2px", background: VIOLET }} />出発（線の下）</span>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "2px", height: "10px", background: C.accent }} />自分の到着</span>
-                  </div>
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    <span style={chip("rgba(15,23,42,0.6)", C.border, C.text)}>到着 <b style={{ fontFamily: FONT.data }}>{arr.length}</b> · 出発 <b style={{ fontFamily: FONT.data }}>{dep.length}</b></span>
-                    {delayed > 0 && <span style={chip("rgba(251,191,36,0.10)", "rgba(251,191,36,0.35)", AMBER)}>遅れ <b style={{ fontFamily: FONT.data }}>{delayed}</b></span>}
-                    {canceled > 0 && <span style={chip("rgba(248,113,113,0.10)", "rgba(248,113,113,0.35)", RED)}>欠航 <b style={{ fontFamily: FONT.data }}>{canceled}</b></span>}
-                    {diverted > 0 && <span style={chip("rgba(248,113,113,0.10)", "rgba(248,113,113,0.35)", RED)}>ダイバート <b style={{ fontFamily: FONT.data }}>{diverted}</b></span>}
-                  </div>
-                  <span style={{ fontSize: FS.xs, color: C.textMuted }}>15分ごとの数。欠航は数えず、遅れている便は見込み時刻で数えます</span>
-                </div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "20px", flexWrap: "wrap" }}>
+            <TrafficBars rows={rows} start={start} center={center} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingBottom: "18px" }}>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: FS.xs, color: C.textSub }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "10px", height: "8px", borderRadius: "2px", background: SKY }} />到着（線の上）</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "10px", height: "8px", borderRadius: "2px", background: VIOLET }} />出発（線の下）</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "2px", height: "10px", background: C.accent }} />自分の到着</span>
               </div>
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                <span style={chip("rgba(15,23,42,0.6)", C.border, C.text)}>到着 <b style={{ fontFamily: FONT.data }}>{arr.length}</b> · 出発 <b style={{ fontFamily: FONT.data }}>{dep.length}</b></span>
+                {delayed > 0 && <span style={chip("rgba(251,191,36,0.10)", "rgba(251,191,36,0.35)", AMBER)}>遅れ <b style={{ fontFamily: FONT.data }}>{delayed}</b></span>}
+                {canceled > 0 && <span style={chip("rgba(248,113,113,0.10)", "rgba(248,113,113,0.35)", RED)}>欠航 <b style={{ fontFamily: FONT.data }}>{canceled}</b></span>}
+                {diverted > 0 && <span style={chip("rgba(248,113,113,0.10)", "rgba(248,113,113,0.35)", RED)}>ダイバート <b style={{ fontFamily: FONT.data }}>{diverted}</b></span>}
+              </div>
+              <span style={{ fontSize: FS.xs, color: C.textMuted }}>15分ごとの数。欠航は数えず、遅れている便は見込み時刻で数えます</span>
+            </div>
+          </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: "14px" }}>
-                {[[leftHead, left, !timeMode && !ownNumber], [rightHead, right, !timeMode]].map(([head, list, divider], i) => {
-                  const { shown, hidden } = trim(list);
-                  return (
-                    <div key={i} style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: "8px", minHeight: "22px", padding: "0 8px", borderBottom: `1px solid ${C.border}` }}>
-                        <span style={{ fontSize: FS.sm, fontWeight: 700, color: C.text }}>{head[0]}</span>
-                        <span style={{ fontSize: FS.xs, color: C.textMuted }}>{head[1]}</span>
-                      </div>
-                      <ol aria-label={head[0]} style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
-                        {shown.length ? renderList(shown, divider) : <li style={{ fontSize: FS.xs, color: C.textMuted, padding: "6px 8px" }}>なし</li>}
-                      </ol>
-                      {hidden > 0 && (
-                        <span style={{ fontSize: FS.xs, color: C.textMuted, padding: "4px 8px" }}>自分の到着に近い {shown.length}便を表示（ほか {hidden}便）</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              {(trim(left).hidden > 0 || trim(right).hidden > 0 || expanded) && (
-                <button type="button" onClick={() => setExpanded((v) => !v)} style={{ ...actionBtnStyle, alignSelf: "flex-start", height: "36px", fontSize: FS.xs }}>
-                  {expanded ? "近い便だけ表示" : `すべて表示（${rows.length}便）`}
-                </button>
-              )}
-            </>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: "14px" }}>
+            {[[leftHead, left, !timeMode && !ownNumber], [rightHead, right, !timeMode]].map(([head, list, divider], i) => {
+              const { shown, hidden } = trim(list);
+              return (
+                <div key={i} style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "8px", minHeight: "22px", padding: "0 8px", borderBottom: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: FS.sm, fontWeight: 700, color: C.text }}>{head[0]}</span>
+                    <span style={{ fontSize: FS.xs, color: C.textMuted }}>{head[1]}</span>
+                  </div>
+                  <ol aria-label={head[0]} style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+                    {shown.length ? renderList(shown, divider) : <li style={{ fontSize: FS.xs, color: C.textMuted, padding: "6px 8px" }}>なし</li>}
+                  </ol>
+                  {hidden > 0 && (
+                    <span style={{ fontSize: FS.xs, color: C.textMuted, padding: "4px 8px" }}>自分の到着に近い {shown.length}便を表示（ほか {hidden}便）</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {(trim(left).hidden > 0 || trim(right).hidden > 0 || expanded) && (
+            <button type="button" onClick={() => setExpanded((v) => !v)} style={{ ...actionBtnStyle, alignSelf: "flex-start", height: "36px", fontSize: FS.xs }}>
+              {expanded ? "近い便だけ表示" : `すべて表示（${rows.length}便）`}
+            </button>
           )}
         </>
       ))}
@@ -548,8 +509,12 @@ function LegTraffic({ icao, leg }) {
   );
 }
 
-// legs：この空港に着く本日の乗務の区間（WeatherBriefing の getDutyArrivalLegs）
+// legs：この空港に着く本日の乗務の区間（WeatherBriefing の getDutyArrivalLegs。便名・時刻は勤務予定の ICS の説明欄のもの）
 export default function FlightTraffic({ icao, legs }) {
   if (!legs?.length || BUSY_AIRPORTS.has(icao)) return null;
-  return legs.map((leg) => <LegTraffic key={leg.key} icao={icao} leg={leg} />);
+  // 同じ空港に何度か着く日は、12時間に収まれば1回でまとめて取る（同じ URL になるので保存も共有）
+  const all = fetchWindow(legs.map((l) => l.arr));
+  return legs.map((leg) => (
+    <LegTraffic key={leg.key} icao={icao} leg={leg} win={all.to - all.from <= MAX_WINDOW ? all : fetchWindow([leg.arr])} />
+  ));
 }

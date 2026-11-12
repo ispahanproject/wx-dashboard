@@ -2370,6 +2370,11 @@ function MetarTafPanel() {
                 </span>
               </div>
               <UnknownIataFix codes={unknownCodes} />
+              {dutyNeedsReload(todayEvts) && (
+                <div style={{ marginTop: "4px", padding: "0 12px", fontSize: FS.xs, color: "#fcd34d" }}>
+                  区間と便名は ICS の説明欄から読むようになりました。DUTY のタブで ICS を読み込み直すと、目的地の空港と発着便が出ます。
+                </div>
+              )}
             </div>
           );
         })()}
@@ -3317,9 +3322,55 @@ function JmaWeatherTicker() {
 
 
 /* ========== ICS PARSER ========== */
+const ICS_MONTHS = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+
+// CrewAccess の説明欄（DESCRIPTION）の区間。日付の見出し「Fri, 13 Nov 2026」（UTC）のあとに、
+// 区間ごとに「641  21:25  23:20  HND - KOJ  FO」（便名・出発・到着（UTC）・区間・役割）が並ぶ。
+// 題名（SUMMARY）には拠点と泊まりの空港しか入らない（日帰りは「FLY (HND)」）ので、区間と便名はここから読む
+function parseIcsLegs(desc) {
+  const legs = [];
+  let day = null;
+  for (const raw of desc.split("\n")) {
+    const line = raw.trim();
+    const d = line.match(/^[A-Z][a-z]{2},?\s+(\d{1,2})\s+([A-Z][a-z]{2})\s+(\d{4})$/);
+    if (d && d[2] in ICS_MONTHS) { day = Date.UTC(+d[3], ICS_MONTHS[d[2]], +d[1]); continue; }
+    const m = line.match(/^(\S*\d\S*)\s+(\d{2}):(\d{2})\s+(\d{2}):(\d{2})\s+([A-Z]{3})\s*-\s*([A-Z]{3})\b/);
+    if (!m || day === null) continue;
+    const dep = day + (+m[2] * 60 + +m[3]) * 60000;
+    let arr = day + (+m[4] * 60 + +m[5]) * 60000;
+    if (arr < dep) arr += 86400000; // 到着が UTC の翌日
+    legs.push({ no: m[1], from: m[6], to: m[7], dep, arr });
+  }
+  return legs;
+}
+
+// 区間をつないだルート（HND-KOJ・KOJ-HND → HND, KOJ, HND）
+function routeOfLegs(legs) {
+  const route = [];
+  for (const l of legs) {
+    if (route[route.length - 1] !== l.from) route.push(l.from);
+    route.push(l.to);
+  }
+  return route;
+}
+
+// その日（from〜to）の区間だけにした乗務。何日かにわたる組を、その日の行程として扱うため
+function dutyDayView(ev, from, to) {
+  if (ev.type !== "FLY" || !ev.legs?.length) return ev;
+  const legs = ev.legs.filter((l) => l.dep < to && l.arr > from);
+  if (legs.length) return { ...ev, legs, route: routeOfLegs(legs) };
+  // その日は飛ばない（泊まりの日など）：いる空港だけ
+  const done = ev.legs.filter((l) => l.arr <= from);
+  return { ...ev, legs: [], route: [done.length ? done[done.length - 1].to : ev.legs[0].from] };
+}
+
+// 区間を読む前の形で保存された勤務予定（ICS を読み込み直すと区間と便名が入る）
+const dutyNeedsReload = (events) => events.some((e) => e.type === "FLY" && !Array.isArray(e.legs));
+
 function parseICS(text) {
   const events = [];
-  const blocks = text.split("BEGIN:VEVENT");
+  // 折り返した行（改行＋空白）をつないでから読む
+  const blocks = text.replace(/\r?\n[ \t]/g, "").split("BEGIN:VEVENT");
   for (let i = 1; i < blocks.length; i++) {
     const b = blocks[i];
     const get = (key) => {
@@ -3332,11 +3383,14 @@ function parseICS(text) {
     const dtstart = get("DTSTART");
     const dtend = get("DTEND");
 
-    // Parse type and route from SUMMARY like "FLY (HND-AOJ-HND)"
+    // 種類は題名（"FLY (HND-AOJ-HND)"）から。区間は説明欄から読み、読めないときだけ題名のルートを使う
     const typeMatch = summary.match(/^(FLY|NON-FLY|OFF|STANDBY|GROUND)\s*\(([^)]*)\)/);
     const type = typeMatch ? typeMatch[1] : summary;
     const routeStr = typeMatch ? typeMatch[2] : "";
-    const route = type === "FLY" && routeStr ? routeStr.split("-") : [];
+    const descM = b.match(/^DESCRIPTION(?:;[^:\r\n]*)?:(.*)$/m);
+    const desc = descM ? descM[1].trim().replace(/\\n/gi, "\n").replace(/\\([,;\\])/g, "$1") : "";
+    const legs = type === "FLY" ? parseIcsLegs(desc) : [];
+    const route = type !== "FLY" ? [] : legs.length ? routeOfLegs(legs) : routeStr ? routeStr.split("-") : [];
 
     // Parse dates: 20260201T030000Z → Date
     const parseD = (s) => {
@@ -3349,7 +3403,7 @@ function parseICS(text) {
     const tripId = uid.replace(/-\d+$/, "");
 
     events.push({
-      uid, summary, location, type, route, tripId,
+      uid, summary, location, type, route, legs, tripId,
       start: parseD(dtstart),
       end: parseD(dtend),
     });
@@ -3380,7 +3434,9 @@ function getTodayDutyEvents() {
     const todayJST = new Date(Date.UTC(nowJST.getUTCFullYear(), nowJST.getUTCMonth(), nowJST.getUTCDate()));
     const todayStartUTC = new Date(todayJST.getTime() - JST);
     const todayEndUTC = new Date(todayStartUTC.getTime() + 86400000);
-    return events.filter(e => e.start < todayEndUTC && e.end > todayStartUTC);
+    // 何日かにわたる組は、今日の区間だけにする
+    return events.filter(e => e.start < todayEndUTC && e.end > todayStartUTC)
+      .map(e => dutyDayView(e, todayStartUTC.getTime(), todayEndUTC.getTime()));
   } catch { return []; }
 }
 
@@ -3406,20 +3462,14 @@ function getUnknownDutyCodes(events) {
   return [...codes];
 }
 
-// 本日の乗務の各区間（到着空港のカードに、到着の前後1時間の発着便を出すため）
+// 本日の乗務の各区間（到着空港のカードに、到着の前後1時間の発着便を出すため）。便名と時刻は ICS の説明欄のもの
 function getDutyArrivalLegs(events) {
   const legs = [];
   for (const ev of events) {
-    if (ev.type !== "FLY" || !ev.route || ev.route.length < 2 || !ev.start || !ev.end) continue;
-    const route = ev.route.map((c) => (c || "").trim().toUpperCase());
-    const n = route.length - 1;
-    for (let k = 1; k <= n; k++) {
-      const toIcao = iataToIcao(route[k]);
-      if (!toIcao) continue;
-      legs.push({
-        key: `${ev.uid}#${k}`, prevKey: k > 1 ? `${ev.uid}#${k - 1}` : null, k, n,
-        from: route[k - 1], to: route[k], toIcao, dutyStart: ev.start.getTime(), dutyEnd: ev.end.getTime(),
-      });
+    if (ev.type !== "FLY" || !ev.legs?.length) continue;
+    for (const l of ev.legs) {
+      const toIcao = iataToIcao(l.to);
+      if (toIcao) legs.push({ ...l, key: `${ev.uid}:${l.no}:${l.dep}`, toIcao });
     }
   }
   return legs;
@@ -3606,6 +3656,17 @@ function DutySchedulePanel() {
           <input ref={fileRef} type="file" accept=".ics" onChange={handleFile} style={{ display: "none" }} />
         </div>
       </div>
+
+      {/* 区間（便名）を読めていない勤務予定の案内 */}
+      {(() => {
+        const unread = events.filter(e => e.type === "FLY" && Array.isArray(e.legs) && e.legs.length === 0).length;
+        const msg = dutyNeedsReload(events)
+          ? "区間と便名を ICS の説明欄から読むようになりました。「↑ RELOAD」で ICS を読み込み直してください。"
+          : unread > 0 ? `${unread}件の乗務で、説明欄から区間を読み取れませんでした（題名のルートで表示しています）。` : "";
+        return msg && (
+          <div style={{ marginBottom: "14px", padding: "8px 12px", borderRadius: "4px", border: "1px solid rgba(251,191,36,0.35)", background: "rgba(251,191,36,0.08)", color: "#fcd34d", fontSize: FS.xs }}>{msg}</div>
+        );
+      })()}
 
       {/* Status Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "20px" }}>

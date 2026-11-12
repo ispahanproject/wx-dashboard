@@ -1,5 +1,6 @@
 /* ============================================================
-   TERMINAL — 乗務の目的地の発着便（自分の到着の前後1時間）
+   TERMINAL — 乗務の目的地に着く便（自分の到着の前後1時間）
+   - 到着便だけを出す。出発便は出さない（2026-11-13 利用者の判断）
    - 今日の乗務に加えて、明日の乗務の分も前の日から出す
    - 便は AeroDataBox（RapidAPI）を Worker 経由で取る（/flights/）。回数に上限があるので Worker の KV に保存して使い回す
    - 自分の到着便は、勤務予定（ICS の説明欄）の便名・出発空港・時刻で時刻表から探す。
@@ -8,7 +9,7 @@
    - 時刻表で十分（利用者の判断）。到着便は、出発空港での遅れ・離陸がわかればそれも添える
    ============================================================ */
 import { useState, useEffect, useMemo } from "react";
-import { ExtLink, Segmented, actionBtnStyle } from "./ui.jsx";
+import { ExtLink, actionBtnStyle } from "./ui.jsx";
 import { C, FS, FONT } from "./theme.js";
 import { WORKER_URL } from "./DomesticWxPanel.jsx";
 
@@ -16,7 +17,7 @@ const JST = 9 * 3600e3;
 const MIN = 60e3;
 const HOUR = 60 * MIN;
 const HALF = HOUR;                // 自分の到着の前後1時間
-const BIN = 15 * MIN;             // 発着の数を数える幅
+const BIN = 15 * MIN;             // 到着の数を数える幅
 const BINS = (2 * HALF) / BIN;
 const MAX_WINDOW = 12 * HOUR;     // AeroDataBox で1回に取れる幅
 const STEP = 30 * MIN;            // 取る時間帯の区切り（Worker の保存の単位）
@@ -25,9 +26,8 @@ const CLIENT_CACHE_MS = 10 * MIN;
 const LATE_MIN = 5;               // これ以上ずれたら見込み時刻を出す
 const DELAY_MIN = 15;             // 遅延として数える
 const SHOW_EACH_SIDE = 6;         // 一覧で、自分の到着の前と後にそれぞれ先に見せる便の数
-const LAYOUT_KEY = "traffic_layout";
 const PICKS_KEY = "traffic_picks";
-const SKY = "#7dd3fc", VIOLET = "#a5b4fc", AMBER = "#fcd34d", RED = "#fca5a5";
+const SKY = "#7dd3fc", AMBER = "#fcd34d", RED = "#fca5a5";
 // 便が多すぎて一覧にしても役に立たない大空港（2026-11-12 利用者の判断）
 const BUSY_AIRPORTS = new Set(["RJTT", "RJAA", "RJBB", "RJOO", "RJCC", "RJFF", "ROAH", "RJGG"]);
 
@@ -161,7 +161,7 @@ const ERRORS = {
   key: "AeroDataBox のキーが使えません（契約・キーを確かめてください）。",
 };
 
-function Row({ f, cols, showDir, showModel, ownNumber }) {
+function Row({ f, cols, showModel, ownNumber }) {
   const [label, tone] = statusOf(f, ownNumber);
   const own = tone === "own";
   const late = Math.abs(f.lateMin) >= LATE_MIN;
@@ -175,9 +175,6 @@ function Row({ f, cols, showDir, showModel, ownNumber }) {
       <span style={{ fontFamily: FONT.data, fontSize: FS.xs, color: f.lateMin > 0 ? AMBER : SKY, whiteSpace: "nowrap" }}>
         {late && !f.canceled ? `→${hhmm(f.expMs)}${f.fromOrigin ? "頃" : ""}` : ""}
       </span>
-      {showDir && (
-        <span style={{ fontSize: FS.xs, fontWeight: 700, color: f.dir === "ARR" ? SKY : VIOLET }}>{f.dir === "ARR" ? "到着" : "出発"}</span>
-      )}
       <span style={{ fontFamily: FONT.data, fontSize: FS.sm, fontWeight: 700, color: C.text, whiteSpace: "nowrap", textDecoration: f.canceled ? "line-through" : "none" }}>{f.number}</span>
       <span style={{ fontFamily: FONT.data, fontSize: FS.sm, color: C.textSub }}>{f.other}</span>
       {showModel && (
@@ -204,31 +201,30 @@ function Divider({ t }) {
   );
 }
 
-// 15分ごとの発着の数（線の上が到着、下が出発。緑の線が自分の到着）
+// 15分ごとの到着の数（緑の線が自分の到着）
 function TrafficBars({ rows, start, center }) {
-  const bins = Array.from({ length: BINS }, () => ({ arr: 0, dep: 0 }));
+  const bins = Array(BINS).fill(0);
   for (const f of rows) {
     if (f.canceled) continue;
     const i = Math.floor((f.expMs - start) / BIN);
     if (i < 0 || i > BINS) continue;
-    bins[Math.min(BINS - 1, i)][f.dir === "ARR" ? "arr" : "dep"]++;
+    bins[Math.min(BINS - 1, i)]++;
   }
-  const max = Math.max(1, ...bins.map((b) => Math.max(b.arr, b.dep)));
-  const H = 30;
-  const bar = (n, color, up) => (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: up ? "flex-end" : "flex-start", alignItems: "center", height: `${H + 12}px`, borderLeft: "1px solid rgba(148,163,184,0.10)" }}>
-      {up && n > 0 && <span style={{ fontFamily: FONT.data, fontSize: "10px", color: C.textMuted, lineHeight: "12px" }}>{n}</span>}
-      <span style={{ width: "60%", height: `${Math.round((H * n) / max)}px`, borderRadius: "2px", background: color }} />
-      {!up && n > 0 && <span style={{ fontFamily: FONT.data, fontSize: "10px", color: C.textMuted, lineHeight: "12px" }}>{n}</span>}
-    </div>
-  );
+  const max = Math.max(1, ...bins);
+  const H = 40;
   const pos = `${((center - start) / (2 * HALF)) * 100}%`;
   return (
-    <figure aria-label="15分ごとの発着の数" style={{ margin: 0, width: "min(100%, 560px)", position: "relative" }}>
-      <div style={{ display: "flex" }}>{bins.map((b, i) => <div key={i} style={{ flex: 1, display: "flex" }}>{bar(b.arr, SKY, true)}</div>)}</div>
+    <figure aria-label="15分ごとの到着の数" style={{ margin: 0, width: "min(100%, 560px)", position: "relative" }}>
+      <div style={{ display: "flex" }}>
+        {bins.map((n, i) => (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", height: `${H + 12}px`, borderLeft: "1px solid rgba(148,163,184,0.10)" }}>
+            {n > 0 && <span style={{ fontFamily: FONT.data, fontSize: "10px", color: C.textMuted, lineHeight: "12px" }}>{n}</span>}
+            <span style={{ width: "60%", height: `${Math.round((H * n) / max)}px`, borderRadius: "2px", background: SKY }} />
+          </div>
+        ))}
+      </div>
       <div style={{ height: "1px", background: "rgba(148,163,184,0.35)" }} />
-      <div style={{ display: "flex" }}>{bins.map((b, i) => <div key={i} style={{ flex: 1, display: "flex" }}>{bar(b.dep, VIOLET, false)}</div>)}</div>
-      <div style={{ position: "absolute", left: pos, top: 0, height: `${2 * (H + 12) + 1}px`, borderLeft: `2px solid ${C.accent}` }} />
+      <div style={{ position: "absolute", left: pos, top: 0, height: `${H + 13}px`, borderLeft: `2px solid ${C.accent}` }} />
       <div style={{ position: "relative", height: "16px", fontFamily: FONT.data, fontSize: FS.xs, color: C.textMuted }}>
         <span style={{ position: "absolute", left: 0 }}>{hhmm(start)}</span>
         <span style={{ position: "absolute", left: pos, transform: "translateX(-50%)", color: C.accent, fontWeight: 700 }}>{hhmm(center)}</span>
@@ -326,7 +322,6 @@ function LegTraffic({ icao, leg, win }) {
   const [choosing, setChoosing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const narrow = useNarrow();
-  const [layout, setLayout] = useState(() => (load(LAYOUT_KEY, "dir") === "time" ? "time" : "dir"));
 
   useEffect(() => {
     let alive = true;
@@ -345,37 +340,18 @@ function LegTraffic({ icao, leg, win }) {
   // 自分の便が時刻表にないとき（時刻を指定したときも）は、保存した時刻か勤務予定の到着時刻を使う
   const center = own ? own.expMs : saved?.arr || leg.arr;
 
-  const setLayoutSaved = (v) => { setLayout(v); save(LAYOUT_KEY, v); };
   const refresh = () => setTick((t) => ({ n: t.n + 1, fresh: true }));
 
+  // 到着便だけ（出発便は出さない）
   const start = center - HALF;
   const rows = flights
-    .filter((f) => (f.expMs >= start && f.expMs <= center + HALF) || (f.schedMs >= start && f.schedMs <= center + HALF))
+    .filter((f) => f.dir === "ARR" && ((f.expMs >= start && f.expMs <= center + HALF) || (f.schedMs >= start && f.schedMs <= center + HALF)))
     .sort((a, b) => a.expMs - b.expMs || a.schedMs - b.schedMs);
-  const arr = rows.filter((f) => f.dir === "ARR");
-  const dep = rows.filter((f) => f.dir === "DEP");
   const delayed = rows.filter((f) => !f.canceled && (f.status === "Delayed" || f.lateMin >= DELAY_MIN)).length;
   const canceled = rows.filter((f) => f.canceled).length;
   const diverted = rows.filter((f) => f.diverted).length;
   const ownNumber = own?.number || null;
-
-  // 並べ方：到着と出発で分ける／自分の到着の前と後で分ける
-  const timeMode = layout === "time";
-  const cols = narrow
-    ? (timeMode ? "40px 56px 26px 62px 32px minmax(0,1fr)" : "40px 56px 62px 32px minmax(0,1fr)")
-    : (timeMode ? "42px 64px 28px 68px 34px minmax(0,1fr) auto" : "42px 64px 68px 34px minmax(0,1fr) auto");
-  let left, right, leftHead, rightHead;
-  if (timeMode) {
-    left = rows.filter((f) => f.expMs < center);
-    right = rows.filter((f) => f.expMs >= center);
-    leftHead = ["到着の前の1時間", `${hhmm(start)}–${hhmm(center)} · ${left.length}便`];
-    rightHead = ["到着の後の1時間", `${hhmm(center)}–${hhmm(center + HALF)} · ${right.length}便`];
-  } else {
-    left = arr;
-    right = dep;
-    leftHead = [`到着 ${arr.length}便`, "時刻順（遅れは見込み時刻）"];
-    rightHead = [`出発 ${dep.length}便`, "点線が自分の到着"];
-  }
+  const cols = narrow ? "40px 56px 62px 32px minmax(0,1fr)" : "42px 64px 68px 34px minmax(0,1fr) auto";
   // 便が多い空港は、自分の到着に近い便だけを先に見せる
   const trim = (list) => {
     if (expanded) return { shown: list, hidden: 0 };
@@ -389,11 +365,12 @@ function LegTraffic({ icao, leg, win }) {
     let placed = !withDivider;
     for (const f of list) {
       if (!placed && f.expMs >= center) { out.push(<Divider key="divider" t={center} />); placed = true; }
-      out.push(<Row key={`${f.dir}-${f.number}-${f.schedMs}`} f={f} cols={cols} showDir={timeMode} showModel={!narrow} ownNumber={ownNumber} />);
+      out.push(<Row key={`${f.dir}-${f.number}-${f.schedMs}`} f={f} cols={cols} showModel={!narrow} ownNumber={ownNumber} />);
     }
     if (!placed) out.push(<Divider key="divider" t={center} />);
     return out;
   };
+  const { shown, hidden } = trim(rows);
 
   const chip = (bg, border, color) => ({ fontSize: FS.xs, padding: "4px 10px", borderRadius: "6px", background: bg, border: `1px solid ${border}`, color });
   // 自分の便の出どころ（勤務予定の便名で見つけた／選び直した／見つからない）
@@ -404,12 +381,12 @@ function LegTraffic({ icao, leg, win }) {
   const data = state.data;
 
   return (
-    <section aria-label={`${icao} 到着前後の発着便`} style={{
+    <section aria-label={`${icao} 自分の到着の前後の到着便`} style={{
       marginTop: "12px", padding: "10px 12px", borderRadius: "8px",
       background: "rgba(125,211,252,0.05)", border: "1px solid rgba(125,211,252,0.28)", display: "flex", flexDirection: "column", gap: "10px",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-        <span style={{ fontSize: FS.xs, fontWeight: 700, letterSpacing: "1px", color: SKY }}>発着便</span>
+        <span style={{ fontSize: FS.xs, fontWeight: 700, letterSpacing: "1px", color: SKY }}>到着便</span>
         {leg.when && (
           <span style={{ fontSize: FS.xs, fontWeight: 700, padding: "2px 8px", borderRadius: "4px", color: SKY, background: "rgba(125,211,252,0.14)" }}>{leg.when}</span>
         )}
@@ -454,50 +431,38 @@ function LegTraffic({ icao, leg, win }) {
             {(saved || !own) && (
               <button type="button" onClick={() => setChoosing(true)} style={{ ...actionBtnStyle, height: "36px", fontSize: FS.xs }}>{saved ? "便を変える" : "便・時刻を指定"}</button>
             )}
-            <Segmented
-              options={[{ key: "dir", label: "到着と出発で分ける" }, { key: "time", label: "到着の前と後で分ける" }]}
-              value={layout} onChange={setLayoutSaved} label="並べ方" height={36} style={{ marginLeft: "auto" }}
-            />
           </div>
 
           <div style={{ display: "flex", alignItems: "flex-end", gap: "20px", flexWrap: "wrap" }}>
             <TrafficBars rows={rows} start={start} center={center} />
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingBottom: "18px" }}>
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: FS.xs, color: C.textSub }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "10px", height: "8px", borderRadius: "2px", background: SKY }} />到着（線の上）</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "10px", height: "8px", borderRadius: "2px", background: VIOLET }} />出発（線の下）</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "10px", height: "8px", borderRadius: "2px", background: SKY }} />15分ごとの到着の数</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}><span style={{ width: "2px", height: "10px", background: C.accent }} />自分の到着</span>
               </div>
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                <span style={chip("rgba(15,23,42,0.6)", C.border, C.text)}>到着 <b style={{ fontFamily: FONT.data }}>{arr.length}</b> · 出発 <b style={{ fontFamily: FONT.data }}>{dep.length}</b></span>
+                <span style={chip("rgba(15,23,42,0.6)", C.border, C.text)}>到着 <b style={{ fontFamily: FONT.data }}>{rows.length}</b></span>
                 {delayed > 0 && <span style={chip("rgba(251,191,36,0.10)", "rgba(251,191,36,0.35)", AMBER)}>遅れ <b style={{ fontFamily: FONT.data }}>{delayed}</b></span>}
                 {canceled > 0 && <span style={chip("rgba(248,113,113,0.10)", "rgba(248,113,113,0.35)", RED)}>欠航 <b style={{ fontFamily: FONT.data }}>{canceled}</b></span>}
                 {diverted > 0 && <span style={chip("rgba(248,113,113,0.10)", "rgba(248,113,113,0.35)", RED)}>ダイバート <b style={{ fontFamily: FONT.data }}>{diverted}</b></span>}
               </div>
-              <span style={{ fontSize: FS.xs, color: C.textMuted }}>15分ごとの数。欠航は数えず、遅れている便は見込み時刻で数えます</span>
+              <span style={{ fontSize: FS.xs, color: C.textMuted }}>欠航は数えず、遅れている便は見込み時刻で数えます</span>
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: "14px" }}>
-            {[[leftHead, left, !timeMode && !ownNumber], [rightHead, right, !timeMode]].map(([head, list, divider], i) => {
-              const { shown, hidden } = trim(list);
-              return (
-                <div key={i} style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: "8px", minHeight: "22px", padding: "0 8px", borderBottom: `1px solid ${C.border}` }}>
-                    <span style={{ fontSize: FS.sm, fontWeight: 700, color: C.text }}>{head[0]}</span>
-                    <span style={{ fontSize: FS.xs, color: C.textMuted }}>{head[1]}</span>
-                  </div>
-                  <ol aria-label={head[0]} style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
-                    {shown.length ? renderList(shown, divider) : <li style={{ fontSize: FS.xs, color: C.textMuted, padding: "6px 8px" }}>なし</li>}
-                  </ol>
-                  {hidden > 0 && (
-                    <span style={{ fontSize: FS.xs, color: C.textMuted, padding: "4px 8px" }}>自分の到着に近い {shown.length}便を表示（ほか {hidden}便）</span>
-                  )}
-                </div>
-              );
-            })}
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, maxWidth: "720px" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "8px", minHeight: "22px", padding: "0 8px", borderBottom: `1px solid ${C.border}` }}>
+              <span style={{ fontSize: FS.sm, fontWeight: 700, color: C.text }}>到着 {rows.length}便</span>
+              <span style={{ fontSize: FS.xs, color: C.textMuted }}>時刻順（遅れは見込み時刻）</span>
+            </div>
+            <ol aria-label="到着便" style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+              {shown.length ? renderList(shown, !ownNumber) : <li style={{ fontSize: FS.xs, color: C.textMuted, padding: "6px 8px" }}>なし</li>}
+            </ol>
+            {hidden > 0 && (
+              <span style={{ fontSize: FS.xs, color: C.textMuted, padding: "4px 8px" }}>自分の到着に近い {shown.length}便を表示（ほか {hidden}便）</span>
+            )}
           </div>
-          {(trim(left).hidden > 0 || trim(right).hidden > 0 || expanded) && (
+          {(hidden > 0 || expanded) && (
             <button type="button" onClick={() => setExpanded((v) => !v)} style={{ ...actionBtnStyle, alignSelf: "flex-start", height: "36px", fontSize: FS.xs }}>
               {expanded ? "近い便だけ表示" : `すべて表示（${rows.length}便）`}
             </button>

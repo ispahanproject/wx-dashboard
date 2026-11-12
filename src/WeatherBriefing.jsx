@@ -2130,7 +2130,7 @@ function MetarTafPanel() {
   const [loading, setLoading] = useState({});
   const [lastUpdate, setLastUpdate] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  // 今日の乗務と明日の乗務の区間（目的地のカードに発着便を出す）。更新のたびに読み直す
+  // 今日の乗務と明日の乗務の区間（目的地のカードに到着便を出す）。更新のたびに読み直す
   const dutyLegs = useMemo(() => {
     const seen = new Set();
     return [...getDutyArrivalLegs(getTodayDutyEvents()), ...getDutyArrivalLegs(getNextDutyEvents(), nextDutyDay().ja)]
@@ -2388,7 +2388,7 @@ function MetarTafPanel() {
               <UnknownIataFix codes={unknownCodes} />
               {dutyNeedsReload(allEvts) && (
                 <div style={{ marginTop: "4px", padding: "0 12px", fontSize: FS.xs, color: "#fcd34d" }}>
-                  区間と便名は ICS の説明欄から読むようになりました。DUTY のタブで ICS を読み込み直すと、目的地の空港と発着便が出ます。
+                  区間と便名は ICS の説明欄から読むようになりました。DUTY のタブで ICS を読み込み直すと、目的地の空港と到着便が出ます。
                 </div>
               )}
             </div>
@@ -3473,7 +3473,7 @@ function getTodayDutyEvents() {
     .map(e => dutyDayView(e, start, end));
 }
 
-// 明日（日本時間）に出発する乗務。前の日から、目的地の METAR/TAF と発着便を前もって出すため
+// 明日（日本時間）に出発する乗務。前の日から、目的地の METAR/TAF と到着便を前もって出すため
 function getNextDutyEvents() {
   const { start, end } = jstDayRange(1);
   return loadDutyEvents().map(e => dutyDepartingView(e, start, end)).filter(Boolean);
@@ -3508,7 +3508,7 @@ function getUnknownDutyCodes(events) {
   return [...codes];
 }
 
-// 乗務の各区間（到着空港のカードに、到着の前後1時間の発着便を出すため）。便名と時刻は ICS の説明欄のもの
+// 乗務の各区間（到着空港のカードに、到着の前後1時間の到着便を出すため）。便名と時刻は ICS の説明欄のもの
 // when：今日以外の区間に添える日付（「明日 11/14（土）」）
 function getDutyArrivalLegs(events, when = null) {
   const legs = [];

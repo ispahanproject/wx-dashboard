@@ -16,6 +16,10 @@ const UWYO_SOUNDING = "https://weather.uwyo.edu/wsgi/sounding";
 // 東京 VAAC の火山灰情報（VAA）: 一覧ページから指定した火山の分を拾い、本文を JSON で返す
 const VAAC_PREFIX = "/vaac/";
 const VAAC_BASE = "https://ds.data.jma.go.jp/svd/vaac/data/";
+// 空港の発着便（AeroDataBox の FIDS、RapidAPI 経由）。キーは秘密情報 AERODATABOX_KEY、結果は KV（FLIGHTS）に保存
+const FLIGHTS_PREFIX = "/flights/";
+const ADB_HOST = "aerodatabox.p.rapidapi.com";
+const FLIGHTS_DAILY_LIMIT = 40; // 1日に AeroDataBox を呼ぶ回数の上限（無料枠は月400ユニット＝200回）
 
 // Allowed origins (restrict to our dashboard)
 const ALLOWED_ORIGINS = [
@@ -125,8 +129,117 @@ async function handleVaac(url, origin) {
   }
 }
 
+// /flights/?icao=RJFK&from=2026-11-12T07:00&to=2026-11-12T17:00（日本の空港のみ・現地時刻＝JST・最大12時間）
+// → { icao, from, to, fetchedAt, usedToday, flights: [{ dir: "ARR"|"DEP", number, airline, other, otherIcao, otherSched, otherRevised, otherRunway, sched, revised, runway, status, model, reg, cargo }] }
+// &fresh=1 で、保存から5分たった結果を取り直す。/flights/coverage?icao= は空港ごとのデータの範囲
+// 時刻は UTC の ISO 文字列。回数に上限のある API なので、時間帯を30分単位に丸めて KV に保存し、呼び出し元と1日の回数も絞る
+async function handleFlights(url, origin, env) {
+  const headers = { ...corsHeaders(origin), "Content-Type": "application/json; charset=utf-8", "Cache-Control": "private, max-age=300" };
+  const fail = (error, status) => new Response(JSON.stringify({ error }), { status, headers });
+  if (!ALLOWED_ORIGINS.includes(origin)) return fail("origin", 403);
+  if (!env?.AERODATABOX_KEY) return fail("no-key", 503);
+  // 空港ごとのデータの範囲（時刻表のみか、リアルタイムの更新もあるか）。AeroDataBox では無料の問い合わせ
+  if (url.pathname === "/flights/coverage") {
+    const ap = (url.searchParams.get("icao") || "").toUpperCase();
+    if (!/^R[JO][A-Z]{2}$/.test(ap)) return fail("icao", 400);
+    const ck = `coverage/${ap}`;
+    const hit = env.FLIGHTS ? await env.FLIGHTS.get(ck) : null;
+    if (hit) return new Response(hit, { headers });
+    const r = await fetch(`https://${ADB_HOST}/health/services/airports/${ap}/feeds`, {
+      headers: { "X-RapidAPI-Key": env.AERODATABOX_KEY, "X-RapidAPI-Host": ADB_HOST },
+    }).catch(() => null);
+    if (!r || !r.ok) return fail(`upstream ${r ? r.status : "fetch"}`, 502);
+    const body = await r.text();
+    if (env.FLIGHTS) await env.FLIGHTS.put(ck, body, { expirationTtl: 86400 });
+    return new Response(body, { headers });
+  }
+  const icao = (url.searchParams.get("icao") || "").toUpperCase();
+  if (!/^R[JO][A-Z]{2}$/.test(icao)) return fail("icao", 400);
+  const toMs = (s) => {
+    const m = (s || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : NaN;
+  };
+  const STEP = 30 * 60e3;
+  const from = Math.floor(toMs(url.searchParams.get("from")) / STEP) * STEP;
+  const to = Math.ceil(toMs(url.searchParams.get("to")) / STEP) * STEP;
+  const nowLocal = Date.now() + 9 * 3600e3;
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > 12 * 3600e3) return fail("range", 400);
+  if (from < nowLocal - 2 * 86400e3 || to > nowLocal + 3 * 86400e3) return fail("date", 400);
+  const fmt = (t) => new Date(t).toISOString().slice(0, 16);
+
+  const kv = env.FLIGHTS;
+  const key = `fids/${icao}/${fmt(from)}/${fmt(to)}`;
+  const dayKey = `count/${fmt(nowLocal).slice(0, 10)}`;
+  const used = kv ? Number(await kv.get(dayKey)) || 0 : 0;
+  if (kv) {
+    const hit = await kv.get(key);
+    // fresh=1（「更新」）は、保存から5分たっていれば取り直す
+    const age = hit ? Date.now() - Date.parse((hit.match(/"fetchedAt":"([^"]+)"/) || [])[1] || 0) : Infinity;
+    const wantFresh = url.searchParams.get("fresh") === "1" && age > 5 * 60e3;
+    if (hit && !wantFresh) return new Response(hit.replace('"usedToday":0', `"usedToday":${used}`), { headers });
+  }
+  if (used >= FLIGHTS_DAILY_LIMIT) return fail("daily-limit", 429);
+
+  const q = "withLeg=true&direction=Both&withCancelled=true&withCodeshared=false&withCargo=true&withPrivate=false&withLocation=false";
+  let resp;
+  try {
+    resp = await fetch(`https://${ADB_HOST}/flights/airports/icao/${icao}/${fmt(from)}/${fmt(to)}?${q}`, {
+      headers: { "X-RapidAPI-Key": env.AERODATABOX_KEY, "X-RapidAPI-Host": ADB_HOST },
+    });
+  } catch (err) {
+    return fail(`upstream: ${err.message}`, 502);
+  }
+  if (kv) await kv.put(dayKey, String(used + 1), { expirationTtl: 3 * 86400 });
+  if (resp.status !== 200 && resp.status !== 204) {
+    // RapidAPI のメッセージ（未契約・キー違い・回数超過など）を短く添える
+    const detail = (await resp.text().catch(() => "")).slice(0, 200);
+    const error = resp.status === 401 || resp.status === 403 ? "key" : resp.status === 429 ? "quota" : `upstream ${resp.status}`;
+    return new Response(JSON.stringify({ error, status: resp.status, detail }), { status: resp.status === 429 ? 429 : 502, headers });
+  }
+  const data = resp.status === 204 ? {} : await resp.json().catch(() => ({}));
+
+  // 時刻は { utc: "2026-11-12 05:35Z", local: … }（古い形式は scheduledTimeUtc など）
+  const iso = (m, k) => {
+    const s = m?.[`${k}Time`]?.utc || m?.[`${k}TimeUtc`] || null;
+    const d = s ? new Date(s.replace(" ", "T")) : null;
+    return d && !isNaN(d) ? d.toISOString() : null;
+  };
+  const norm = (f, dir) => {
+    const here = dir === "ARR" ? f.arrival : f.departure;
+    const there = dir === "ARR" ? f.departure : f.arrival;
+    return {
+      dir,
+      number: f.number || "",
+      airline: f.airline?.iata || f.airline?.icao || "",
+      other: there?.airport?.iata || there?.airport?.icao || "",
+      otherIcao: there?.airport?.icao || "",
+      otherSched: iso(there, "scheduled"),
+      // 相手の空港での見込み・実際の時刻（到着空港にリアルタイムの更新がないときの手がかり）
+      otherRevised: iso(there, "revised") || iso(there, "actual"),
+      otherRunway: iso(there, "runway"),
+      sched: iso(here, "scheduled"),
+      revised: iso(here, "revised") || iso(here, "actual"),
+      runway: iso(here, "runway"),
+      status: f.status || "Unknown",
+      model: f.aircraft?.model || "",
+      reg: f.aircraft?.reg || "",
+      cargo: !!f.isCargo,
+    };
+  };
+  const flights = [
+    ...(data.arrivals || []).map((f) => norm(f, "ARR")),
+    ...(data.departures || []).map((f) => norm(f, "DEP")),
+  ].filter((f) => f.sched).sort((a, b) => a.sched.localeCompare(b.sched));
+
+  const body = JSON.stringify({ icao, from: fmt(from), to: fmt(to), fetchedAt: new Date().toISOString(), usedToday: 0, flights });
+  // 今から3時間以内にかかる時間帯は15分、それ以外は1時間で取り直す
+  const near = from < nowLocal + 3 * 3600e3 && to > nowLocal;
+  if (kv) await kv.put(key, body, { expirationTtl: near ? 900 : 3600 });
+  return new Response(body.replace('"usedToday":0', `"usedToday":${used + 1}`), { headers });
+}
+
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "";
 
@@ -150,6 +263,9 @@ export default {
     }
     if (path.startsWith(VAAC_PREFIX)) {
       return handleVaac(url, origin);
+    }
+    if (path.startsWith(FLIGHTS_PREFIX)) {
+      return handleFlights(url, origin, env);
     }
 
     if (path.startsWith(SOUNDING_PREFIX)) {

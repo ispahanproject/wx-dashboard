@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { PanelFrame, ExtLink, MenuShell } from "./ui.jsx";
 import { C, FS, FONT } from "./theme.js";
 import { EmagramSection, JmaAirportCharts, jmaTafChartUrl, jmaCommentUrl, collectChartUrls } from "./DomesticWxPanel.jsx";
@@ -7,6 +7,7 @@ import ImageryViewer from "./ImageryViewer.jsx";
 import { SigmetView, CmntView, CciPanel, LowLevelView } from "./SigWx.jsx";
 import { MaijiView } from "./EnrouteViews.jsx";
 import VolcanoInfo, { volcanoUrls } from "./VolcanoInfo.jsx";
+import FlightTraffic from "./FlightTraffic.jsx";
 
 /* ============================================================
    AWC API BASE URL
@@ -2129,6 +2130,8 @@ function MetarTafPanel() {
   const [loading, setLoading] = useState({});
   const [lastUpdate, setLastUpdate] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  // 本日の乗務の区間（目的地のカードに発着便を出す）。更新のたびに読み直す
+  const dutyLegs = useMemo(() => getDutyArrivalLegs(getTodayDutyEvents()), [lastUpdate]);
 
   const fetchMetar = useCallback(async (icao) => {
     setLoading((prev) => ({ ...prev, [icao]: true }));
@@ -2509,6 +2512,7 @@ function MetarTafPanel() {
               )}
               <JmaAirportCharts icao={icao} />
               <VolcanoInfo icao={icao} />
+              <FlightTraffic icao={icao} legs={dutyLegs.filter((l) => l.toIcao === icao)} />
             </div>
           );
         })}
@@ -3400,6 +3404,25 @@ function getUnknownDutyCodes(events) {
     if (ev.type === "FLY" && ev.route) ev.route.forEach((c) => { if (c && !iataToIcao(c)) codes.add(c.trim().toUpperCase()); });
   }
   return [...codes];
+}
+
+// 本日の乗務の各区間（到着空港のカードに、到着の前後1時間の発着便を出すため）
+function getDutyArrivalLegs(events) {
+  const legs = [];
+  for (const ev of events) {
+    if (ev.type !== "FLY" || !ev.route || ev.route.length < 2 || !ev.start || !ev.end) continue;
+    const route = ev.route.map((c) => (c || "").trim().toUpperCase());
+    const n = route.length - 1;
+    for (let k = 1; k <= n; k++) {
+      const toIcao = iataToIcao(route[k]);
+      if (!toIcao) continue;
+      legs.push({
+        key: `${ev.uid}#${k}`, prevKey: k > 1 ? `${ev.uid}#${k - 1}` : null, k, n,
+        from: route[k - 1], to: route[k], toIcao, dutyStart: ev.start.getTime(), dutyEnd: ev.end.getTime(),
+      });
+    }
+  }
+  return legs;
 }
 
 function DutySchedulePanel() {

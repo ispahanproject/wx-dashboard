@@ -2114,8 +2114,8 @@ function CrosswindDisplay({ icao, metarRaw }) {
 /* ========== METAR/TAF ========== */
 function MetarTafPanel() {
   const [selectedAirports, setSelectedAirports] = useState(() => {
-    const todayEvents = getTodayDutyEvents();
-    const dutyIcaos = getDutyRouteIcaoCodes(todayEvents);
+    // 今日の乗務と、明日の乗務（前もって）の空港
+    const dutyIcaos = getDutyRouteIcaoCodes([...getTodayDutyEvents(), ...getNextDutyEvents()]);
     if (dutyIcaos.length > 0) {
       const base = new Set(["RJTT", ...dutyIcaos]);
       return [...base];
@@ -2130,8 +2130,12 @@ function MetarTafPanel() {
   const [loading, setLoading] = useState({});
   const [lastUpdate, setLastUpdate] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  // 本日の乗務の区間（目的地のカードに発着便を出す）。更新のたびに読み直す
-  const dutyLegs = useMemo(() => getDutyArrivalLegs(getTodayDutyEvents()), [lastUpdate]);
+  // 今日の乗務と明日の乗務の区間（目的地のカードに発着便を出す）。更新のたびに読み直す
+  const dutyLegs = useMemo(() => {
+    const seen = new Set();
+    return [...getDutyArrivalLegs(getTodayDutyEvents()), ...getDutyArrivalLegs(getNextDutyEvents(), nextDutyDay().ja)]
+      .filter((l) => !seen.has(l.key) && seen.add(l.key));
+  }, [lastUpdate]);
 
   const fetchMetar = useCallback(async (icao) => {
     setLoading((prev) => ({ ...prev, [icao]: true }));
@@ -2332,45 +2336,57 @@ function MetarTafPanel() {
             </span>
           )}
         </div>
-        {/* DUTY ROUTE indicator */}
+        {/* DUTY ROUTE indicator（今日の乗務と、明日の乗務を前もって） */}
         {(() => {
           const todayEvts = getTodayDutyEvents();
-          const flyEvts = todayEvts.filter(e => e.type === "FLY");
-          const route = [];
-          for (const ev of flyEvts) {
-            if (ev.route) ev.route.forEach(c => { if (route.length === 0 || route[route.length - 1] !== c) route.push(c); });
-          }
+          const nextEvts = getNextDutyEvents();
+          const allEvts = [...todayEvts, ...nextEvts];
+          const routeOf = (evts) => {
+            const route = [];
+            for (const ev of evts) {
+              if (ev.type === "FLY" && ev.route) ev.route.forEach(c => { if (route.length === 0 || route[route.length - 1] !== c) route.push(c); });
+            }
+            return route;
+          };
+          const rows = [
+            { label: "DUTY ROUTE", evts: todayEvts },
+            { label: `NEXT DUTY ${nextDutyDay().en}`, evts: nextEvts },
+          ].map(r => ({ ...r, route: routeOf(r.evts) })).filter(r => r.route.length > 0);
           // ICAO に変換できない空港があっても隠さずに表示する
-          if (route.length === 0) return null;
-          const dutyIcaos = getDutyRouteIcaoCodes(todayEvts);
-          const unknownCodes = getUnknownDutyCodes(todayEvts);
+          if (rows.length === 0) return null;
+          const unknownCodes = getUnknownDutyCodes(allEvts);
           const mono = FONT.data;
           return (
-            <div style={{ marginTop: "6px" }}>
-              <div style={{
-                display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
-                padding: "5px 12px",
-                background: "rgba(251,191,36,0.06)",
-                border: "1px solid rgba(251,191,36,0.2)",
-                borderRadius: "4px",
-              }}>
-                <span style={{ color: "#fbbf24", fontSize: FS.xs, fontWeight: 700, fontFamily: mono, letterSpacing: "1px" }}>DUTY ROUTE</span>
-                <span style={{ fontSize: FS.xs, fontFamily: mono }}>
-                  {route.map((c, i) => (
-                    <span key={i}>
-                      {i > 0 && <span style={{ color: C.textMuted }}> → </span>}
-                      <span style={{ color: unknownCodes.includes(c.trim().toUpperCase()) ? "#fcd34d" : "#e2e8f0", fontWeight: unknownCodes.includes(c.trim().toUpperCase()) ? 700 : 400 }}>
-                        {unknownCodes.includes(c.trim().toUpperCase()) ? `⚠${c}` : c}
-                      </span>
+            <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "4px" }}>
+              {rows.map(({ label, evts, route }) => {
+                const dutyIcaos = getDutyRouteIcaoCodes(evts);
+                return (
+                  <div key={label} style={{
+                    display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
+                    padding: "5px 12px",
+                    background: "rgba(251,191,36,0.06)",
+                    border: "1px solid rgba(251,191,36,0.2)",
+                    borderRadius: "4px",
+                  }}>
+                    <span style={{ color: "#fbbf24", fontSize: FS.xs, fontWeight: 700, fontFamily: mono, letterSpacing: "1px" }}>{label}</span>
+                    <span style={{ fontSize: FS.xs, fontFamily: mono }}>
+                      {route.map((c, i) => (
+                        <span key={i}>
+                          {i > 0 && <span style={{ color: C.textMuted }}> → </span>}
+                          <span style={{ color: unknownCodes.includes(c.trim().toUpperCase()) ? "#fcd34d" : "#e2e8f0", fontWeight: unknownCodes.includes(c.trim().toUpperCase()) ? 700 : 400 }}>
+                            {unknownCodes.includes(c.trim().toUpperCase()) ? `⚠${c}` : c}
+                          </span>
+                        </span>
+                      ))}
                     </span>
-                  ))}
-                </span>
-                <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: mono, marginLeft: "auto" }}>
-                  ICAO: {dutyIcaos.length ? dutyIcaos.join(", ") : "—"}
-                </span>
-              </div>
+                    <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: mono, marginLeft: "auto" }}>
+                      ICAO: {dutyIcaos.length ? dutyIcaos.join(", ") : "—"}
+                    </span>
+                  </div>
+                );
+              })}
               <UnknownIataFix codes={unknownCodes} />
-              {dutyNeedsReload(todayEvts) && (
+              {dutyNeedsReload(allEvts) && (
                 <div style={{ marginTop: "4px", padding: "0 12px", fontSize: FS.xs, color: "#fcd34d" }}>
                   区間と便名は ICS の説明欄から読むようになりました。DUTY のタブで ICS を読み込み直すと、目的地の空港と発着便が出ます。
                 </div>
@@ -3364,6 +3380,18 @@ function dutyDayView(ev, from, to) {
   return { ...ev, legs: [], route: [done.length ? done[done.length - 1].to : ev.legs[0].from] };
 }
 
+// その日（from〜to）に出発する区間だけにした乗務。前もって出す「次の乗務」用で、
+// その日に飛ばない組や、前の日の乗務の続き（日付をまたいだ解散など）は入れない
+function dutyDepartingView(ev, from, to) {
+  if (ev.type !== "FLY") return null;
+  if (!ev.legs?.length) { // 区間を読めていない組は、始まる日で決める
+    const s = new Date(ev.start).getTime();
+    return s >= from && s < to ? ev : null;
+  }
+  const legs = ev.legs.filter((l) => l.dep >= from && l.dep < to);
+  return legs.length ? { ...ev, legs, route: routeOfLegs(legs) } : null;
+}
+
 // 区間を読む前の形で保存された勤務予定（ICS を読み込み直すと区間と便名が入る）
 const dutyNeedsReload = (events) => events.some((e) => e.type === "FLY" && !Array.isArray(e.legs));
 
@@ -3422,22 +3450,40 @@ const DUTY_COLORS = {
   GROUND: "#67e8f9",
 };
 
-function getTodayDutyEvents() {
+function loadDutyEvents() {
   try {
     const saved = localStorage.getItem(DUTY_STORAGE_KEY);
-    if (!saved) return [];
-    const events = JSON.parse(saved).map(e => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
-    const now = new Date();
-    // JST-based "today"
-    const JST = 9 * 3600000;
-    const nowJST = new Date(now.getTime() + JST);
-    const todayJST = new Date(Date.UTC(nowJST.getUTCFullYear(), nowJST.getUTCMonth(), nowJST.getUTCDate()));
-    const todayStartUTC = new Date(todayJST.getTime() - JST);
-    const todayEndUTC = new Date(todayStartUTC.getTime() + 86400000);
-    // 何日かにわたる組は、今日の区間だけにする
-    return events.filter(e => e.start < todayEndUTC && e.end > todayStartUTC)
-      .map(e => dutyDayView(e, todayStartUTC.getTime(), todayEndUTC.getTime()));
+    return saved ? JSON.parse(saved).map(e => ({ ...e, start: new Date(e.start), end: new Date(e.end) })) : [];
   } catch { return []; }
+}
+
+// 日本時間で今日から offset 日後の 0時〜24時（UTC のミリ秒）
+function jstDayRange(offset = 0) {
+  const JST = 9 * 3600000;
+  const n = new Date(Date.now() + JST);
+  const start = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate() + offset) - JST;
+  return { start, end: start + 86400000 };
+}
+
+function getTodayDutyEvents() {
+  const { start, end } = jstDayRange(0);
+  // 何日かにわたる組は、今日の区間だけにする
+  return loadDutyEvents()
+    .filter(e => e.start.getTime() < end && e.end.getTime() > start)
+    .map(e => dutyDayView(e, start, end));
+}
+
+// 明日（日本時間）に出発する乗務。前の日から、目的地の METAR/TAF と発着便を前もって出すため
+function getNextDutyEvents() {
+  const { start, end } = jstDayRange(1);
+  return loadDutyEvents().map(e => dutyDepartingView(e, start, end)).filter(Boolean);
+}
+
+// 明日の日付（{ ja: "明日 11/14（土）", en: "11/14 (SAT)" }）
+function nextDutyDay() {
+  const d = new Date(jstDayRange(1).start + 9 * 3600000);
+  const md = `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+  return { ja: `明日 ${md}（${"日月火水木金土"[d.getUTCDay()]}）`, en: `${md} (${["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][d.getUTCDay()]})` };
 }
 
 function getDutyRouteIcaoCodes(events) {
@@ -3462,14 +3508,15 @@ function getUnknownDutyCodes(events) {
   return [...codes];
 }
 
-// 本日の乗務の各区間（到着空港のカードに、到着の前後1時間の発着便を出すため）。便名と時刻は ICS の説明欄のもの
-function getDutyArrivalLegs(events) {
+// 乗務の各区間（到着空港のカードに、到着の前後1時間の発着便を出すため）。便名と時刻は ICS の説明欄のもの
+// when：今日以外の区間に添える日付（「明日 11/14（土）」）
+function getDutyArrivalLegs(events, when = null) {
   const legs = [];
   for (const ev of events) {
     if (ev.type !== "FLY" || !ev.legs?.length) continue;
     for (const l of ev.legs) {
       const toIcao = iataToIcao(l.to);
-      if (toIcao) legs.push({ ...l, key: `${ev.uid}:${l.no}:${l.dep}`, toIcao });
+      if (toIcao) legs.push({ ...l, key: `${ev.uid}:${l.no}:${l.dep}`, toIcao, when });
     }
   }
   return legs;

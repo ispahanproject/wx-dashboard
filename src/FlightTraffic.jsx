@@ -1,5 +1,6 @@
 /* ============================================================
    TERMINAL — 乗務の目的地の発着便（自分の到着の前後1時間）
+   - 今日の乗務に加えて、明日の乗務の分も前の日から出す
    - 便は AeroDataBox（RapidAPI）を Worker 経由で取る（/flights/）。回数に上限があるので Worker の KV に保存して使い回す
    - 自分の到着便は、勤務予定（ICS の説明欄）の便名・出発空港・時刻で時刻表から探す。
      見つからないときだけ、便か時刻を選べる（端末に保存）
@@ -409,6 +410,9 @@ function LegTraffic({ icao, leg, win }) {
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
         <span style={{ fontSize: FS.xs, fontWeight: 700, letterSpacing: "1px", color: SKY }}>発着便</span>
+        {leg.when && (
+          <span style={{ fontSize: FS.xs, fontWeight: 700, padding: "2px 8px", borderRadius: "4px", color: SKY, background: "rgba(125,211,252,0.14)" }}>{leg.when}</span>
+        )}
         <span style={{ fontSize: FS.xs, color: C.textMuted }}>
           {hhmm(start)}–{hhmm(center + HALF)} JST（自分の到着の前後1時間） · AeroDataBox
         </span>
@@ -509,7 +513,8 @@ function LegTraffic({ icao, leg, win }) {
   );
 }
 
-// legs：この空港に着く本日の乗務の区間（WeatherBriefing の getDutyArrivalLegs。便名・時刻は勤務予定の ICS の説明欄のもの）
+// legs：この空港に着く今日と明日の乗務の区間（WeatherBriefing の getDutyArrivalLegs。便名・時刻は勤務予定の ICS の説明欄のもの。
+// 明日の区間には when に日付が入る）
 export default function FlightTraffic({ icao, legs }) {
   if (!legs?.length || BUSY_AIRPORTS.has(icao)) return null;
   // 同じ空港に何度か着く日は、12時間に収まれば1回でまとめて取る（同じ URL になるので保存も共有）

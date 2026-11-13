@@ -2,11 +2,12 @@
    TERMINAL — 乗務の目的地に着く便（自分の到着の前後1時間）
    - 到着便だけを出す。出発便は出さない（2026-11-13 利用者の判断）
    - 今日の乗務に加えて、明日の乗務の分も前の日から出す
-   - 便は AeroDataBox（RapidAPI）を Worker 経由で取る（/flights/）。回数に上限があるので Worker の KV に保存して使い回す
+   - 便は FlightAware AeroAPI を Worker 経由で取る（/flights/fa）。出発前に遅れ（到着の見込み）がわかるように（2026-11-13 利用者の判断）。
+     Skymark（IATA に入っていない）は FlightAware の時刻表に抜け・誤りがあるので、Worker が Skymark の時刻表で定刻を直し・足す。
+     FlightAware が使えないとき（キー・1日の上限など）だけ AeroDataBox（/flights/）。どちらも Worker の KV に保存して使い回す
    - 自分の到着便は、勤務予定（ICS の説明欄）の便名・出発空港・時刻で時刻表から探す。
      見つからないときだけ、便か時刻を選べる（端末に保存）
    - 便が多すぎる大空港（羽田・成田・関西・伊丹・新千歳・福岡・那覇・中部）には出さない
-   - 時刻表で十分（利用者の判断）。到着便は、出発空港での遅れ・離陸がわかればそれも添える
    ============================================================ */
 import { useState, useEffect, useMemo } from "react";
 import { ExtLink, actionBtnStyle } from "./ui.jsx";
@@ -19,7 +20,7 @@ const HOUR = 60 * MIN;
 const HALF = HOUR;                // 自分の到着の前後1時間
 const BIN = 15 * MIN;             // 到着の数を数える幅
 const BINS = (2 * HALF) / BIN;
-const MAX_WINDOW = 12 * HOUR;     // AeroDataBox で1回に取れる幅
+const MAX_WINDOW = 12 * HOUR;     // 1回に取る幅の上限（Worker と合わせる）
 const STEP = 30 * MIN;            // 取る時間帯の区切り（Worker の保存の単位）
 const MATCH_RANGE = 3 * HOUR;     // 勤務予定と時刻表の到着時刻のずれの許容（済んだ便は ICS の時刻が実績に変わるらしいので広め）
 const CLIENT_CACHE_MS = 10 * MIN;
@@ -39,8 +40,16 @@ const toMs = (iso) => (iso ? Date.parse(iso) : NaN);
 const load = (k, def) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? def; } catch { return def; } };
 const save = (k, v) => { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch { /* 保存できなくても表示はする */ } };
 
-// 機材名を短く（"Boeing 737-800" → "737-800"、"Embraer 170" → "E170" など）
-const shortModel = (m) => (m || "")
+// FlightAware の機材は ICAO の型式（B738 など）なので、見慣れた名前に
+const ICAO_TYPES = {
+  B737: "737-700", B738: "737-800", B38M: "737 MAX 8", B763: "767-300", B772: "777-200", B773: "777-300", B77W: "777-300ER",
+  B788: "787-8", B789: "787-9", B78X: "787-10", A320: "A320", A20N: "A320neo", A321: "A321", A21N: "A321neo",
+  A359: "A350-900", A35K: "A350-1000", E170: "E170", E190: "E190", DH8D: "Q400", AT72: "ATR72", AT76: "ATR72",
+  AT43: "ATR42", AT45: "ATR42", AT46: "ATR42",
+};
+// 機材名を短く（"Boeing 737-800" → "737-800"、"Embraer 170" → "E170"、"B738" → "737-800" など）
+const shortModel = (m) => ICAO_TYPES[(m || "").trim()] || (m || "")
+  .trim()
   .replace(/^Boeing\s+/i, "")
   .replace(/^Airbus\s+/i, "")
   .replace(/\s*\(Sharklets\)/i, "")
@@ -52,25 +61,29 @@ const shortModel = (m) => (m || "")
 
 /* ---------- データ ---------- */
 const flightsCache = new Map(); // URL → { at, promise }
+const getJson = (url) => fetch(url).then(async (r) => {
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || d.error) throw Object.assign(new Error(d.error || `HTTP ${r.status}`), { code: d.error || `HTTP ${r.status}` });
+  return d;
+});
+// FlightAware（/flights/fa）。使えないとき（キー・1日の上限・混雑など）は AeroDataBox（/flights/）で代わりに出す
 function loadFlights(icao, from, to, fresh = false) {
-  const base = `${WORKER_URL}/flights/?icao=${icao}&from=${localStr(from)}&to=${localStr(to)}`;
-  const hit = flightsCache.get(base);
+  const q = `?icao=${icao}&from=${localStr(from)}&to=${localStr(to)}${fresh ? "&fresh=1" : ""}`;
+  const key = `${icao}/${from}/${to}`;
+  const hit = flightsCache.get(key);
   if (hit && !fresh && Date.now() - hit.at < CLIENT_CACHE_MS) return hit.promise;
-  const promise = fetch(fresh ? `${base}&fresh=1` : base).then(async (r) => {
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || d.error) throw Object.assign(new Error(d.error || `HTTP ${r.status}`), { code: d.error || `HTTP ${r.status}` });
-    return d;
-  });
-  flightsCache.set(base, { at: Date.now(), promise });
-  promise.catch(() => flightsCache.delete(base));
+  const promise = getJson(`${WORKER_URL}/flights/fa${q}`).catch((err) =>
+    getJson(`${WORKER_URL}/flights/${q}`).then((d) => ({ ...d, source: "aerodatabox", fallbackFrom: err.code })).catch(() => { throw err; }));
+  flightsCache.set(key, { at: Date.now(), promise });
+  promise.catch(() => flightsCache.delete(key));
   return promise;
 }
 
-// 取る時間帯：勤務予定の到着の2時間前から3時間後まで（遅れても前後1時間が入るように）
+// 取る時間帯：勤務予定の到着の1時間半前から2時間後まで（前後1時間に、少しの遅れ・早着の分を足す。FlightAware は15便ごとに料金がかかるので広げすぎない）
 function fetchWindow(arrs) {
   return {
-    from: Math.floor((Math.min(...arrs) - 2 * HOUR) / STEP) * STEP,
-    to: Math.ceil((Math.max(...arrs) + 3 * HOUR) / STEP) * STEP,
+    from: Math.floor((Math.min(...arrs) - 1.5 * HOUR) / STEP) * STEP,
+    to: Math.ceil((Math.max(...arrs) + 2 * HOUR) / STEP) * STEP,
   };
 }
 
@@ -146,19 +159,22 @@ function statusOf(f, ownNumber) {
   if (ownNumber && f.number === ownNumber && f.dir === "ARR") return ["自分", "own"];
   if (f.canceled) return [f.status === "CanceledUncertain" ? "欠航?" : "欠航", "bad"];
   if (f.diverted) return ["ダイバート", "bad"];
-  // 到着便は、出発空港での離陸・遅れがわかればそれを出す
+  // 着いた便は着陸時刻、飛んでいる便は出発空港での離陸、出る前の便は出発の遅れ
   if (f.dir === "ARR") {
+    if (f.status === "Arrived" && Number.isFinite(toMs(f.runway || f.revised))) return [`着 ${hhmm(toMs(f.runway || f.revised))}`, "done"];
     if (Number.isFinite(toMs(f.otherRunway))) return [`${f.other} 離陸 ${hhmm(toMs(f.otherRunway))}`, "live"];
     if (f.originDelay !== null && f.originDelay >= LATE_MIN) return [`出発 +${f.originDelay}分`, "warn"];
   }
+  // Skymark の時刻表から足した便（FlightAware にまだない＝見込みがない）
+  if (f.timetableOnly) return ["時刻表のみ", "muted"];
   return ["", "muted"];
 }
 
 const ERRORS = {
-  "no-key": "AeroDataBox のキーが Worker に登録されていません。",
-  "daily-limit": "今日の取得回数の上限（40回）に達しました。明日になると取り直せます。",
-  quota: "AeroDataBox の今月の回数を使い切りました。",
-  key: "AeroDataBox のキーが使えません（契約・キーを確かめてください）。",
+  "no-key": "FlightAware のキーが Worker に登録されていません。",
+  "daily-limit": "今日の取得の上限に達しました。明日になると取り直せます。",
+  rate: "FlightAware が混み合っています。1分ほど待って「更新」を押してください。",
+  key: "FlightAware のキーが使えません（キーを確かめてください）。",
 };
 
 function Row({ f, cols, showModel, ownNumber }) {
@@ -391,10 +407,10 @@ function LegTraffic({ icao, leg, win }) {
           <span style={{ fontSize: FS.xs, fontWeight: 700, padding: "2px 8px", borderRadius: "4px", color: SKY, background: "rgba(125,211,252,0.14)" }}>{leg.when}</span>
         )}
         <span style={{ fontSize: FS.xs, color: C.textMuted }}>
-          {hhmm(start)}–{hhmm(center + HALF)} JST（自分の到着の前後1時間） · AeroDataBox
+          {hhmm(start)}–{hhmm(center + HALF)} JST（自分の到着の前後1時間） · {data?.source === "aerodatabox" ? "AeroDataBox" : "FlightAware"}
         </span>
         <span style={{ marginLeft: "auto", fontSize: FS.xs, color: C.textMuted }}>
-          {state.status === "loading" ? "読み込み中…" : state.status === "refreshing" ? "更新中…" : data ? `取得 ${hhmm(toMs(data.fetchedAt))}${data.usedToday ? ` · 今日の取得 ${data.usedToday}回` : ""}` : ""}
+          {state.status === "loading" ? "読み込み中…" : state.status === "refreshing" ? "更新中…" : data ? `取得 ${hhmm(toMs(data.fetchedAt))}${data.usedToday ? (data.limit ? ` · 今日 ${data.usedToday}/${data.limit}` : ` · 今日の取得 ${data.usedToday}回`) : ""}` : ""}
         </span>
         <button type="button" onClick={refresh} disabled={state.status === "loading" || state.status === "refreshing"} style={{ ...actionBtnStyle, height: "32px", fontSize: FS.xs }}>更新</button>
       </div>
@@ -402,6 +418,16 @@ function LegTraffic({ icao, leg, win }) {
       {state.status === "error" && (
         <div style={{ fontSize: FS.xs, color: AMBER }}>
           {ERRORS[state.error] || "便のデータを取得できません。通信状態を確かめて「更新」を押してください。"}
+        </div>
+      )}
+      {data?.fallbackFrom && (
+        <div style={{ fontSize: FS.xs, color: AMBER }}>
+          FlightAware が使えないため（{ERRORS[data.fallbackFrom] || data.fallbackFrom}）、AeroDataBox の時刻表で出しています。遅れは出ません。
+        </div>
+      )}
+      {data?.skymark?.expired && (
+        <div style={{ fontSize: FS.xs, color: AMBER }}>
+          Skymark の時刻表（{data.skymark.until} まで）の期間が過ぎています。Skymark の便の定刻が抜けたり違ったりすることがあります。新しい時刻表の取り込みが必要です。
         </div>
       )}
 
@@ -471,7 +497,7 @@ function LegTraffic({ icao, leg, win }) {
       ))}
 
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", fontSize: FS.xs, color: C.textMuted }}>
-        <span>時刻は JST。「→」は見込み時刻、「頃」は出発空港での遅れから出した目安です（参考）。</span>
+        <span>時刻は JST。「→」は到着の見込み（参考）。Skymark の定刻は Skymark の時刻表から。</span>
         <span style={{ marginLeft: "auto" }}><ExtLink href={`https://www.flightaware.com/live/airport/${icao}`}>FlightAware {icao}</ExtLink></span>
       </div>
     </section>

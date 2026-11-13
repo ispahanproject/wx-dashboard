@@ -1,5 +1,6 @@
 // WX Dashboard CORS Proxy — Cloudflare Worker
 // Proxies requests to aviationweather.gov & tenki.jp with CORS headers
+import { SKYMARK } from "./skymark-timetable.js";
 
 const AWC_BASE = "https://aviationweather.gov";
 const TENKI_BASE = "https://static.tenki.jp";
@@ -20,6 +21,10 @@ const VAAC_BASE = "https://ds.data.jma.go.jp/svd/vaac/data/";
 const FLIGHTS_PREFIX = "/flights/";
 const ADB_HOST = "aerodatabox.p.rapidapi.com";
 const FLIGHTS_DAILY_LIMIT = 40; // 1日に AeroDataBox を呼ぶ回数の上限（無料枠は月400ユニット＝200回）
+// 到着便（FlightAware AeroAPI）。キーは秘密情報 FLIGHTAWARE_KEY。アプリはこちらを使い、使えないときだけ AeroDataBox
+const FA_BASE = "https://aeroapi.flightaware.com/aeroapi";
+// 1日に FlightAware から取る結果セット（15便で 0.005 ドル）の上限。個人利用の無料分は月5ドル＝1000セット
+const FA_DAILY_LIMIT = 30;
 
 // Allowed origins (restrict to our dashboard)
 const ALLOWED_ORIGINS = [
@@ -137,6 +142,7 @@ async function handleFlights(url, origin, env) {
   const headers = { ...corsHeaders(origin), "Content-Type": "application/json; charset=utf-8", "Cache-Control": "private, max-age=300" };
   const fail = (error, status) => new Response(JSON.stringify({ error }), { status, headers });
   if (!ALLOWED_ORIGINS.includes(origin)) return fail("origin", 403);
+  if (url.pathname.startsWith("/flights/fa")) return handleFlightsFA(url, env, headers, fail);
   if (!env?.AERODATABOX_KEY) return fail("no-key", 503);
   // 空港ごとのデータの範囲（時刻表のみか、リアルタイムの更新もあるか）。AeroDataBox では無料の問い合わせ
   if (url.pathname === "/flights/coverage") {
@@ -153,19 +159,9 @@ async function handleFlights(url, origin, env) {
     if (env.FLIGHTS) await env.FLIGHTS.put(ck, body, { expirationTtl: 86400 });
     return new Response(body, { headers });
   }
-  const icao = (url.searchParams.get("icao") || "").toUpperCase();
-  if (!/^R[JO][A-Z]{2}$/.test(icao)) return fail("icao", 400);
-  const toMs = (s) => {
-    const m = (s || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
-    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : NaN;
-  };
-  const STEP = 30 * 60e3;
-  const from = Math.floor(toMs(url.searchParams.get("from")) / STEP) * STEP;
-  const to = Math.ceil(toMs(url.searchParams.get("to")) / STEP) * STEP;
-  const nowLocal = Date.now() + 9 * 3600e3;
-  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > 12 * 3600e3) return fail("range", 400);
-  if (from < nowLocal - 2 * 86400e3 || to > nowLocal + 3 * 86400e3) return fail("date", 400);
-  const fmt = (t) => new Date(t).toISOString().slice(0, 16);
+  const w = flightsWindow(url);
+  if (w.error) return fail(w.error, 400);
+  const { icao, from, to, nowLocal, fmt } = w;
 
   const kv = env.FLIGHTS;
   const key = `fids/${icao}/${fmt(from)}/${fmt(to)}`;
@@ -236,6 +232,167 @@ async function handleFlights(url, origin, env) {
   const near = from < nowLocal + 3 * 3600e3 && to > nowLocal;
   if (kv) await kv.put(key, body, { expirationTtl: near ? 900 : 3600 });
   return new Response(body.replace('"usedToday":0', `"usedToday":${used + 1}`), { headers });
+}
+
+// 発着便の問い合わせの空港と時間帯。現地時刻（JST）を30分単位に丸め、最大12時間・2日前〜3日後まで
+function flightsWindow(url) {
+  const icao = (url.searchParams.get("icao") || "").toUpperCase();
+  if (!/^R[JO][A-Z]{2}$/.test(icao)) return { error: "icao" };
+  const toMs = (s) => {
+    const m = (s || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : NaN;
+  };
+  const STEP = 30 * 60e3;
+  const from = Math.floor(toMs(url.searchParams.get("from")) / STEP) * STEP;
+  const to = Math.ceil(toMs(url.searchParams.get("to")) / STEP) * STEP;
+  const nowLocal = Date.now() + 9 * 3600e3;
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > 12 * 3600e3) return { error: "range" };
+  if (from < nowLocal - 2 * 86400e3 || to > nowLocal + 3 * 86400e3) return { error: "date" };
+  return { icao, from, to, nowLocal, fmt: (t) => new Date(t).toISOString().slice(0, 16) };
+}
+
+// /flights/fa?icao=RJFK&from=2026-11-14T06:30&to=2026-11-14T10:30 → /flights/ と同じ形（到着便だけ）
+// FlightAware AeroAPI：まだ着いていない便は scheduled_arrivals（estimated_on で絞る）、着いた便は arrivals（actual_on で絞る）。
+// 15便ごとに料金がかかるので、KV に保存して使い回し、1日に取る量も絞る
+async function handleFlightsFA(url, env, headers, fail) {
+  if (!env?.FLIGHTAWARE_KEY) return fail("no-key", 503);
+  const w = flightsWindow(url);
+  if (w.error) return fail(w.error, 400);
+  const { icao, from, to, nowLocal, fmt } = w;
+
+  const kv = env.FLIGHTS;
+  const key = `fa2/${icao}/${fmt(from)}/${fmt(to)}`;
+  const dayKey = `fa-count/${fmt(nowLocal).slice(0, 10)}`;
+  const used = kv ? Number(await kv.get(dayKey)) || 0 : 0;
+  if (kv) {
+    const hit = await kv.get(key);
+    // fresh=1（「更新」）は、保存から5分たっていれば取り直す
+    const age = hit ? Date.now() - Date.parse((hit.match(/"fetchedAt":"([^"]+)"/) || [])[1] || 0) : Infinity;
+    const wantFresh = url.searchParams.get("fresh") === "1" && age > 5 * 60e3;
+    if (hit && !wantFresh) return new Response(hit.replace('"usedToday":0', `"usedToday":${used}`), { headers });
+  }
+  if (used >= FA_DAILY_LIMIT) return fail("daily-limit", 429);
+
+  // 現地時刻（JST）→ UTC。scheduled_arrivals は2日先までしか取れない
+  const now = Date.now();
+  const start = from - 9 * 3600e3;
+  const end = Math.min(to - 9 * 3600e3, now + 2 * 86400e3);
+  const z = (t) => new Date(t).toISOString().replace(/\.\d{3}Z$/, "Z");
+  const parts = [];
+  if (end > now) parts.push(["scheduled_arrivals", start, end]); // まだ着いていない便
+  if (start < now) parts.push(["arrivals", start, Math.min(end, now)]); // もう着いた便
+  const byId = new Map();
+  let pages = 0;
+  for (const [kind, a, b] of parts) {
+    let resp;
+    try {
+      resp = await fetch(`${FA_BASE}/airports/${icao}/flights/${kind}?type=Airline&max_pages=2&start=${z(a)}&end=${z(b)}`, {
+        headers: { "x-apikey": env.FLIGHTAWARE_KEY, Accept: "application/json" },
+      });
+    } catch (err) {
+      return fail(`upstream: ${err.message}`, 502);
+    }
+    if (!resp.ok) {
+      const detail = (await resp.text().catch(() => "")).slice(0, 200);
+      const error = resp.status === 401 || resp.status === 403 ? "key" : resp.status === 429 ? "rate" : `upstream ${resp.status}`;
+      if (kv && pages) await kv.put(dayKey, String(used + pages), { expirationTtl: 3 * 86400 });
+      return new Response(JSON.stringify({ error, status: resp.status, detail }), { status: resp.status === 429 ? 429 : 502, headers });
+    }
+    const data = await resp.json().catch(() => ({}));
+    pages += data.num_pages || 1;
+    for (const f of data[kind] || []) {
+      // 位置だけで追った便（出発地がわからない。時刻表の便と二重になることがある）は出さない
+      if (f.position_only || !(f.origin?.code_iata || f.origin?.code_icao)) continue;
+      byId.set(f.fa_flight_id || `${f.ident}/${f.scheduled_in}`, f);
+    }
+  }
+  if (kv) await kv.put(dayKey, String(used + pages), { expirationTtl: 3 * 86400 });
+
+  // 便名は「JL 641」の形に。子会社の運航便（EH 541、JC 3760 など）は、同じ番号の販売便名（NH 541、JL 3760）で出す
+  const number = (f) => {
+    const same = (f.codeshares_iata || []).find((c) => f.flight_number && c.slice(2) === String(f.flight_number));
+    if (same) return `${same.slice(0, 2)} ${same.slice(2)}`;
+    if (f.operator_iata && f.flight_number) return `${f.operator_iata} ${f.flight_number}`;
+    const m = (f.ident_iata || f.ident || "").match(/^([A-Z0-9]{2,3}?)(\d+[A-Z]?)$/);
+    return m ? `${m[1]} ${m[2]}` : f.ident_iata || f.ident || "";
+  };
+  const normalized = [...byId.values()].map((f) => ({
+    dir: "ARR",
+    number: number(f),
+    airline: f.operator_iata || f.operator_icao || "",
+    other: f.origin?.code_iata || f.origin?.code_icao || "",
+    otherIcao: f.origin?.code_icao || "",
+    otherSched: f.scheduled_out || f.scheduled_off || null,
+    otherRevised: f.actual_out || f.estimated_out || null,
+    otherRunway: f.actual_off || null,
+    sched: f.scheduled_in || f.scheduled_on || null,
+    revised: f.actual_in || f.estimated_in || null,
+    runway: f.actual_on || null,
+    status: f.cancelled ? "Canceled" : f.diverted ? "Diverted" : f.actual_in || f.actual_on ? "Arrived" : f.actual_off ? "EnRoute" : "Expected",
+    model: (f.aircraft_type || "").trim(),
+    reg: (f.registration || "").trim(),
+    cargo: false,
+  })).filter((f) => f.sched);
+  const { flights, skymark } = mergeSkymark(icao, from, to, normalized);
+
+  const body = JSON.stringify({ icao, from: fmt(from), to: fmt(to), source: "flightaware", skymark, limit: FA_DAILY_LIMIT, fetchedAt: new Date().toISOString(), usedToday: 0, flights });
+  // 今から3時間以内にかかる時間帯は15分、それ以外は1時間で取り直す
+  const near = from < nowLocal + 3 * 3600e3 && to > nowLocal;
+  if (kv) await kv.put(key, body, { expirationTtl: near ? 900 : 3600 });
+  return new Response(body.replace('"usedToday":0', `"usedToday":${used + pages}`), { headers });
+}
+
+// Skymark は IATA に入っておらず、FlightAware の時刻表に抜けや誤り（BC 635 の定刻が 23:59 など）がある。
+// Skymark の時刻表（skymark-timetable.js）で、Skymark の便の定刻を直し、FlightAware にない便を足す。
+// from・to は現地時刻（JST）の時間帯、flights の時刻は UTC
+function mergeSkymark(icao, from, to, flights) {
+  const DAY = 86400e3, JST = 9 * 3600e3, H = 3600e3;
+  const entries = SKYMARK.flights.filter((e) => e.toIcao === icao);
+  if (!entries.length) return { flights: flights.sort((a, b) => a.sched.localeCompare(b.sched)), skymark: null };
+  const validFrom = Date.parse(`${SKYMARK.valid[0]}T00:00:00Z`);
+  const validTo = Date.parse(`${SKYMARK.valid[1]}T00:00:00Z`) + DAY;
+  const hm = (s) => (+s.slice(0, 2) * 60 + +s.slice(3)) * 60e3;
+  // 時間帯の前後1日に飛ぶ便（運休日・この日だけ・この曜日だけを見る。日付は日本時間の出発日）
+  const plan = [];
+  for (let day = Math.floor(from / DAY) * DAY - DAY; day <= to + DAY; day += DAY) {
+    for (const e of entries) {
+      const arr = day + hm(e.arr);
+      const dep = day + hm(e.dep) - (hm(e.dep) > hm(e.arr) ? DAY : 0);
+      const depDay = Math.floor(dep / DAY) * DAY;
+      const date = new Date(depDay).toISOString().slice(0, 10);
+      if (depDay < validFrom || depDay >= validTo) continue;
+      if (e.off?.includes(date) || (e.only && !e.only.includes(date)) || (e.dow && !e.dow.includes(new Date(depDay).getUTCDay()))) continue;
+      plan.push({ e, arr: arr - JST, dep: dep - JST });
+    }
+  }
+  const digits = (n) => (String(n).match(/\d+/) || [""])[0].replace(/^0+/, "");
+  const used = new Set();
+  const out = [];
+  for (const f of flights) {
+    if (f.airline !== "BC") { out.push(f); continue; }
+    // 見込み・実際の時刻（なければ定刻）が近い、同じ番号の時刻表の便に合わせる
+    const t = Date.parse(f.runway || f.revised || f.sched);
+    const same = plan.filter((p) => p.e.no === digits(f.number));
+    const m = same.filter((p) => !used.has(p) && Math.abs(p.arr - t) < 4 * H).sort((a, b) => Math.abs(a.arr - t) - Math.abs(b.arr - t))[0];
+    if (m) {
+      used.add(m);
+      out.push({ ...f, number: `BC ${m.e.no}`, other: m.e.from, sched: new Date(m.arr).toISOString(), otherSched: new Date(m.dep).toISOString(), timetable: true });
+    } else if (!same.length) {
+      out.push(f); // 時刻表にない便（臨時便など）はそのまま
+    }
+    // 同じ番号が時刻表にあるのに時刻がかけ離れた便は、FlightAware の壊れた予定なので出さない
+  }
+  // FlightAware にまだない便（前もって見るときなど）を、時刻表から足す
+  for (const p of plan) {
+    if (used.has(p) || p.arr + JST < from || p.arr + JST >= to) continue;
+    out.push({
+      dir: "ARR", number: `BC ${p.e.no}`, airline: "BC", other: p.e.from, otherIcao: "",
+      otherSched: new Date(p.dep).toISOString(), otherRevised: null, otherRunway: null,
+      sched: new Date(p.arr).toISOString(), revised: null, runway: null,
+      status: "Expected", model: "", reg: "", cargo: false, timetable: true, timetableOnly: true,
+    });
+  }
+  return { flights: out.sort((a, b) => a.sched.localeCompare(b.sched)), skymark: { until: SKYMARK.valid[1], expired: to > validTo } };
 }
 
 export default {

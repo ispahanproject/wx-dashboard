@@ -337,16 +337,19 @@ function LegTraffic({ icao, leg, win }) {
   const [tick, setTick] = useState({ n: 0, fresh: false });
   const [choosing, setChoosing] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // ふだんは1行にたたんでおき、タップで開く（情報が多いため。2026-11-13 利用者の希望）。便のデータは開いたときに取る
+  const [open, setOpen] = useState(false);
   const narrow = useNarrow();
 
   useEffect(() => {
+    if (!open) return;
     let alive = true;
     setState((s) => ({ ...s, status: s.data ? "refreshing" : "loading" }));
     loadFlights(icao, win.from, win.to, tick.fresh)
       .then((data) => alive && setState({ status: "ok", data, error: null }))
       .catch((e) => alive && setState((s) => ({ status: "error", data: s.data, error: e.code || e.message })));
     return () => { alive = false; };
-  }, [icao, win.from, win.to, tick]);
+  }, [open, icao, win.from, win.to, tick]);
 
   const flights = useMemo(() => (state.data?.flights || []).map(enrich), [state.data]);
   const matched = useMemo(() => findOwn(leg, flights), [leg, flights]);
@@ -398,14 +401,27 @@ function LegTraffic({ icao, leg, win }) {
 
   return (
     <section aria-label={`${icao} 自分の到着の前後の到着便`} style={{
-      marginTop: "12px", padding: "10px 12px", borderRadius: "8px",
+      marginTop: "12px", padding: open ? "0 12px 10px" : "0 12px", borderRadius: "8px",
       background: "rgba(125,211,252,0.05)", border: "1px solid rgba(125,211,252,0.28)", display: "flex", flexDirection: "column", gap: "10px",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+      {/* たたんだ行（タップで開く）。勤務予定の便名と到着時刻だけを出す */}
+      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} style={{
+        display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", width: "100%", minHeight: "44px", padding: 0,
+        background: "none", border: "none", color: "inherit", font: "inherit", textAlign: "left", cursor: "pointer",
+      }}>
+        <span aria-hidden="true" style={{ display: "inline-block", width: "10px", color: SKY, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>▸</span>
         <span style={{ fontSize: FS.xs, fontWeight: 700, letterSpacing: "1px", color: SKY }}>到着便</span>
         {leg.when && (
           <span style={{ fontSize: FS.xs, fontWeight: 700, padding: "2px 8px", borderRadius: "4px", color: SKY, background: "rgba(125,211,252,0.14)" }}>{leg.when}</span>
         )}
+        <span style={{ fontSize: FS.xs, color: C.textSub }}>
+          <span style={{ fontFamily: FONT.data, color: C.text }}>{leg.no}便 {hhmm(leg.arr)}</span> 着の前後1時間
+        </span>
+        <span style={{ marginLeft: "auto", fontSize: FS.xs, color: C.textMuted }}>{open ? "閉じる" : "タップで表示"}</span>
+      </button>
+
+      {open && (<>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
         <span style={{ fontSize: FS.xs, color: C.textMuted }}>
           {hhmm(start)}–{hhmm(center + HALF)} JST（自分の到着の前後1時間） · {data?.source === "aerodatabox" ? "AeroDataBox" : "FlightAware"}
         </span>
@@ -500,6 +516,7 @@ function LegTraffic({ icao, leg, win }) {
         <span>時刻は JST。「→」は到着の見込み（参考）。Skymark の定刻は Skymark の時刻表から。</span>
         <span style={{ marginLeft: "auto" }}><ExtLink href={`https://www.flightaware.com/live/airport/${icao}`}>FlightAware {icao}</ExtLink></span>
       </div>
+      </>)}
     </section>
   );
 }

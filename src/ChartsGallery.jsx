@@ -29,7 +29,7 @@ const ISO_COLOR = "#2563eb";
 // 850hPa 相当温位（FXJP854）で色を付ける等相当温位線（2026-11-15 利用者の希望）
 const THETA_E = [
   { value: 300, color: "#2563eb", name: "青" },
-  { value: 345, color: "#dc2626", name: "赤" },
+  { value: 345, color: "#f97316", name: "橙" }, // 地図の線（淡い赤）と見分けやすい橙（2026-11-15 利用者の希望）
 ];
 const XSEC_KEY = "wxcharts_xsec_color"; // 断面図の線の色分けの表示
 // 断面図の色分けの凡例（白地に線の見本。dash は破線、symbol は線の代わりの印）
@@ -536,7 +536,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
           <span style={{ fontSize: FS.xs, color: C.textMuted }}>タップで全画面{charts.length > 1 ? "、左右スワイプで次の図へ" : ""}</span>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             {hasIso && (
-              <label title="500hPa の −30℃線・850hPa の −6℃線（寒気の目安、青）と、850hPa 相当温位の 300K（青）・345K（赤）の線を、図の数字を読み取って色で示します（目安）" style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
+              <label title="500hPa の −30℃線・850hPa の −6℃線（寒気の目安、青）と、850hPa 相当温位の 300K（青）・345K（橙）の線を、図の数字を読み取って色で示します（目安）" style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
                 <input type="checkbox" checked={isoOn} onChange={(e) => setIsoOn(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
                 目安の線を色付け
               </label>

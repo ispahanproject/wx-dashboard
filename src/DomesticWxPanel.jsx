@@ -199,8 +199,8 @@ function fetchPdf(url, refresh) {
 }
 
 // isotherm: { target: -30, color } を渡すと、その等温線に色を付ける（線の下に蛍光ペンのように引く）
-// mapColor: "#…" を渡すと、地図の線（海岸線・経緯線など。いちばん細い黒線）をその色で描く（解析の線と見分けるため）
-async function renderPdfToImage(url, refresh, isotherm, mapColor) {
+// map: { color, rule } を渡すと、地図の線（海岸線・経緯線など）をその色で描く（解析の線と見分けるため）。rule は pdfmap.js の見分け方
+async function renderPdfToImage(url, refresh, isotherm, map) {
   const [pdfjs, worker] = await Promise.all([
     import("pdfjs-dist"),
     import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
@@ -221,19 +221,19 @@ async function renderPdfToImage(url, refresh, isotherm, mapColor) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     let lines = null; // null＝色付けしない／失敗、[]＝見つからない
-    const opList = isotherm || mapColor ? await page.getOperatorList() : null;
+    const opList = isotherm || map ? await page.getOperatorList() : null;
     if (isotherm) {
       try { lines = findIsotherm(opList, pdfjs.OPS, isotherm.target); } catch { lines = null; }
     }
     // 地図の線の色を替えて描く。stroke の数が合わないとき（PDF の作りが違う）は、色を替えずに描き直す
     let flags = null;
-    if (mapColor) {
-      try { flags = mapStrokeFlags(opList, pdfjs.OPS); } catch { flags = null; }
+    if (map) {
+      try { flags = mapStrokeFlags(opList, pdfjs.OPS, map.rule); } catch { flags = null; }
     }
     const render = async (target, background) => {
       const c2d = target.getContext("2d");
       if (flags) {
-        const r = recolorStrokes(c2d, flags, mapColor);
+        const r = recolorStrokes(c2d, flags, map.color);
         await page.render({ canvasContext: r.ctx, viewport: vp, background }).promise;
         if (r.count() === flags.length) return;
         c2d.setTransform(1, 0, 0, 1, 0, 0);
@@ -272,10 +272,10 @@ async function renderPdfToImage(url, refresh, isotherm, mapColor) {
 }
 
 // PDF を画像化した結果（キャッシュ付き）。天気図一覧タブからも使う
-export function getPdfImage(url, refresh = 0, isotherm = null, mapColor = null) {
-  const key = `${url}|${refresh}|${isotherm ? isotherm.target : ""}|${mapColor || ""}`;
+export function getPdfImage(url, refresh = 0, isotherm = null, map = null) {
+  const key = `${url}|${refresh}|${isotherm ? isotherm.target : ""}|${map ? `${map.rule}:${map.color}` : ""}`;
   if (!pdfCache.has(key)) {
-    pdfCache.set(key, renderPdfToImage(url, refresh, isotherm, mapColor).catch((e) => { pdfCache.delete(key); throw e; }));
+    pdfCache.set(key, renderPdfToImage(url, refresh, isotherm, map).catch((e) => { pdfCache.delete(key); throw e; }));
   }
   return pdfCache.get(key);
 }

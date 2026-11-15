@@ -7,6 +7,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { PanelFrame, ExtLink, Segmented, actionBtnStyle } from "./ui.jsx";
 import { C, FS } from "./theme.js";
 import { getPdfImage, defaultInit } from "./DomesticWxPanel.jsx";
+import { getXsecImage } from "./xsecColor.js";
+import { XS, XSEC_RGB } from "./xsecClassify.js";
 
 const JMA = "https://www.jma.go.jp";
 const JMA_DATA = "https://www.data.jma.go.jp";
@@ -24,6 +26,17 @@ const AUTO_REFRESH_MS = 10 * 60e3;
 export const DIM_FILTER = "brightness(0.68) contrast(1.05)";
 const ISO_KEY = "wxcharts_isotherm"; // 寒気の目安（等温線の色付け）の表示
 const ISO_COLOR = "#2563eb";
+const XSEC_KEY = "wxcharts_xsec_color"; // 断面図の線の色分けの表示
+// 断面図の色分けの凡例（白地に線の見本。dash は破線）
+const rgb = (k) => `rgb(${XSEC_RGB[k].join(",")})`;
+const XSEC_LEGEND = [
+  { label: "VWS", color: rgb(XS.VWS), width: 3, dash: true },
+  { label: "湿域 T-Td<3℃", color: rgb(XS.MOIST), width: 3 },
+  { label: "等風速線", color: rgb(XS.ISOTACH), width: 2, dash: true },
+  { label: "気温", color: rgb(XS.TEMP), width: 1.5 },
+  { label: "相当温位", color: "#000", width: 2 },
+];
+const XSEC_TEXT = "赤 VWS・緑 湿域・青 等風速線・橙 気温";
 // 地図の線（海岸線・経緯線・山岳域）の色。解析の線（黒）と見分けるための淡い赤（2026-11-15 利用者の希望）
 const MAP_COLOR = "#ef7f7f";
 // 等温線の色付けの説明（例: 500hPa −30℃線）。d.iso は見つかった線の数（null は色付けできなかった）
@@ -96,11 +109,11 @@ const WX_CHARTS = [
   { key: "fsas48", cat: "sfc", title: "48時間 予想", code: "FSAS48", kind: "wm", region: "near", sel: "ft48" },
   { key: "asas", cat: "sfc", title: "アジア 実況", code: "ASAS", kind: "wm", region: "asia", sel: "now" },
   { ...FBJP_CHART, cat: "sev" }, // その日の悪天の全体像（「すべて」だけに表示。SIG WX にも同じ図）
-  { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48] },
-  // 気象庁 AUPQ78＝850・700hPa、AUPQ35＝500・300hPa。isotherm は寒気の目安として色を付ける等温線（下段の図）。
-  // mapColor は地図の線を淡い赤で描く（解析の線と見分けるため）
-  { key: "aupq78", cat: "upper", title: "850/700hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78", isotherm: { target: -6, level: "850hPa" }, mapColor: true },
-  { key: "aupq35", cat: "upper", title: "500/300hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35", isotherm: { target: -30, level: "500hPa" }, mapColor: true },
+  // mapLines は地図の線（海岸線・経緯線など）を淡い赤で描く（解析の線と見分けるため）。値は地図の線の見分け方（pdfmap.js）
+  { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48], mapLines: "panels" },
+  // 気象庁 AUPQ78＝850・700hPa、AUPQ35＝500・300hPa。isotherm は寒気の目安として色を付ける等温線（下段の図）
+  { key: "aupq78", cat: "upper", title: "850/700hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78", isotherm: { target: -6, level: "850hPa" }, mapLines: "thinnest" },
+  { key: "aupq35", cat: "upper", title: "500/300hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35", isotherm: { target: -30, level: "500hPa" }, mapLines: "thinnest" },
   { key: "aupa25", cat: "upper", title: "250hPa 解析", code: "AUPA25", kind: "pdf", file: "aupa25" },
   { key: "fupa252", cat: "upper", title: "250hPa 24時間予想", code: "FUPA252", kind: "pdf", file: "fupa252", ft: [24], hideInAll: true },
 ];
@@ -135,7 +148,8 @@ const PROG_LINKS = [
 
 // ENROUTE：断面図（縦長の図）
 const XSEC_CHARTS = [
-  { key: "fxjp106", title: "航空路 予想断面図", code: "FXJP106", kind: "cycle3h", urlFor: fxjp106Url, ft: [6, 12], aspect: "4 / 5" },
+  // colorize: 白黒の図を線の種類ごとに色分けする（xsecClassify.js）
+  { key: "fxjp106", title: "航空路 予想断面図", code: "FXJP106", kind: "cycle3h", urlFor: fxjp106Url, ft: [6, 12], aspect: "4 / 5", colorize: true },
   { key: "axjp140", title: "高層断面図 130°E・140°E", code: "AXJP130/140", kind: "pdf", file: "axjp140", aspect: "3 / 4" },
 ];
 const XSEC_LINKS = [
@@ -147,7 +161,7 @@ const XSEC_LINKS = [
 
 // 各図の取得状態 { status, src, href, timeLabel, ageFrom, error }
 // charts はモジュール直下の定数を渡す（参照が変わると取り直しになる）
-function useChartSources(charts, manualRefresh, autoTick, isoOn = false) {
+function useChartSources(charts, manualRefresh, autoTick, isoOn = false, xsecOn = false) {
   const [data, setData] = useState({});
   const patch = useCallback((key, v) => setData((p) => ({ ...p, [key]: { ...(p[key] || {}), ...v } })), []);
 
@@ -187,7 +201,12 @@ function useChartSources(charts, manualRefresh, autoTick, isoOn = false) {
       const urlOf = (base) => c.urlFor(pad(base.getUTCHours()));
       const show = (base, lm) => {
         const url = urlOf(base);
-        upd(c.key, { status: "ok", src: url, href: url, error: null, timeLabel: runLabel(c, base), ageFrom: lm || null });
+        const meta = { href: url, error: null, timeLabel: runLabel(c, base), ageFrom: lm || null };
+        if (!(c.colorize && xsecOn)) { upd(c.key, { ...meta, status: "ok", src: url, colored: false }); return; }
+        // 色分けした画像（できるまでは前の画像と時刻のまま）。作れなかったら元の画像
+        getXsecImage(url, lm ? lm.getTime() : `${manualRefresh}-${autoTick}`)
+          .then((r) => upd(c.key, { ...meta, status: "ok", src: r.src, colored: r.colored }))
+          .catch(() => upd(c.key, { ...meta, status: "ok", src: url, colored: false }));
       };
       const base = cycleBaseDate(0);
       const lm = await lastModified(urlOf(base));
@@ -200,7 +219,7 @@ function useChartSources(charts, manualRefresh, autoTick, isoOn = false) {
       }
     });
     return () => { alive = false; };
-  }, [charts, manualRefresh, autoTick, patch]);
+  }, [charts, manualRefresh, autoTick, xsecOn, patch]);
 
   // 数値予報天気図（PDF → 画像）。重いので初期時刻が変わったときと手動更新のときだけ
   const init = defaultInit(PDF_LAG_H);
@@ -210,7 +229,7 @@ function useChartSources(charts, manualRefresh, autoTick, isoOn = false) {
       const url = `${NWP_PDF}${c.file}_${init}.pdf`;
       patch(c.key, { href: url });
       setData((p) => (p[c.key]?.src ? p : { ...p, [c.key]: { ...(p[c.key] || {}), status: "loading" } }));
-      getPdfImage(url, manualRefresh, c.isotherm && isoOn ? { target: c.isotherm.target, color: ISO_COLOR } : null, c.mapColor ? MAP_COLOR : null)
+      getPdfImage(url, manualRefresh, c.isotherm && isoOn ? { target: c.isotherm.target, color: ISO_COLOR } : null, c.mapLines ? { rule: c.mapLines, color: MAP_COLOR } : null)
         .then((r) => {
           if (!alive) return;
           const modified = r.modified ? new Date(r.modified) : null;
@@ -225,8 +244,24 @@ function useChartSources(charts, manualRefresh, autoTick, isoOn = false) {
   return data;
 }
 
+// 断面図の色分けの凡例（線の見本と名前）
+function XsecLegend() {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 12px", padding: "0 12px 8px", fontSize: FS.xs, color: C.textSub }}>
+      {XSEC_LEGEND.map((l) => (
+        <span key={l.label} style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+          <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "28px", height: "14px", background: "#fff", borderRadius: "3px", flexShrink: 0 }}>
+            <span style={{ width: "20px", borderTop: `${l.width}px ${l.dash ? "dashed" : "solid"} ${l.color}` }} />
+          </span>
+          {l.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // 一覧のカード
-function ChartCard({ chart, d, dim, nowMs, isoOn, onOpen, onRetry }) {
+function ChartCard({ chart, d, dim, nowMs, isoOn, xsecOn, onOpen, onRetry }) {
   const src = d?.src;
   const [loadedSrc, setLoadedSrc] = useState(null);
   const [errorSrc, setErrorSrc] = useState(null);
@@ -258,6 +293,7 @@ function ChartCard({ chart, d, dim, nowMs, isoOn, onOpen, onRetry }) {
           {iso}
         </div>
       )}
+      {chart.colorize && xsecOn && d?.colored && <XsecLegend />}
       <div style={{
         position: "relative", width: "calc(100% - 20px)", margin: "0 10px 10px", aspectRatio: chart.aspect || "4 / 3",
         background: "#ffffff", borderRadius: "6px", overflow: "hidden",
@@ -426,6 +462,9 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
   const hasIso = charts.some((c) => c.isotherm);
   const [isoOn, setIsoOnState] = useState(() => loadPref(ISO_KEY, true) !== false);
   const setIsoOn = (v) => { setIsoOnState(v); savePref(ISO_KEY, v); };
+  const hasXsec = charts.some((c) => c.colorize);
+  const [xsecOn, setXsecOnState] = useState(() => loadPref(XSEC_KEY, true) !== false);
+  const setXsecOn = (v) => { setXsecOnState(v); savePref(XSEC_KEY, v); };
   const [filter, setFilterState] = useState(() => {
     const v = cats && filterKey ? loadPref(filterKey, "all") : "all";
     return cats?.some((c) => c.key === v) ? v : "all"; // 以前の「悪天」など、なくなった分類は「すべて」に戻す
@@ -435,7 +474,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
   const [autoTick, setAutoTick] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [viewer, setViewer] = useState(null); // 表示中の図のインデックス（visible 内）
-  const data = useChartSources(charts, manualRefresh, autoTick, hasIso && isoOn);
+  const data = useChartSources(charts, manualRefresh, autoTick, hasIso && isoOn, hasXsec && xsecOn);
 
   const setFilter = (v) => { setFilterState(v); if (filterKey) savePref(filterKey, v); };
 
@@ -450,7 +489,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
     const d = data[c.key] || {};
     return {
       key: c.key, title: c.title, code: c.code, src: d.status === "ok" ? d.src : null, href: d.href,
-      meta: [d.timeLabel, d.ageFrom ? ago(d.ageFrom, nowMs) : null, isoNote(c, d, isoOn)].filter(Boolean).join(" · "),
+      meta: [d.timeLabel, d.ageFrom ? ago(d.ageFrom, nowMs) : null, isoNote(c, d, isoOn), c.colorize && xsecOn && d.colored ? XSEC_TEXT : null].filter(Boolean).join(" · "),
     };
   });
 
@@ -473,6 +512,12 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
                 寒気の目安を色付け
               </label>
             )}
+            {hasXsec && (
+              <label title="FXJP106 の VWS・湿域・等風速線・気温を、線の太さと破線の形から自動で色分けします（目安）" style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
+                <input type="checkbox" checked={xsecOn} onChange={(e) => setXsecOn(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
+                線を色分け
+              </label>
+            )}
             <label style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
               <input type="checkbox" checked={dim} onChange={(e) => setDim(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
               図を減光（夜間用）
@@ -484,7 +529,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
         <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minCard}px), 1fr))`, alignItems: "start", gap: "14px", padding: "12px 16px 16px" }}>
           {visible.map((c, i) => (
             <ChartCard
-              key={c.key} chart={c} d={data[c.key]} dim={dim} nowMs={nowMs} isoOn={hasIso && isoOn}
+              key={c.key} chart={c} d={data[c.key]} dim={dim} nowMs={nowMs} isoOn={hasIso && isoOn} xsecOn={hasXsec && xsecOn}
               onOpen={() => setViewer(i)}
               onRetry={() => setManualRefresh((n) => n + 1)}
             />
@@ -540,7 +585,7 @@ export function CrossSectionCharts() {
   return (
     <ChartGallery
       title="断面図" charts={XSEC_CHARTS} links={XSEC_LINKS} minCard={360}
-      note="FXJP106 は国内主要航空路に沿った6・12時間予想、AXJP130/140 は東経130°・140°に沿った解析（00Z・12Z）。出典: 気象庁"
+      note="FXJP106 は国内主要航空路に沿った6・12時間予想、AXJP130/140 は東経130°・140°に沿った解析（00Z・12Z）。出典: 気象庁。FXJP106 の色分けは、白黒の図の線の太さと破線の形から自動で判定したもので、線が重なる所などは元の黒のまま残ることがあります（「線を色分け」を外すと元の図）"
     />
   );
 }

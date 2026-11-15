@@ -8,6 +8,7 @@ import { SigmetView, CmntView, CciPanel, LowLevelView } from "./SigWx.jsx";
 import { MaijiView } from "./EnrouteViews.jsx";
 import VolcanoInfo, { volcanoUrls } from "./VolcanoInfo.jsx";
 import FlightTraffic from "./FlightTraffic.jsx";
+import BriefingDisplay from "./BriefingDisplay.jsx";
 
 /* ============================================================
    AWC API BASE URL
@@ -1061,6 +1062,7 @@ const AIRPORT_NAME_BY_ICAO = Object.fromEntries(AIRPORT_CODE_TABLE.map(([, icao,
 // 表にない空港は利用者が ICAO を登録できる（localStorage に保存）
 const IATA_OVERRIDE_KEY = "wx-dashboard-iata-icao";
 const IATA_OVERRIDE_EVENT = "wx-iata-override";
+const DUTY_UPDATED_EVENT = "wx-duty-updated"; // 乗務の予定を読み込んだ・消したとき（トップの表示を更新する）
 function loadIataOverrides() {
   try { return JSON.parse(localStorage.getItem(IATA_OVERRIDE_KEY) || "{}") || {}; } catch { return {}; }
 }
@@ -1418,437 +1420,21 @@ function BottomNav({ tabs, active, onSelect }) {
 }
 
 
-/* ========== METAR QUICK STATUS — 主要空港ミニサマリ ========== */
-const QUICK_AIRPORTS = [
-  { icao: "RJCC", name: "千歳" },
-  { icao: "RJAA", name: "成田" },
-  { icao: "RJTT", name: "羽田" },
-  { icao: "RJBB", name: "関西" },
-  { icao: "RJFF", name: "福岡" },
-  { icao: "ROAH", name: "那覇" },
-];
-
-function MetarQuickStatus() {
-  const [data, setData] = useState({});
-
-  useEffect(() => {
-    const fetchAll = async () => {
-      const icaos = QUICK_AIRPORTS.map(a => a.icao).join(",");
-      try {
-        const text = await fetchMetarRaw(icaos);
-        const lines = text.split("\n").filter(Boolean);
-        const parsed = {};
-        for (let line of lines) {
-          // AWC形式 "METAR RJTT..." / "SPECI RJTT..." のプレフィックス除去
-          line = line.replace(/^(METAR|SPECI)\s+/, "");
-          const icao = line.slice(0, 4);
-          // 風抽出
-          const windMatch = line.match(/\b(\d{3}|VRB)(\d{2,3})(G\d{2,3})?KT\b/);
-          const wind = windMatch ? windMatch[0] : "---";
-          // 視程抽出 — 風の後の最初の独立4桁数字が視程(m)
-          const afterWind = line.replace(/.*?\d{3,5}(G\d{2,3})?KT\b/, "");
-          const visMatch = afterWind.match(/\b(\d{4})\b/);
-          const vis = visMatch ? visMatch[1] : "----";
-          // 雲抽出（表示用=最低雲底、ceiling判定=BKN/OVC/VVのみ）
-          const cloudMatches = [...line.matchAll(/(FEW|SCT|BKN|OVC|VV)(\d{3})/g)];
-          const clouds = cloudMatches.length > 0 ? cloudMatches[0][0] : (line.includes("CAVOK") ? "CAVOK" : "---");
-          const ceilingMatch = cloudMatches.find(m => /^(BKN|OVC|VV)/.test(m[0]));
-          // 現象
-          const wxMatch = line.match(/\b(\+?-?)(TS|TSRA|RA|SN|FG|BR|HZ|DZ|GR|SQ|FC|SS|DS|FZRA|FZDZ|SHRA|SHSN)\b/);
-          const wx = wxMatch ? wxMatch[0] : "";
-          // ステータス判定 — FAA基準: LIFR <500ft/<1SM, IFR <1000ft/<3SM, MVFR <3000ft/<5SM
-          const visNum = parseInt(vis, 10);
-          const ceilFt = ceilingMatch ? parseInt(ceilingMatch[2], 10) * 100 : 99999;
-          let status = "VFR";
-          let statusColor = "#6ee7b7";
-          if (visNum < 1600 || ceilFt < 500) { status = "LIFR"; statusColor = "#c084fc"; }
-          else if (visNum < 4800 || ceilFt < 1000) { status = "IFR"; statusColor = "#f87171"; }
-          else if (visNum < 8000 || ceilFt < 3000) { status = "MVFR"; statusColor = "#60a5fa"; }
-          if (line.includes("CAVOK")) { status = "VFR"; statusColor = "#6ee7b7"; }
-
-          parsed[icao] = { wind, vis, clouds, wx, status, statusColor, raw: line };
-        }
-        setData(parsed);
-      } catch { /* silent */ }
-    };
-    fetchAll();
-    const iv = setInterval(fetchAll, 120000);
-    return () => clearInterval(iv);
-  }, []);
-
-  return (
-    <PanelFrame title="METAR STATUS" code="QCK" style={{ padding: "0" }}>
-      <div style={{ padding: "14px 10px 6px" }}>
-        {QUICK_AIRPORTS.map(ap => {
-          const d = data[ap.icao];
-          return (
-            <div key={ap.icao} style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              padding: "5px 6px",
-              borderBottom: "1px solid rgba(110,231,183,0.05)",
-            }}>
-              {/* ステータスドット */}
-              <div style={{
-                width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0,
-                background: d?.statusColor ?? "#334155",
-                
-              }} />
-              {/* ICAO */}
-              <span style={{
-                fontSize: FS.xs, fontWeight: 700, color: "#6ee7b7",
-                fontFamily: FONT.data,
-                letterSpacing: "1px", width: "36px", flexShrink: 0,
-              }}>{ap.icao}</span>
-              {d ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "5px", flex: 1, overflow: "hidden" }}>
-                  {/* フライトカテゴリ */}
-                  <span style={{
-                    fontSize: FS.xs, fontWeight: 700, color: d.statusColor,
-                    fontFamily: FONT.ui,
-                    padding: "1px 4px", borderRadius: "1px",
-                    background: `${d.statusColor}18`,
-                    border: `1px solid ${d.statusColor}40`,
-                    letterSpacing: "1px", flexShrink: 0,
-                  }}>{d.status}</span>
-                  {/* 風 */}
-                  <span style={{ fontSize: FS.xs, color: "#60a5fa", fontFamily: FONT.data, flexShrink: 0 }}>{d.wind}</span>
-                  {/* 雲 */}
-                  <span style={{ fontSize: FS.xs, color: "#94a3b8", fontFamily: FONT.data, flexShrink: 0 }}>{d.clouds}</span>
-                  {/* 現象 */}
-                  {d.wx && <span style={{ fontSize: FS.xs, color: "#f87171", fontFamily: FONT.data, fontWeight: 700, flexShrink: 0 }}>{d.wx}</span>}
-                </div>
-              ) : (
-                <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: FONT.data }}>---</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {/* 凡例 */}
-      <div style={{
-        display: "flex", gap: "8px", padding: "4px 10px 8px", flexWrap: "wrap",
-        borderTop: "1px solid rgba(110,231,183,0.05)",
-      }}>
-        {[
-          { label: "VFR", color: "#6ee7b7" },
-          { label: "MVFR", color: "#60a5fa" },
-          { label: "IFR", color: "#f87171" },
-          { label: "LIFR", color: "#c084fc" },
-        ].map(c => (
-          <div key={c.label} style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-            <div style={{ width: "4px", height: "4px", borderRadius: "50%", background: c.color }} />
-            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: FONT.ui, letterSpacing: "0.5px" }}>{c.label}</span>
-          </div>
-        ))}
-      </div>
-    </PanelFrame>
-  );
-}
-
-/* ========== UPPER-AIR DATA TABLE — PRIMARY DISPLAY下 ========== */
-function UpperAirTable() {
-  const [airportData, setAirportData] = useState({});
-  const [dataLoading, setDataLoading] = useState(true);
-  const [dataError, setDataError] = useState(null);
-  const [lastFetch, setLastFetch] = useState(null);
-
-  const jstNow = new Date(Date.now() + 9 * 3600000);
-  const month = jstNow.getUTCMonth() + 1;
-  const isWinter = month <= 2 || month === 12;
-  const isSummer = month >= 6 && month <= 9;
-
-  const fetchAirportData = useCallback(async () => {
-    setDataLoading(true);
-    setDataError(null);
-    try {
-      const results = {};
-      await Promise.all(OPS_AIRPORTS.map(async (ap) => {
-        const url = `https://api.open-meteo.com/v1/forecast`
-          + `?latitude=${ap.lat}&longitude=${ap.lon}`
-          + `&hourly=windspeed_300hPa,winddirection_300hPa`
-          + `,windspeed_250hPa,winddirection_250hPa`
-          + `,temperature_850hPa,cape`
-          + `&forecast_days=1&timezone=UTC`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`${ap.icao}: HTTP ${res.status}`);
-        const json = await res.json();
-        const idx = Math.min(new Date().getUTCHours(), (json.hourly?.time?.length ?? 1) - 1);
-        const toKt = (v) => v != null ? Math.round(v * 0.539957) : null;
-        results[ap.icao] = {
-          wind300spd: toKt(json.hourly?.windspeed_300hPa?.[idx]),
-          wind300dir: json.hourly?.winddirection_300hPa?.[idx] != null ? Math.round(json.hourly.winddirection_300hPa[idx]) : null,
-          wind250spd: toKt(json.hourly?.windspeed_250hPa?.[idx]),
-          wind250dir: json.hourly?.winddirection_250hPa?.[idx] != null ? Math.round(json.hourly.winddirection_250hPa[idx]) : null,
-          temp850: json.hourly?.temperature_850hPa?.[idx] != null ? Math.round(json.hourly.temperature_850hPa[idx] * 10) / 10 : null,
-          cape: json.hourly?.cape?.[idx] != null ? Math.round(json.hourly.cape[idx]) : null,
-        };
-      }));
-      setAirportData(results);
-      setLastFetch(new Date());
-    } catch (e) {
-      setDataError(e.message);
-    } finally {
-      setDataLoading(false);
-    }
-  }, []);
-
-  const fetchRef = useRef(fetchAirportData);
-  useEffect(() => { fetchRef.current = fetchAirportData; }, [fetchAirportData]);
-  useEffect(() => {
-    fetchRef.current();
-    const iv = setInterval(() => fetchRef.current(), 600000);
-    return () => clearInterval(iv);
-  }, []);
-
-  const fmtWind = (dir, spd) => {
-    if (dir == null || spd == null) return "---/---KT";
-    return `${String(dir).padStart(3, "0")}/${String(spd).padStart(3, "0")}KT`;
-  };
-  const jetColor = (spd) => {
-    if (spd == null) return "#475569";
-    if (spd >= 120) return "#f87171";
-    if (spd >= 80) return "#fbbf24";
-    if (spd >= 50) return "#6ee7b7";
-    return "#94a3b8";
-  };
-  const temp850Color = (t) => {
-    if (t == null) return "#475569";
-    if (t <= -15) return "#c084fc";
-    if (t <= -6) return "#60a5fa";
-    if (t <= 0) return "#93c5fd";
-    if (t >= 24) return "#f87171";
-    return "#94a3b8";
-  };
-  const capeColor = (c) => {
-    if (c == null) return "#475569";
-    if (c >= 2500) return "#f87171";
-    if (c >= 1000) return "#fbbf24";
-    if (c >= 300) return "#fde68a";
-    return "#94a3b8";
-  };
-
-  return (
-    <PanelFrame title={`UPPER-AIR DATA${isWinter ? " ❄️" : isSummer ? " ⚡" : ""}`} code="UA-TBL" style={{ padding: "0" }}>
-      {/* ヘッダー */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "6px 12px", background: "rgba(0,0,0,0.4)",
-        borderBottom: "1px solid rgba(110, 231, 183, 0.08)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <div style={{
-            width: "5px", height: "5px", borderRadius: "50%",
-            background: dataLoading ? "#fbbf24" : dataError ? "#f87171" : "#6ee7b7",
-            
-          }} />
-          <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.ui, letterSpacing: "1px" }}>
-            {dataLoading ? "FETCHING..." : dataError ? "ERROR" : "OPEN-METEO ECMWF"}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {lastFetch && <span style={{ color: C.textMuted, fontSize: FS.xs, fontFamily: FONT.data }}>UPD {lastFetch.toISOString().slice(11, 16)}Z</span>}
-          <button onClick={() => fetchRef.current()} style={{
-            padding: "2px 6px", background: "rgba(110,231,183,0.06)",
-            border: "1px solid rgba(110,231,183,0.15)", borderRadius: "2px",
-            color: "#6ee7b7", fontSize: FS.xs, cursor: "pointer",
-            fontFamily: FONT.ui, letterSpacing: "1px",
-          }}>↻</button>
-        </div>
-      </div>
-
-      {/* テーブル */}
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: FONT.data }}>
-          <thead>
-            <tr style={{ background: "rgba(0,0,0,0.5)", borderBottom: "1px solid rgba(110,231,183,0.15)" }}>
-              {["ICAO", "300hPa", "250hPa", "850T", "CAPE"].map((h, i) => (
-                <th key={h} style={{
-                  padding: "5px 8px", textAlign: i === 0 ? "left" : "right",
-                  color: (isWinter && h === "850T") ? "#60a5fa" : (isSummer && h === "CAPE") ? "#fbbf24" : C.textMuted,
-                  fontSize: FS.xs, letterSpacing: "1px", fontWeight: 700,
-                  background: (isWinter && h === "850T") ? "rgba(96,165,250,0.06)" : (isSummer && h === "CAPE") ? "rgba(251,191,36,0.06)" : "transparent",
-                }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {OPS_AIRPORTS.map((ap, ri) => {
-              const d = airportData[ap.icao] || {};
-              return (
-                <tr key={ap.icao} style={{
-                  borderBottom: "1px solid rgba(110,231,183,0.04)",
-                  background: ri % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent",
-                }}>
-                  <td style={{ padding: "4px 8px", fontSize: FS.xs, fontWeight: 700, color: C.text, whiteSpace: "nowrap" }}>
-                    {ap.icao}<span style={{ marginLeft: "4px", fontSize: FS.xs, color: C.textMuted, fontWeight: 400 }}>{ap.name}</span>
-                  </td>
-                  <td style={{ padding: "4px 8px", textAlign: "right", fontSize: FS.xs, color: jetColor(d.wind300spd) }}>{fmtWind(d.wind300dir, d.wind300spd)}</td>
-                  <td style={{ padding: "4px 8px", textAlign: "right", fontSize: FS.xs, color: jetColor(d.wind250spd) }}>{fmtWind(d.wind250dir, d.wind250spd)}</td>
-                  <td style={{
-                    padding: "4px 8px", textAlign: "right", fontSize: FS.xs,
-                    fontWeight: isWinter ? 700 : 400, color: temp850Color(d.temp850),
-                    background: isWinter ? "rgba(96,165,250,0.04)" : "transparent",
-                  }}>
-                    {d.temp850 != null ? `${d.temp850 > 0 ? "+" : ""}${d.temp850}` : "---"}
-                  </td>
-                  <td style={{
-                    padding: "4px 8px", textAlign: "right", fontSize: FS.xs,
-                    fontWeight: isSummer ? 700 : 400, color: capeColor(d.cape),
-                    background: isSummer ? "rgba(251,191,36,0.04)" : "transparent",
-                  }}>
-                    {d.cape != null ? d.cape : "---"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 凡例 */}
-      <div style={{
-        display: "flex", gap: "8px", padding: "4px 10px", flexWrap: "wrap",
-        borderTop: "1px solid rgba(110,231,183,0.05)", background: "rgba(0,0,0,0.3)",
-      }}>
-        <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: FONT.ui }}>JET:</span>
-        {[{ l: ">120kt", c: "#f87171" }, { l: "80-120", c: "#fbbf24" }, { l: "50-80", c: "#6ee7b7" }].map(x => (
-          <div key={x.l} style={{ display: "flex", alignItems: "center", gap: "2px" }}>
-            <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: x.c }} />
-            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: FONT.ui }}>{x.l}</span>
-          </div>
-        ))}
-        <span style={{ color: C.textMuted, fontSize: FS.xs }}>│</span>
-        <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: FONT.ui }}>850T:</span>
-        {[{ l: "<-15", c: "#c084fc" }, { l: "<-6", c: "#60a5fa" }, { l: "<0", c: "#93c5fd" }].map(x => (
-          <div key={x.l} style={{ display: "flex", alignItems: "center", gap: "2px" }}>
-            <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: x.c }} />
-            <span style={{ fontSize: FS.xs, color: C.textMuted, fontFamily: FONT.ui }}>{x.l}</span>
-          </div>
-        ))}
-      </div>
-    </PanelFrame>
-  );
-}
-
-/* ========== JAPAN OVERVIEW — ALWAYS AT TOP ========== */
-function JapanOverview() {
-  const [overlayType, setOverlayType] = useState("jet300");
-
-  const month = new Date().getMonth();
-  const isSummer = month >= 5 && month <= 8; // Jun-Sep
-
-  const overlays = [
-    // --- OPS: パイロット重要情報 ---
-    { key: "jet300", label: "JET 300", icon: "🌀", group: "ops",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=5&lat=36&lon=137&overlay=wind&product=ecmwf&level=300h&calendar=now&message=true" },
-    { key: "jet250", label: "JET 250", icon: "🌀", group: "ops",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=5&lat=36&lon=137&overlay=wind&product=ecmwf&level=250h&calendar=now&message=true" },
-    { key: "cold850", label: "850T", icon: "❄️", group: "ops",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=5&lat=36&lon=137&overlay=temp&product=ecmwf&level=850h&calendar=now&message=true" },
-    { key: "cape", label: "CAPE", icon: "⚡", group: "ops",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=5&lat=36&lon=137&overlay=cape&product=ecmwf&level=surface&calendar=now&message=true" },
-    { key: "pressure", label: "SFC PRES", icon: "🗺️", group: "ops",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=5&lat=36&lon=137&overlay=pressure&product=ecmwf&level=surface&calendar=now&message=true" },
-    // --- SFC: 地上気象 ---
-    { key: "radar", label: "RADAR", icon: "🌧️", group: "sfc",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=6&lat=36.5&lon=137&overlay=radar&product=radar&level=surface&calendar=now&message=true" },
-    { key: "satellite", label: "SAT IR", icon: "🛰️", group: "sfc",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=6&lat=36.5&lon=137&overlay=satellite&product=satellite&level=surface&calendar=now&message=true" },
-    { key: "wind", label: "SFC WIND", icon: "💨", group: "sfc",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=6&lat=36.5&lon=137&overlay=wind&product=ecmwf&level=surface&calendar=now&message=true" },
-    { key: "cloud", label: "CLOUD", icon: "☁️", group: "sfc",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=6&lat=36.5&lon=137&overlay=clouds&product=ecmwf&level=surface&calendar=now&message=true" },
-    { key: "turb", label: "CAT", icon: "🔶", group: "sfc",
-      src: "https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=kt&zoom=5&lat=36&lon=140&overlay=turbulence&product=ecmwf&level=300h&calendar=now&message=true" },
-  ];
-
-  const opsOverlays = overlays.filter(o => o.group === "ops");
-  const sfcOverlays = overlays.filter(o => o.group === "sfc");
-
-  const current = overlays.find((o) => o.key === overlayType) ?? overlays[0];
-
-  return (
-    <div style={{ marginBottom: "24px" }}>
-      <PanelFrame title="PRIMARY SURVEILLANCE DISPLAY" code="SECT-01" style={{ padding: "0" }}>
-        {/* Overlay control bar */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "10px 14px", flexWrap: "wrap", gap: "8px",
-          borderBottom: "1px solid rgba(110, 231, 183, 0.08)",
-          background: "rgba(0,0,0,0.4)",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#6ee7b7", }} />
-            <span style={{ color: C.textSub, fontSize: FS.xs, fontFamily: FONT.ui, letterSpacing: "1px", }}>JAPAN AREA MONITOR</span>
-          </div>
-          <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ color: "#f59e0b", fontSize: FS.xs, fontFamily: FONT.ui, letterSpacing: "1px", marginRight: "2px" }}>OPS</span>
-            {opsOverlays.map((o) => (
-              <button key={o.key} onClick={() => setOverlayType(o.key)} style={{
-                padding: "4px 10px",
-                background: overlayType === o.key ? "rgba(245, 158, 11, 0.15)" : "transparent",
-                border: overlayType === o.key ? "1px solid rgba(245, 158, 11, 0.6)" : "1px solid rgba(110, 231, 183, 0.06)",
-                borderRadius: "2px",
-                color: overlayType === o.key ? "#f59e0b" : C.textMuted,
-                fontSize: FS.xs, cursor: "pointer",
-                fontFamily: FONT.ui, letterSpacing: "0.5px",
-                
-                transition: "all 0.15s ease",
-              }}>
-                {o.icon} {o.label}
-              </button>
-            ))}
-            <div style={{ width: "1px", height: "18px", background: "rgba(110,231,183,0.15)", margin: "0 4px" }} />
-            <span style={{ color: "#6ee7b7", fontSize: FS.xs, fontFamily: FONT.ui, letterSpacing: "1px", marginRight: "2px" }}>SFC</span>
-            {sfcOverlays.map((o) => (
-              <button key={o.key} onClick={() => setOverlayType(o.key)} style={{
-                padding: "4px 10px",
-                background: overlayType === o.key ? "rgba(110, 231, 183, 0.12)" : "transparent",
-                border: overlayType === o.key ? "1px solid rgba(110, 231, 183, 0.5)" : "1px solid rgba(110, 231, 183, 0.06)",
-                borderRadius: "2px",
-                color: overlayType === o.key ? "#6ee7b7" : C.textMuted,
-                fontSize: FS.xs, cursor: "pointer",
-                fontFamily: FONT.ui, letterSpacing: "0.5px",
-                
-                transition: "all 0.15s ease",
-              }}>
-                {o.icon} {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Windy map */}
-        <div style={{ position: "relative", background: "#000" }}>
-          <iframe
-            key={current.key}
-            src={current.src}
-            style={{ width: "100%", height: "480px", border: "none", display: "block" }}
-            title={current.label}
-            loading="lazy"
-            allow="autoplay"
-          />
-          {/* HUD overlay corners on map */}
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", }} />
-        </div>
-
-        {/* Bottom link bar */}
-        <div style={{
-          display: "flex", gap: "4px", padding: "8px 14px", flexWrap: "wrap",
-          borderTop: "1px solid rgba(110, 231, 183, 0.08)",
-          background: "rgba(0,0,0,0.4)",
-        }}>
-          <ExtLink href="https://www.jma.go.jp/bosai/nowc/" accent>ナウキャスト</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/map.html#5/34.5/137/&elem=ir&contents=himawari">気象衛星</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/weather_map/">天気図</ExtLink>
-          <ExtLink href="https://www.jma.go.jp/bosai/numericmap/">数値予報天気図</ExtLink>
-          <ExtLink href="https://www.data.jma.go.jp/airinfo/data/awfo_maiji.html">三十分大気解析</ExtLink>
-          <ExtLink href="https://himawari.asia/">ひまわりRT</ExtLink>
-        </div>
-      </PanelFrame>
-    </div>
-  );
-}
+/* ========== PRIMARY SURVEILLANCE DISPLAY に渡す道具（BriefingDisplay.jsx） ========== */
+// 乗務の予定・空港コード・電文の取得はこのファイルのものを使う（循環 import を避けて渡す）
+const BRIEFING_API = {
+  fetchViaProxy: (path) => fetchViaProxy(path, undefined, 12000),
+  fetchTafRaw: (icao) => fetchTafRaw(icao),
+  loadDutyEvents: () => loadDutyEvents(),
+  getTodayDutyEvents: () => getTodayDutyEvents(),
+  getNextDutyEvents: () => getNextDutyEvents(),
+  nextDutyDay: () => nextDutyDay(),
+  iataToIcao: (code) => iataToIcao(code),
+  airportName: (icao) => AIRPORT_NAME_BY_ICAO[icao] || "",
+  runwayData: RUNWAY_DATA,
+  overrideEvent: IATA_OVERRIDE_EVENT,
+  dutyEvent: DUTY_UPDATED_EVENT,
+};
 
 /* ========== TODAY DUTY BAR（PSD直上表示） ========== */
 function TodayDutyBar() {
@@ -3547,6 +3133,7 @@ function DutySchedulePanel() {
     const parsed = parseICS(text);
     setEvents(parsed);
     localStorage.setItem(DUTY_STORAGE_KEY, JSON.stringify(parsed));
+    window.dispatchEvent(new Event(DUTY_UPDATED_EVENT));
   };
 
   const handleDrop = (e) => {
@@ -3572,6 +3159,7 @@ function DutySchedulePanel() {
   const clearData = () => {
     setEvents([]);
     localStorage.removeItem(DUTY_STORAGE_KEY);
+    window.dispatchEvent(new Event(DUTY_UPDATED_EVENT));
   };
 
   const fmtZ = (d) => {
@@ -5055,16 +4643,10 @@ export default function WeatherBriefing() {
       {/* ===== AlmanacBar ===== */}
       <AlmanacBar now={now} />
 
-      {/* Japan Overview + METAR Quick Status + Upper-Air Data */}
+      {/* 乗務の帯 + PRIMARY SURVEILLANCE DISPLAY（① 今日の概況 → ② DUTY の空港の PFD） */}
       <div style={{ padding: "16px 24px 0", maxWidth: "1400px", margin: "0 auto" }}>
         <TodayDutyBar />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "8px", alignItems: "start" }}>
-          <JapanOverview />
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <MetarQuickStatus />
-            <UpperAirTable />
-          </div>
-        </div>
+        <BriefingDisplay api={BRIEFING_API} />
       </div>
 
       {/* ===== JMA気象概况ティッカー (メインモニター直下) ===== */}

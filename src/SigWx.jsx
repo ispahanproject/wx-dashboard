@@ -200,7 +200,10 @@ export function SigmetView() {
                     padding: "3px 7px", borderRadius: "4px", background: "rgba(3,8,16,0.85)",
                     whiteSpace: "nowrap", pointerEvents: "none",
                   }}>
-                    <span style={{ color: h.color, fontSize: FS.xs, fontWeight: 700 }}>{(s.seriesId || "").replace(/F$/, "")} {h.label}</span>
+                    {/* 番号・qualifier・hazard は電文の語のまま（例 A03 SEV TURB）。色は hazard ごと */}
+                    <span style={{ color: h.color, fontFamily: FONT.data, fontSize: FS.xs, fontWeight: 700 }}>
+                      {[(s.seriesId || "").replace(/F$/, ""), s.qualifier, s.hazard || "SIGMET"].filter(Boolean).join(" ")}
+                    </span>
                     {extent && <span style={{ fontFamily: FONT.data, fontSize: FS.xs, color: C.text }}>{extent}</span>}
                     <span style={{ fontFamily: FONT.data, fontSize: FS.xs, color: started ? C.text : "#fcd34d" }}>
                       {started ? "" : "開始前 "}{hhmmZ(from).replace(/Z$/, "")}–{hhmmZ(to)}

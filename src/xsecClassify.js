@@ -7,12 +7,13 @@
    2. 3px・2px の線をつながり（連結成分）に分け、形（長さ・幅・向き）と並び方で破線の片を見分ける
       破線の片＝端の先が空いていて、すき間をおいて同じ向きの片が続くもの（線の重なりで太い所や、矢羽の羽根を除く）
    3. 1px の線は、縦にまっすぐ長い線と横の破線の行を目盛り線、残りを気温とする
-   見分けられない所は元の黒のまま。図の外（凡例・目盛りの数字・右上の地上図）は色を付けない
+   4. 圏界面の印（✡）は、決まった列（モデルの格子の位置）の上で、六芒星の形の特徴から探す（findTropopause）
+   見分けられない所は元の黒のまま。図の外（凡例・目盛りの数字・右上の地上図）は色を付けない（凡例の ✡ だけ色を付ける）
    画像の大きさや図の枠の位置が想定と違うときは null（色分けしない）
    ============================================================ */
 
 // 画素ごとの種類
-export const XS = { BG: 0, BLACK: 1, VWS: 2, MOIST: 3, ISOTACH: 4, TEMP: 5, GRID: 6 };
+export const XS = { BG: 0, BLACK: 1, VWS: 2, MOIST: 3, ISOTACH: 4, TEMP: 5, GRID: 6, TROPO: 7 };
 // 種類ごとの色（RGB）。背景は白、相当温位・矢羽・数字は黒のまま
 export const XSEC_RGB = {
   [XS.BLACK]: [0, 0, 0],
@@ -21,6 +22,7 @@ export const XSEC_RGB = {
   [XS.ISOTACH]: [37, 99, 235],
   [XS.TEMP]: [217, 119, 6],
   [XS.GRID]: [170, 170, 170],
+  [XS.TROPO]: [192, 38, 211],
 };
 
 // 図の範囲（上下2枚。右上の小さな地上図と見出しの箱、軸の目盛りを除く）と、あるはずの図の上下の線
@@ -31,7 +33,108 @@ const LAYOUT = {
     [256, 1426, 1405, 2350], [1406, 1550, 1830, 2350],
   ],
   lines: [[221, 240, 1400], [1150, 240, 1850], [1424, 240, 1400], [2353, 240, 1850]], // [y, x0, x1]
+  // 圏界面の印が描かれる列（x）と、探す行の範囲（上下2枚）。凡例の印の位置
+  tropoX: Array.from({ length: 26 }, (_, k) => 300.3 + 59.36 * k),
+  tropoRows: [[222, 1146], [1425, 2349]],
+  tropoLegend: [[922, 201], [922, 1405]],
 };
+
+// 正方形 (2r+1)^2 が収まる中心（erode）
+function erodeSquare(src, W, H, r) {
+  const N = W * H, h = new Uint8Array(N), o = new Uint8Array(N), k = 2 * r + 1;
+  for (let y = 0; y < H; y++) { let run = 0; const b = y * W; for (let x = 0; x < W; x++) { run = src[b + x] ? run + 1 : 0; if (run >= k) h[b + x - r] = 1; } }
+  for (let x = 0; x < W; x++) { let run = 0; for (let y = 0; y < H; y++) { run = h[y * W + x] ? run + 1 : 0; if (run >= k) o[(y - r) * W + x] = 1; } }
+  return o;
+}
+
+/* 圏界面の印（✡、六芒星。高さ・幅とも約19px、線の太さ3〜4px、真ん中に白い六角形の穴）を探す
+   印は列ごとに1つ（決まった x の列の上）。中心に置いた見本の点で形を確かめる:
+     穴（中心と半径2）が白・輪（半径5.5）が黒・6つの先端（半径8）が黒・先端の間のくぼみ（半径9.5）と先端の外（半径11.5）が白
+   線が重なると一部が合わなくなるので、それぞれ少しの外れは許し、合計の点数・左右の対称さ・旗のような塗りつぶし
+   （5x5 が収まる所）の少なさで選ぶ。形がよく合うもの（点数 4.25 以上）か、形は少し崩れていても左右がよくそろうもの
+   （点数 3.9 以上・対称さ 0.86 以上）。間違って色を付けないよう、迷うものは選ばない
+   E5: 5x5 が収まる中心（なければ作る）。戻り値: [{ x, y }]（凡例の印も含む） */
+export function findTropopause(B, W, H, E5 = erodeSquare(B, W, H, 2)) {
+  if (W !== LAYOUT.W || H !== LAYOUT.H) return [];
+  const at = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : B[y * W + x]);
+  // 見本の点（中心からのずれ）を画素の番号のずれにしておく（探す中心は画像の端から 12px 以上離れている）
+  const ring = (r, angs) => Int32Array.from(angs, (a) => Math.round(r * Math.sin(a * Math.PI / 180)) * W + Math.round(r * Math.cos(a * Math.PI / 180)));
+  const HOLE = Int32Array.from([0, ...ring(2, [0, 45, 90, 135, 180, 225, 270, 315])]);
+  const RING = ring(5.5, [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]);
+  const POINT = ring(8, [90, 30, -30, -90, -150, 150]);
+  const NOTCH = ring(9.5, [0, 60, 120, 180, 240, 300]);
+  const TIP = ring(11.5, [90, 30, -30, -90, -150, 150]);
+  const black = (offs, i) => { let n = 0; for (let k = 0; k < offs.length; k++) n += B[i + offs[k]]; return n; };
+  // 形の点数（各見本の合う割合の合計、5点満点）。合う数が足りなければ null
+  const score = (x, y) => {
+    const i = y * W + x;
+    if (B[i]) return null;
+    const hole = HOLE.length - black(HOLE, i);
+    if (hole < 5) return null;
+    const rg = black(RING, i), pt = black(POINT, i);
+    if (rg < 10 || pt < 5) return null;
+    const notch = NOTCH.length - black(NOTCH, i), tip = TIP.length - black(TIP, i);
+    if (notch < 2 || tip < 3) return null;
+    return hole / 9 + rg / 12 + pt / 6 + notch / 6 + tip / 6;
+  };
+  // 左右の対称さ（半径7の内側。軸は半画素ずれも試す）
+  const symmetry = (cx, cy) => {
+    let best = 0;
+    for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) for (const half of [0, 1]) {
+      let same = 0, tot = 0;
+      for (let dy = -7; dy <= 7; dy++) for (let dx = 1; dx <= 7; dx++) {
+        if (dx * dx + dy * dy > 49) continue;
+        tot++;
+        if (at(cx + ox - dx + half, cy + oy + dy) === at(cx + ox + dx, cy + oy + dy)) same++;
+      }
+      best = Math.max(best, same / tot);
+    }
+    return best;
+  };
+  const filled = (cx, cy) => {
+    let n = 0;
+    for (let dy = -10; dy <= 10; dy++) for (let dx = -10; dx <= 10; dx++) if (dx * dx + dy * dy <= 100 && E5[(cy + dy) * W + cx + dx]) n++;
+    return n;
+  };
+  // 列（または凡例の位置）の近くで点数のいちばん高い所。y の近い当たりはまとめる
+  const best = (cx, y0, y1, dxMax) => {
+    const found = [];
+    let cur = null;
+    for (let y = y0; y <= y1; y++) {
+      let row = null;
+      for (let x = Math.round(cx) - dxMax; x <= Math.round(cx) + dxMax; x++) {
+        const s = score(x, y);
+        if (s !== null && (!row || s > row.s)) row = { x, y, s };
+      }
+      if (!row) continue;
+      if (cur && y - cur.last <= 3) { if (row.s > cur.s) Object.assign(cur, row); cur.last = y; }
+      else { cur = { ...row, last: y }; found.push(cur); }
+    }
+    return found.filter((c) => {
+      if (c.s < 3.9) return false;
+      const f = filled(c.x, c.y), sym = symmetry(c.x, c.y);
+      return (c.s >= 4.25 && f <= 30 && sym >= 0.75) || (f <= 20 && sym >= 0.86);
+    });
+  };
+  const stars = [];
+  for (const [y0, y1] of LAYOUT.tropoRows) {
+    for (const cx of LAYOUT.tropoX) {
+      const c = best(cx, y0, y1, 2);
+      if (c.length) stars.push(c.reduce((a, b) => (b.s > a.s ? b : a))); // 1つの列に印は1つ
+    }
+  }
+  for (const [cx, cy] of LAYOUT.tropoLegend) stars.push(...best(cx, cy - 3, cy + 3, 3));
+  return stars.map(({ x, y }) => ({ x, y }));
+}
+
+// 印の範囲（六芒星の形＋真ん中の円）に入る画素か。dx, dy は中心からのずれ
+function inStar(dx, dy) {
+  if (dx * dx + dy * dy <= 52) return true; // 半径約7.2（くぼみの角まで）
+  const m = 5.25; // 外側の三角形（外接円の半径 10.5）の内接円の半径
+  const up = dy <= m && 0.866 * dx - 0.5 * dy <= m && -0.866 * dx - 0.5 * dy <= m;
+  const down = -dy <= m && 0.866 * dx + 0.5 * dy <= m && -0.866 * dx + 0.5 * dy <= m;
+  return up || down;
+}
 
 // RGBA の画素から、黒い画素を 1 にした配列
 export function binaryFromRgba(data, W, H) {
@@ -62,12 +165,7 @@ export function classifyXsec(B, W, H) {
   for (const [x0, y0, x1, y1] of LAYOUT.rects) for (let y = y0; y <= y1; y++) inside.fill(1, y * W + x0, y * W + x1 + 1);
 
   // 正方形 (2r+1)^2 が収まる中心（erode）と、そこから r だけ広げた範囲（dilate）
-  const erode = (src, r) => {
-    const h = new Uint8Array(N), o = new Uint8Array(N), k = 2 * r + 1;
-    for (let y = 0; y < H; y++) { let run = 0; const b = y * W; for (let x = 0; x < W; x++) { run = src[b + x] ? run + 1 : 0; if (run >= k) h[b + x - r] = 1; } }
-    for (let x = 0; x < W; x++) { let run = 0; for (let y = 0; y < H; y++) { run = h[y * W + x] ? run + 1 : 0; if (run >= k) o[(y - r) * W + x] = 1; } }
-    return o;
-  };
+  const erode = (src, r) => erodeSquare(src, W, H, r);
   const dilate = (src, r) => {
     const h = new Uint8Array(N), o = new Uint8Array(N);
     for (let y = 0; y < H; y++) {
@@ -90,7 +188,8 @@ export function classifyXsec(B, W, H) {
   const o3 = dilate(erode(B, 1), 1);
   for (let i = 0; i < N; i++) if (B[i]) thick[i] = o3[i] ? 3 : thick[i] || 1;
   // 矢羽の旗（5x5 が収まる塗りつぶし）のまわり。湿域の雲形に旗がくっついたとき、旗を黒のままにする
-  const flag = dilate(erode(B, 2), 3);
+  const E5 = erode(B, 2);
+  const flag = dilate(E5, 3);
 
   const out = new Uint8Array(N);
   for (let i = 0; i < N; i++) if (B[i]) out[i] = XS.BLACK;
@@ -279,5 +378,12 @@ export function classifyXsec(B, W, H) {
   }
   // 図の外はそのまま黒
   for (let i = 0; i < N; i++) if (B[i] && !inside[i]) out[i] = XS.BLACK;
+  // 圏界面の印（凡例の印も）。印に重なった線の画素も印の色にする
+  for (const { x, y } of findTropopause(B, W, H, E5)) {
+    for (let dy = -11; dy <= 11; dy++) for (let dx = -11; dx <= 11; dx++) {
+      const i = (y + dy) * W + x + dx;
+      if (B[i] && inStar(dx, dy)) out[i] = XS.TROPO;
+    }
+  }
   return out;
 }

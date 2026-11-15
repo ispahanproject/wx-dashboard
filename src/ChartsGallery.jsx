@@ -27,16 +27,17 @@ export const DIM_FILTER = "brightness(0.68) contrast(1.05)";
 const ISO_KEY = "wxcharts_isotherm"; // 寒気の目安（等温線の色付け）の表示
 const ISO_COLOR = "#2563eb";
 const XSEC_KEY = "wxcharts_xsec_color"; // 断面図の線の色分けの表示
-// 断面図の色分けの凡例（白地に線の見本。dash は破線）
+// 断面図の色分けの凡例（白地に線の見本。dash は破線、symbol は線の代わりの印）
 const rgb = (k) => `rgb(${XSEC_RGB[k].join(",")})`;
 const XSEC_LEGEND = [
   { label: "VWS", color: rgb(XS.VWS), width: 3, dash: true },
   { label: "湿域 T-Td<3℃", color: rgb(XS.MOIST), width: 3 },
   { label: "等風速線", color: rgb(XS.ISOTACH), width: 2, dash: true },
   { label: "気温", color: rgb(XS.TEMP), width: 1.5 },
+  { label: "圏界面", color: rgb(XS.TROPO), symbol: "✡" },
   { label: "相当温位", color: "#000", width: 2 },
 ];
-const XSEC_TEXT = "赤 VWS・緑 湿域・青 等風速線・橙 気温";
+const XSEC_TEXT = "赤 VWS・緑 湿域・青 等風速線・橙 気温・紫 圏界面";
 // 地図の線（海岸線・経緯線・山岳域）の色。解析の線（黒）と見分けるための淡い赤（2026-11-15 利用者の希望）
 const MAP_COLOR = "#ef7f7f";
 // 等温線の色付けの説明（例: 500hPa −30℃線）。d.iso は見つかった線の数（null は色付けできなかった）
@@ -251,7 +252,9 @@ function XsecLegend() {
       {XSEC_LEGEND.map((l) => (
         <span key={l.label} style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
           <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "28px", height: "14px", background: "#fff", borderRadius: "3px", flexShrink: 0 }}>
-            <span style={{ width: "20px", borderTop: `${l.width}px ${l.dash ? "dashed" : "solid"} ${l.color}` }} />
+            {l.symbol
+              ? <span style={{ color: l.color, fontSize: "13px", lineHeight: 1, fontWeight: 700 }}>{l.symbol}</span>
+              : <span style={{ width: "20px", borderTop: `${l.width}px ${l.dash ? "dashed" : "solid"} ${l.color}` }} />}
           </span>
           {l.label}
         </span>
@@ -513,7 +516,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
               </label>
             )}
             {hasXsec && (
-              <label title="FXJP106 の VWS・湿域・等風速線・気温を、線の太さと破線の形から自動で色分けします（目安）" style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
+              <label title="FXJP106 の VWS・湿域・等風速線・気温を線の太さと破線の形から、圏界面を印の形から自動で色分けします（目安）" style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
                 <input type="checkbox" checked={xsecOn} onChange={(e) => setXsecOn(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
                 線を色分け
               </label>
@@ -585,7 +588,7 @@ export function CrossSectionCharts() {
   return (
     <ChartGallery
       title="断面図" charts={XSEC_CHARTS} links={XSEC_LINKS} minCard={360}
-      note="FXJP106 は国内主要航空路に沿った6・12時間予想、AXJP130/140 は東経130°・140°に沿った解析（00Z・12Z）。出典: 気象庁。FXJP106 の色分けは、白黒の図の線の太さと破線の形から自動で判定したもので、線が重なる所などは元の黒のまま残ることがあります（「線を色分け」を外すと元の図）"
+      note="FXJP106 は国内主要航空路に沿った6・12時間予想、AXJP130/140 は東経130°・140°に沿った解析（00Z・12Z）。出典: 気象庁。FXJP106 の色分けは、白黒の図の線の太さと破線の形（圏界面は印の形）から自動で判定したもので、線が重なる所などは元の黒のまま残ることがあります（「線を色分け」を外すと元の図）"
     />
   );
 }

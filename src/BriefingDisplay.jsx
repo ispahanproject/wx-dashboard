@@ -11,7 +11,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { PanelFrame } from "./ui.jsx";
 import { C, FS, FONT } from "./theme.js";
-import { TileMap, COASTLINE, WORKER_URL, FBJP_URL } from "./DomesticWxPanel.jsx";
+import { TileMap, COASTLINE, WORKER_URL, FBJP_URL, lon2px, lat2px } from "./DomesticWxPanel.jsx";
 import { ChartViewer, DIM_FILTER, useDimPref } from "./ChartsGallery.jsx";
 
 const JMA = "https://www.jma.go.jp";
@@ -24,6 +24,9 @@ const OPEN_METEO = "https://api.open-meteo.com/v1/forecast";
 
 const HERO_REGION = { w: 121, e: 151, n: 46.5, s: 26, z: 5 };
 const THUMB_REGION = { w: 121, e: 151, n: 46.5, s: 26, z: 4 };
+// 主役の枠の縦横比（ひまわりの範囲と同じ。天気図に切り替えても枠の大きさを変えない）
+const HERO_ASPECT = (lon2px(HERO_REGION.e, HERO_REGION.z) - lon2px(HERO_REGION.w, HERO_REGION.z))
+  / (lat2px(HERO_REGION.s, HERO_REGION.z) - lat2px(HERO_REGION.n, HERO_REGION.z));
 const BANDS = [
   { key: "REP/ETC", label: "トゥルーカラー" },
   { key: "B13/TBB", label: "赤外" },
@@ -709,7 +712,8 @@ function Overview({ plan, metars, metarNote, sigmets, listIcaos, favorites, setF
   const [bandSel, setBandSel] = useState(null); // null＝昼夜で自動
   const autoBand = sunElevation(now, 36, 138) > 5 ? "REP/ETC" : "B13/TBB";
   const band = bandSel || autoBand;
-  const [viewer, setViewer] = useState(null);
+  const [view, setView] = useState("sat"); // 主役の画像：sat（ひまわり、既定）・spas（地上天気図 実況）・fbjp
+  const [viewer, setViewer] = useState(null); // 全画面（天気図の何枚目か）
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
@@ -719,64 +723,96 @@ function Overview({ plan, metars, metarNote, sigmets, listIcaos, favorites, setF
   const vaCount = sigmets.filter((s) => s.hazard === "VA").length;
   const satLayer = (b) => sat && { id: `sat-${b}`, url: (z, x, y) => `${SAT}/${sat.basetime}/fd/${sat.validtime}/${b}/${z}/${x}/${y}.jpg` };
   const coast = { id: "coast", url: COASTLINE, pixelated: true };
-  const viewerItems = [
-    { key: "spas", title: "地上天気図 実況", code: "SPAS", meta: spas?.valid ? `${pad(new Date(spas.valid).getUTCDate())}日 ${pad(new Date(spas.valid).getUTCHours())}00Z` : "", src: spas?.src || null, href: spas?.src },
+  const charts = [
+    { key: "spas", title: "地上天気図 実況", code: "SPAS", meta: spas?.valid ? `${pad(new Date(spas.valid).getUTCDate())}日 ${hhmmZ(spas.valid)}` : "", src: spas?.src || null, href: spas?.src },
     { key: "fbjp", title: "国内悪天予想図", code: "FBJP", meta: "", src: FBJP_URL, href: FBJP_URL },
   ];
-  const thumbStyle = { display: "flex", flexDirection: "column", padding: 0, borderRadius: "8px", border: "1px solid #1c2433", background: "#0f1726", overflow: "hidden", fontFamily: "inherit", color: "inherit", textAlign: "left", cursor: "pointer", minWidth: 0 };
-  // 狭い画面では短い名前だけ
-  const thumbHead = (title, short, note) => (
-    <span style={{ display: "flex", alignItems: "baseline", gap: "6px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden" }}>
-      {narrow ? short : title}{!narrow && <span style={{ fontSize: "10px", fontWeight: 400, color: C.textSub }}>{note}</span>}
-    </span>
-  );
+  const chart = charts.find((c) => c.key === view) || null;
+  const viewerList = charts.filter((c) => c.src);
+  const openFull = () => { const i = viewerList.findIndex((c) => c.key === view); if (i >= 0) setViewer(i); };
   const satTime = sat ? Date.UTC(+sat.validtime.slice(0, 4), +sat.validtime.slice(4, 6) - 1, +sat.validtime.slice(6, 8), +sat.validtime.slice(8, 10), +sat.validtime.slice(10, 12)) : null;
+  const bandLabel = BANDS.find((b) => b.key === band)?.label || "";
+
+  // 主役の見出し：ひまわりは画像に重ねる（狭い画面と天気図のときは画像の上に置く）
+  const overlayHead = view === "sat" && !narrow;
   const heroHead = (
-    <div style={{ ...(narrow ? {} : { position: "absolute", top: 0, left: 0, right: 0 }), display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", padding: "8px 10px 8px 14px", background: narrow ? "#070d18" : "rgba(3,8,16,0.78)" }}>
-      <span style={{ fontSize: FS.md, fontWeight: 700, color: COL.white }}>ひまわり</span>
-      {satTime && <span style={{ fontFamily: FONT.data, fontSize: "12px", color: "#cbd5e1" }}>{hhmmZ(satTime)}</span>}
-      <div role="group" aria-label="衛星画像の種類" style={{ marginLeft: "auto", display: "inline-flex", gap: "2px", padding: "2px", borderRadius: "9px", background: "rgba(7,13,24,0.92)", border: "1px solid #1c2433" }}>
-        {BANDS.map((b) => (
-          <button key={b.key} type="button" aria-pressed={band === b.key} onClick={() => setBandSel(b.key)} style={{ ...segBtn(band === b.key), fontSize: "12px" }}>{b.label}</button>
-        ))}
-      </div>
+    <div style={{ ...(overlayHead ? { position: "absolute", top: 0, left: 0, right: 0 } : {}), display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", minHeight: "62px", boxSizing: "border-box", padding: "8px 10px 8px 14px", background: overlayHead ? "rgba(3,8,16,0.78)" : "#070d18", borderBottom: overlayHead ? "none" : "1px solid #1c2433" }}>
+      {view === "sat" ? (
+        <>
+          <span style={{ fontSize: FS.md, fontWeight: 700, color: COL.white }}>ひまわり</span>
+          {satTime && <span style={{ fontFamily: FONT.data, fontSize: "12px", color: "#cbd5e1" }}>{hhmmZ(satTime)}</span>}
+          <div role="group" aria-label="衛星画像の種類" style={{ marginLeft: "auto", display: "inline-flex", gap: "2px", padding: "2px", borderRadius: "9px", background: "rgba(7,13,24,0.92)", border: "1px solid #1c2433" }}>
+            {BANDS.map((b) => (
+              <button key={b.key} type="button" aria-pressed={band === b.key} onClick={() => setBandSel(b.key)} style={{ ...segBtn(band === b.key), fontSize: "12px" }}>{b.label}</button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <span style={{ fontSize: FS.md, fontWeight: 700, color: COL.white }}>{chart.title}</span>
+          <span style={{ fontFamily: FONT.data, fontSize: "12px", color: "#cbd5e1" }}>{chart.meta || chart.code}</span>
+          <button type="button" onClick={openFull} disabled={!chart.src} style={{ ...plainBtn, marginLeft: "auto", opacity: chart.src ? 1 : 0.5 }}>全画面</button>
+        </>
+      )}
     </div>
   );
+
+  // 下の3枚：タップで主役の画像を切り替える（実況・FBJP・ひまわり）
+  const thumbs = [
+    { key: "spas", title: "地上天気図 実況", short: "実況", note: spas?.valid ? hhmmZ(spas.valid) : "", label: "地上天気図（実況）" },
+    { key: "fbjp", title: "国内悪天予想図", short: "FBJP", note: "FBJP", label: "国内悪天予想図（FBJP）" },
+    { key: "sat", title: "ひまわり", short: "ひまわり", note: bandLabel, label: "ひまわり" },
+  ];
+  const thumbStyle = (on) => ({
+    display: "flex", flexDirection: "column", padding: 0, borderRadius: "8px", overflow: "hidden", fontFamily: "inherit", color: "inherit", textAlign: "left", cursor: on ? "default" : "pointer", minWidth: 0,
+    border: `1px solid ${on ? C.accent : "#1c2433"}`, background: on ? "#0f2a22" : "#0f1726",
+  });
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: narrow ? "minmax(0, 1fr)" : "minmax(0, 1.25fr) minmax(0, 1fr)", gap: "14px", alignItems: "start" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 }}>
-        <div style={{ position: "relative", borderRadius: "8px", border: "1px solid #1c2433", overflow: "hidden", background: "#000", filter: dim ? DIM_FILTER : "none" }}>
-          {/* 見出しは画像の上に重ねる（狭い画面では画像の上に置く） */}
-          {narrow && heroHead}
-          <TileMap region={HERO_REGION} layers={[satLayer(band), coast]} bg="#000">
-            {!narrow && heroHead}
-            {!narrow && (
-              <span style={{ position: "absolute", left: "12px", bottom: "10px", padding: "3px 8px", borderRadius: "5px", background: "rgba(3,8,16,0.72)", fontSize: FS.xs, color: "#cbd5e1" }}>
-                気象庁 ひまわりの画像をそのまま{bandSel ? "" : " · 昼はトゥルーカラー、夜は赤外"}
-              </span>
-            )}
-          </TileMap>
+        <div style={{ position: "relative", borderRadius: "8px", border: "1px solid #1c2433", overflow: "hidden", background: "#000" }}>
+          {view === "sat" ? (
+            <>
+              {narrow && heroHead}
+              <div style={{ filter: dim ? DIM_FILTER : "none" }}>
+                <TileMap region={HERO_REGION} layers={[satLayer(band), coast]} bg="#000" />
+              </div>
+              {overlayHead && heroHead}
+              {overlayHead && (
+                <span style={{ position: "absolute", left: "12px", bottom: "10px", padding: "3px 8px", borderRadius: "5px", background: "rgba(3,8,16,0.72)", fontSize: FS.xs, color: "#cbd5e1" }}>
+                  気象庁 ひまわりの画像をそのまま{bandSel ? "" : " · 昼はトゥルーカラー、夜は赤外"}
+                </span>
+              )}
+            </>
+          ) : narrow ? (
+            <>
+              {heroHead}
+              <div style={{ position: "relative", aspectRatio: HERO_ASPECT }}><HeroChart item={chart} dim={dim} onOpen={openFull} /></div>
+            </>
+          ) : (
+            <div style={{ aspectRatio: HERO_ASPECT, display: "flex", flexDirection: "column" }}>
+              {heroHead}
+              <div style={{ position: "relative", flex: 1, minHeight: 0 }}><HeroChart item={chart} dim={dim} onOpen={openFull} /></div>
+            </div>
+          )}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "10px" }}>
-          <button type="button" aria-label="地上天気図（実況）を全画面で開く" onClick={() => setViewer(0)} style={thumbStyle}>
-            {thumbHead("地上天気図 実況", "天気図", viewerItems[0].meta.replace(/^\d+日 /, ""))}
-            <span style={{ margin: "0 8px 8px", height: "84px", borderRadius: "5px", background: "#fff", overflow: "hidden", display: "flex", filter: dim ? DIM_FILTER : "none" }}>
-              {spas?.src && <img src={spas.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-            </span>
-          </button>
-          <button type="button" aria-label="国内悪天予想図を全画面で開く" onClick={() => setViewer(1)} style={thumbStyle}>
-            {thumbHead("国内悪天予想図", "FBJP", "FBJP")}
-            <span style={{ margin: "0 8px 8px", height: "84px", borderRadius: "5px", background: "#fff", overflow: "hidden", display: "flex", filter: dim ? DIM_FILTER : "none" }}>
-              <img src={FBJP_URL} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            </span>
-          </button>
-          <button type="button" aria-label="ひまわり 水蒸気を大きく表示" onClick={() => setBandSel("B08/TBB")} style={thumbStyle}>
-            {thumbHead("水蒸気", "水蒸気", "ひまわり")}
-            <span style={{ margin: "0 8px 8px", height: "84px", borderRadius: "5px", background: "#000", overflow: "hidden", display: "flex", alignItems: "center", filter: dim ? DIM_FILTER : "none" }}>
-              <div style={{ width: "100%" }}><TileMap region={THUMB_REGION} layers={[satLayer("B08/TBB")]} bg="#000" /></div>
-            </span>
-          </button>
+        <div role="group" aria-label="主役の画像を切り替える" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "10px" }}>
+          {thumbs.map((t) => {
+            const on = view === t.key;
+            return (
+              <button key={t.key} type="button" aria-pressed={on} aria-label={`${t.label}を大きく表示`} onClick={() => setView(t.key)} style={thumbStyle(on)}>
+                <span style={{ display: "flex", alignItems: "baseline", gap: "6px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, color: on ? C.accent : C.text, whiteSpace: "nowrap", overflow: "hidden" }}>
+                  {narrow ? t.short : t.title}{!narrow && t.note && <span style={{ fontSize: "10px", fontWeight: 400, color: C.textSub }}>{t.note}</span>}
+                </span>
+                <span style={{ margin: "0 8px 8px", height: "84px", borderRadius: "5px", background: t.key === "sat" ? "#000" : "#fff", overflow: "hidden", display: "flex", alignItems: "center", filter: dim ? DIM_FILTER : "none" }}>
+                  {t.key === "sat"
+                    ? <div style={{ width: "100%" }}><TileMap region={THUMB_REGION} layers={[satLayer(band)]} bg="#000" /></div>
+                    : charts.find((c) => c.key === t.key)?.src && <img src={charts.find((c) => c.key === t.key).src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -832,10 +868,24 @@ function Overview({ plan, metars, metarNote, sigmets, listIcaos, favorites, setF
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
         </button>
       </div>
-      {viewer !== null && viewerItems[viewer]?.src && (
-        <ChartViewer items={viewerItems.filter((x) => x.src)} index={Math.min(viewer, viewerItems.filter((x) => x.src).length - 1)} setIndex={setViewer} onClose={() => setViewer(null)} dim={dim} />
+      {viewer !== null && viewerList[viewer] && (
+        <ChartViewer items={viewerList} index={viewer} setIndex={setViewer} onClose={() => setViewer(null)} dim={dim} />
       )}
     </div>
+  );
+}
+
+// 主役の枠に天気図を1枚（枠いっぱいに収める。タップで全画面）
+function HeroChart({ item, dim, onOpen }) {
+  const [errSrc, setErrSrc] = useState(null);
+  const ok = item?.src && errSrc !== item.src;
+  return (
+    <button type="button" onClick={onOpen} disabled={!ok} aria-label={`${item?.title || "図"}を全画面で開く`}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", padding: 0, border: "none", display: "flex", alignItems: "center", justifyContent: "center", background: ok ? "#fff" : "#0f1726", cursor: ok ? "zoom-in" : "default", filter: dim && ok ? DIM_FILTER : "none" }}>
+      {ok
+        ? <img src={item.src} alt={item.title} onError={() => setErrSrc(item.src)} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
+        : <span style={{ color: C.textSub, fontSize: FS.sm }}>{item?.src ? "この図を読み込めません" : "読み込み中…"}</span>}
+    </button>
   );
 }
 

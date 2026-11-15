@@ -37,7 +37,10 @@ const BASE_ICAO = "RJTT"; // 拠点（乗務がない日の天気概況）
 const REFRESH_MS = 5 * 60e3;
 const PREF = {
   collapsed: "psd_collapsed", airports: "psd_airports", fl: "psd_fl", rwy: "psd_rwy", xw: "psd_xw_limit", tw: "psd_tw_limit",
+  chartDark: "psd_chart_dark",
 };
+// 天気図（地上天気図・FBJP）のダーク表示：明るさを反転してから色相を戻す（白地→黒、黒い線→白、赤・青の線は赤・青のまま）
+const DARK_FILTER = "invert(1) hue-rotate(180deg)";
 // 注意（琥珀色）の目安：ガスト 25kt 以上か平均 20kt 以上・視程 1600m 未満・雲底 1000ft 未満・VWS 6kt/1000ft 以上
 const LIMIT = { gust: 25, wind: 20, vis: 1600, ceil: 1000, vws: 6, jet: 80 };
 
@@ -707,6 +710,8 @@ function FoldedBar({ plan, metars, sigmets, favorites, onOpen, onPick, api }) {
 function Overview({ plan, metars, metarNote, sigmets, listIcaos, favorites, setFavorites, onPick, api, now, tick }) {
   const narrow = useNarrow(900);
   const [dim] = useDimPref();
+  const [chartDark, setChartDark] = usePref(PREF.chartDark, true); // 既定はダーク
+  const chartFilter = [chartDark ? DARK_FILTER : null, dim ? DIM_FILTER : null].filter(Boolean).join(" ") || "none";
   const sat = useSatTime(tick);
   const spas = useSpas(tick);
   const [bandSel, setBandSel] = useState(null); // null＝昼夜で自動
@@ -751,7 +756,12 @@ function Overview({ plan, metars, metarNote, sigmets, listIcaos, favorites, setF
         <>
           <span style={{ fontSize: FS.md, fontWeight: 700, color: COL.white }}>{chart.title}</span>
           <span style={{ fontFamily: FONT.data, fontSize: "12px", color: "#cbd5e1" }}>{chart.meta || chart.code}</span>
-          <button type="button" onClick={openFull} disabled={!chart.src} style={{ ...plainBtn, marginLeft: "auto", opacity: chart.src ? 1 : 0.5 }}>全画面</button>
+          <div role="group" aria-label="天気図の色" style={{ marginLeft: "auto", display: "inline-flex", gap: "2px", padding: "2px", borderRadius: "9px", background: "rgba(7,13,24,0.92)", border: "1px solid #1c2433" }}>
+            {[[true, "ダーク"], [false, "元の色"]].map(([v, label]) => (
+              <button key={label} type="button" aria-pressed={chartDark === v} onClick={() => setChartDark(v)} style={{ ...segBtn(chartDark === v), fontSize: "12px" }}>{label}</button>
+            ))}
+          </div>
+          <button type="button" onClick={openFull} disabled={!chart.src} style={{ ...plainBtn, opacity: chart.src ? 1 : 0.5 }}>全画面</button>
         </>
       )}
     </div>
@@ -788,12 +798,12 @@ function Overview({ plan, metars, metarNote, sigmets, listIcaos, favorites, setF
           ) : narrow ? (
             <>
               {heroHead}
-              <div style={{ position: "relative", aspectRatio: HERO_ASPECT }}><HeroChart item={chart} dim={dim} onOpen={openFull} /></div>
+              <div style={{ position: "relative", aspectRatio: HERO_ASPECT }}><HeroChart item={chart} filter={chartFilter} onOpen={openFull} /></div>
             </>
           ) : (
             <div style={{ aspectRatio: HERO_ASPECT, display: "flex", flexDirection: "column" }}>
               {heroHead}
-              <div style={{ position: "relative", flex: 1, minHeight: 0 }}><HeroChart item={chart} dim={dim} onOpen={openFull} /></div>
+              <div style={{ position: "relative", flex: 1, minHeight: 0 }}><HeroChart item={chart} filter={chartFilter} onOpen={openFull} /></div>
             </div>
           )}
         </div>
@@ -805,7 +815,7 @@ function Overview({ plan, metars, metarNote, sigmets, listIcaos, favorites, setF
                 <span style={{ display: "flex", alignItems: "baseline", gap: "6px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, color: on ? C.accent : C.text, whiteSpace: "nowrap", overflow: "hidden" }}>
                   {narrow ? t.short : t.title}{!narrow && t.note && <span style={{ fontSize: "10px", fontWeight: 400, color: C.textSub }}>{t.note}</span>}
                 </span>
-                <span style={{ margin: "0 8px 8px", height: "84px", borderRadius: "5px", background: t.key === "sat" ? "#000" : "#fff", overflow: "hidden", display: "flex", alignItems: "center", filter: dim ? DIM_FILTER : "none" }}>
+                <span style={{ margin: "0 8px 8px", height: "84px", borderRadius: "5px", background: t.key === "sat" ? "#000" : "#fff", overflow: "hidden", display: "flex", alignItems: "center", filter: t.key === "sat" ? (dim ? DIM_FILTER : "none") : chartFilter }}>
                   {t.key === "sat"
                     ? <div style={{ width: "100%" }}><TileMap region={THUMB_REGION} layers={[satLayer(band)]} bg="#000" /></div>
                     : charts.find((c) => c.key === t.key)?.src && <img src={charts.find((c) => c.key === t.key).src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
@@ -869,19 +879,19 @@ function Overview({ plan, metars, metarNote, sigmets, listIcaos, favorites, setF
         </button>
       </div>
       {viewer !== null && viewerList[viewer] && (
-        <ChartViewer items={viewerList} index={viewer} setIndex={setViewer} onClose={() => setViewer(null)} dim={dim} />
+        <ChartViewer items={viewerList} index={viewer} setIndex={setViewer} onClose={() => setViewer(null)} dim={dim} filter={chartFilter} />
       )}
     </div>
   );
 }
 
 // 主役の枠に天気図を1枚（枠いっぱいに収める。タップで全画面）
-function HeroChart({ item, dim, onOpen }) {
+function HeroChart({ item, filter, onOpen }) {
   const [errSrc, setErrSrc] = useState(null);
   const ok = item?.src && errSrc !== item.src;
   return (
     <button type="button" onClick={onOpen} disabled={!ok} aria-label={`${item?.title || "図"}を全画面で開く`}
-      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", padding: 0, border: "none", display: "flex", alignItems: "center", justifyContent: "center", background: ok ? "#fff" : "#0f1726", cursor: ok ? "zoom-in" : "default", filter: dim && ok ? DIM_FILTER : "none" }}>
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", padding: 0, border: "none", display: "flex", alignItems: "center", justifyContent: "center", background: ok ? "#fff" : "#0f1726", cursor: ok ? "zoom-in" : "default", filter: ok ? filter : "none" }}>
       {ok
         ? <img src={item.src} alt={item.title} onError={() => setErrSrc(item.src)} draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
         : <span style={{ color: C.textSub, fontSize: FS.sm }}>{item?.src ? "この図を読み込めません" : "読み込み中…"}</span>}

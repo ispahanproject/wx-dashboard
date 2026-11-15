@@ -350,7 +350,8 @@ function ChartCard({ chart, d, dim, nowMs, isoOn, xsecOn, onOpen, onRetry }) {
 }
 
 // 全画面ビューア。items: [{ key, title, code, meta, src, href }]
-export function ChartViewer({ items, index, setIndex, onClose, dim }) {
+// filter：図の CSS フィルタを差し替えるとき（トップのダーク表示など）。無ければ減光の設定に従う
+export function ChartViewer({ items, index, setIndex, onClose, dim, filter }) {
   const item = items[index];
   const [fit, setFit] = useState(true);
   const closeRef = useRef(null);
@@ -428,7 +429,7 @@ export function ChartViewer({ items, index, setIndex, onClose, dim }) {
             src={item.src} alt={item.title} draggable={false}
             style={{
               background: "#ffffff", borderRadius: "6px",
-              filter: dim ? DIM_FILTER : "none",
+              filter: filter ?? (dim ? DIM_FILTER : "none"),
               ...(fit ? { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" } : { maxWidth: "none" }),
             }}
           />

@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from "react";
 import { PanelFrame, ExtLink, Segmented, actionBtnStyle } from "./ui.jsx";
 import { C, FS, FONT } from "./theme.js";
 import { findIsotherm } from "./isotherm.js";
+import { mapStrokeFlags, recolorStrokes } from "./pdfmap.js";
 
 const MONO = FONT.ui;
 const GREEN = "#6ee7b7";
@@ -198,7 +199,8 @@ function fetchPdf(url, refresh) {
 }
 
 // isotherm: { target: -30, color } を渡すと、その等温線に色を付ける（線の下に蛍光ペンのように引く）
-async function renderPdfToImage(url, refresh, isotherm) {
+// mapColor: "#…" を渡すと、地図の線（海岸線・経緯線など。いちばん細い黒線）をその色で描く（解析の線と見分けるため）
+async function renderPdfToImage(url, refresh, isotherm, mapColor) {
   const [pdfjs, worker] = await Promise.all([
     import("pdfjs-dist"),
     import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
@@ -219,9 +221,27 @@ async function renderPdfToImage(url, refresh, isotherm) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     let lines = null; // null＝色付けしない／失敗、[]＝見つからない
+    const opList = isotherm || mapColor ? await page.getOperatorList() : null;
     if (isotherm) {
-      try { lines = findIsotherm(await page.getOperatorList(), pdfjs.OPS, isotherm.target); } catch { lines = null; }
+      try { lines = findIsotherm(opList, pdfjs.OPS, isotherm.target); } catch { lines = null; }
     }
+    // 地図の線の色を替えて描く。stroke の数が合わないとき（PDF の作りが違う）は、色を替えずに描き直す
+    let flags = null;
+    if (mapColor) {
+      try { flags = mapStrokeFlags(opList, pdfjs.OPS); } catch { flags = null; }
+    }
+    const render = async (target, background) => {
+      const c2d = target.getContext("2d");
+      if (flags) {
+        const r = recolorStrokes(c2d, flags, mapColor);
+        await page.render({ canvasContext: r.ctx, viewport: vp, background }).promise;
+        if (r.count() === flags.length) return;
+        c2d.setTransform(1, 0, 0, 1, 0, 0);
+        c2d.clearRect(0, 0, target.width, target.height);
+        if (background) { c2d.fillStyle = background; c2d.fillRect(0, 0, target.width, target.height); }
+      }
+      await page.render({ canvasContext: c2d, viewport: vp, background }).promise;
+    };
     if (lines?.length) {
       ctx.save();
       ctx.strokeStyle = isotherm.color;
@@ -239,10 +259,10 @@ async function renderPdfToImage(url, refresh, isotherm) {
       const layer = document.createElement("canvas");
       layer.width = canvas.width;
       layer.height = canvas.height;
-      await page.render({ canvasContext: layer.getContext("2d"), viewport: vp, background: "rgba(0,0,0,0)" }).promise;
+      await render(layer, "rgba(0,0,0,0)");
       ctx.drawImage(layer, 0, 0);
     } else {
-      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      await render(canvas, "#fff");
     }
     const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
     return { src: URL.createObjectURL(blob), modified, isotherm: isotherm ? (lines ? lines.length : null) : undefined };
@@ -252,10 +272,10 @@ async function renderPdfToImage(url, refresh, isotherm) {
 }
 
 // PDF を画像化した結果（キャッシュ付き）。天気図一覧タブからも使う
-export function getPdfImage(url, refresh = 0, isotherm = null) {
-  const key = `${url}|${refresh}|${isotherm ? isotherm.target : ""}`;
+export function getPdfImage(url, refresh = 0, isotherm = null, mapColor = null) {
+  const key = `${url}|${refresh}|${isotherm ? isotherm.target : ""}|${mapColor || ""}`;
   if (!pdfCache.has(key)) {
-    pdfCache.set(key, renderPdfToImage(url, refresh, isotherm).catch((e) => { pdfCache.delete(key); throw e; }));
+    pdfCache.set(key, renderPdfToImage(url, refresh, isotherm, mapColor).catch((e) => { pdfCache.delete(key); throw e; }));
   }
   return pdfCache.get(key);
 }

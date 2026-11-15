@@ -24,6 +24,8 @@ const AUTO_REFRESH_MS = 10 * 60e3;
 export const DIM_FILTER = "brightness(0.68) contrast(1.05)";
 const ISO_KEY = "wxcharts_isotherm"; // 寒気の目安（等温線の色付け）の表示
 const ISO_COLOR = "#2563eb";
+// 地図の線（海岸線・経緯線・山岳域）の色。解析の線（黒）と見分けるための淡い赤（2026-11-15 利用者の希望）
+const MAP_COLOR = "#ef7f7f";
 // 等温線の色付けの説明（例: 500hPa −30℃線）。d.iso は見つかった線の数（null は色付けできなかった）
 const isoNote = (c, d, on) => {
   if (!c.isotherm || !on || d?.iso === undefined) return null;
@@ -95,9 +97,10 @@ const WX_CHARTS = [
   { key: "asas", cat: "sfc", title: "アジア 実況", code: "ASAS", kind: "wm", region: "asia", sel: "now" },
   { ...FBJP_CHART, cat: "sev" }, // その日の悪天の全体像（「すべて」だけに表示。SIG WX にも同じ図）
   { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48] },
-  // 気象庁 AUPQ78＝850・700hPa、AUPQ35＝500・300hPa。isotherm は寒気の目安として色を付ける等温線（下段の図）
-  { key: "aupq78", cat: "upper", title: "850/700hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78", isotherm: { target: -6, level: "850hPa" } },
-  { key: "aupq35", cat: "upper", title: "500/300hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35", isotherm: { target: -30, level: "500hPa" } },
+  // 気象庁 AUPQ78＝850・700hPa、AUPQ35＝500・300hPa。isotherm は寒気の目安として色を付ける等温線（下段の図）。
+  // mapColor は地図の線を淡い赤で描く（解析の線と見分けるため）
+  { key: "aupq78", cat: "upper", title: "850/700hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78", isotherm: { target: -6, level: "850hPa" }, mapColor: true },
+  { key: "aupq35", cat: "upper", title: "500/300hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35", isotherm: { target: -30, level: "500hPa" }, mapColor: true },
   { key: "aupa25", cat: "upper", title: "250hPa 解析", code: "AUPA25", kind: "pdf", file: "aupa25" },
   { key: "fupa252", cat: "upper", title: "250hPa 24時間予想", code: "FUPA252", kind: "pdf", file: "fupa252", ft: [24], hideInAll: true },
 ];
@@ -207,7 +210,7 @@ function useChartSources(charts, manualRefresh, autoTick, isoOn = false) {
       const url = `${NWP_PDF}${c.file}_${init}.pdf`;
       patch(c.key, { href: url });
       setData((p) => (p[c.key]?.src ? p : { ...p, [c.key]: { ...(p[c.key] || {}), status: "loading" } }));
-      getPdfImage(url, manualRefresh, c.isotherm && isoOn ? { target: c.isotherm.target, color: ISO_COLOR } : null)
+      getPdfImage(url, manualRefresh, c.isotherm && isoOn ? { target: c.isotherm.target, color: ISO_COLOR } : null, c.mapColor ? MAP_COLOR : null)
         .then((r) => {
           if (!alive) return;
           const modified = r.modified ? new Date(r.modified) : null;

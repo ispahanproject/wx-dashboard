@@ -49,6 +49,8 @@ const dur = (ms) => {
   return m < 60 ? `${m}分` : `${Math.floor(m / 60)}時間${m % 60 ? `${m % 60}分` : ""}`;
 };
 const fl = (ft) => `FL${String(Math.round(ft / 100)).padStart(3, "0")}`;
+// 高度の範囲（地図の札と一覧で共通）
+const extentOf = (s) => (s.base && s.top ? `${fl(s.base)}–${fl(s.top)}` : s.top ? `TOP ${fl(s.top)}` : s.base ? `${fl(s.base)} 以上` : "");
 const loadJson = (key, fallback) => {
   try { const v = localStorage.getItem(key); return v === null ? fallback : { ...fallback, ...JSON.parse(v) }; } catch { return fallback; }
 };
@@ -186,12 +188,24 @@ export function SigmetView() {
                 const p = projectPct(region, z, lon, lat);
                 if (p.x < 0 || p.x > 100 || p.y < 0 || p.y > 100) return null;
                 const h = hazardOf(s.hazard);
+                // 高度と有効時間（UTC）。まだ始まっていないものは琥珀色で「開始前」
+                const from = new Date((s.validTimeFrom || 0) * 1000);
+                const to = new Date((s.validTimeTo || 0) * 1000);
+                const started = nowMs >= from.getTime();
+                const extent = extentOf(s);
                 return (
                   <span key={`l${i}`} style={{
                     position: "absolute", left: `${p.x}%`, top: `${p.y}%`, transform: "translate(-50%,-50%)",
-                    padding: "2px 6px", borderRadius: "4px", background: "rgba(3,8,16,0.85)", color: h.color,
-                    fontSize: FS.xs, fontWeight: 700, whiteSpace: "nowrap", pointerEvents: "none",
-                  }}>{(s.seriesId || "").replace(/F$/, "")} {h.label}</span>
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: "1px",
+                    padding: "3px 7px", borderRadius: "4px", background: "rgba(3,8,16,0.85)",
+                    whiteSpace: "nowrap", pointerEvents: "none",
+                  }}>
+                    <span style={{ color: h.color, fontSize: FS.xs, fontWeight: 700 }}>{(s.seriesId || "").replace(/F$/, "")} {h.label}</span>
+                    {extent && <span style={{ fontFamily: FONT.data, fontSize: FS.xs, color: C.text }}>{extent}</span>}
+                    <span style={{ fontFamily: FONT.data, fontSize: FS.xs, color: started ? C.text : "#fcd34d" }}>
+                      {started ? "" : "開始前 "}{hhmmZ(from).replace(/Z$/, "")}–{hhmmZ(to)}
+                    </span>
+                  </span>
                 );
               })}
             </TileMap>
@@ -246,7 +260,7 @@ export function SigmetView() {
         const from = new Date((s.validTimeFrom || 0) * 1000);
         const to = new Date((s.validTimeTo || 0) * 1000);
         const started = nowMs >= from.getTime();
-        const extent = s.base && s.top ? `${fl(s.base)}–${fl(s.top)}` : s.top ? `TOP ${fl(s.top)}` : s.base ? `${fl(s.base)} 以上` : "";
+        const extent = extentOf(s);
         // 停滞（STNR）は方向 "-"・速度 0 で返るので、移動しているときだけ表示
         const move = /^[NSEW]{1,3}$/.test(s.dir || "") && +s.spd > 0 ? `MOV ${s.dir} ${s.spd}KT` : "";
         return (

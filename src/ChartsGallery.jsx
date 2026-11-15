@@ -24,8 +24,13 @@ const PDF_LAG_H = 4; // 数値予報天気図の PDF は初期時刻の約3.6時
 const CYCLE_LAG_MIN = 140; // FBJP112・FXJP106：3時間毎の初期値、約2時間14分後に掲載
 const AUTO_REFRESH_MS = 10 * 60e3;
 export const DIM_FILTER = "brightness(0.68) contrast(1.05)";
-const ISO_KEY = "wxcharts_isotherm"; // 寒気の目安（等温線の色付け）の表示
+const ISO_KEY = "wxcharts_isotherm"; // 目安の線（寒気の目安の等温線・等相当温位線）の色付けの表示
 const ISO_COLOR = "#2563eb";
+// 850hPa 相当温位（FXJP854）で色を付ける等相当温位線（2026-11-15 利用者の希望）
+const THETA_E = [
+  { value: 300, color: "#2563eb", name: "青" },
+  { value: 345, color: "#dc2626", name: "赤" },
+];
 const XSEC_KEY = "wxcharts_xsec_color"; // 断面図の線の色分けの表示
 // 断面図の色分けの凡例（白地に線の見本。dash は破線、symbol は線の代わりの印）
 const rgb = (k) => `rgb(${XSEC_RGB[k].join(",")})`;
@@ -45,6 +50,19 @@ const isoNote = (c, d, on) => {
   if (!c.isotherm || !on || d?.iso === undefined) return null;
   const name = `${c.isotherm.level} ${String(c.isotherm.target).replace("-", "−")}℃線`;
   return d.iso > 0 ? `${name}を青で表示` : `${name}は読み取れませんでした`;
+};
+// 等相当温位線の色付けの説明。d.te: { panels, read, found: { 300: 見つかった図の数 } }（null は読めなかった）
+// 戻り値: { text, shown: 色を付けた線 [{ value, color }] }
+const teNote = (c, d, on) => {
+  if (!c.thetaE || !on || d?.te === undefined) return null;
+  if (!d.te || !d.te.read) return { text: "相当温位の線は読み取れませんでした", shown: [] };
+  const shown = c.thetaE.filter((t) => d.te.found[t.value] > 0);
+  const missing = c.thetaE.filter((t) => !(d.te.found[t.value] > 0));
+  const text = [
+    shown.length ? `相当温位 ${shown.map((t) => `${t.value}K（${t.name}）`).join("・")}を表示` : "",
+    missing.length ? `${missing.map((t) => `${t.value}K`).join("・")}の線はなし` : "",
+  ].filter(Boolean).join("、");
+  return { text, shown };
 };
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -111,7 +129,8 @@ const WX_CHARTS = [
   { key: "asas", cat: "sfc", title: "アジア 実況", code: "ASAS", kind: "wm", region: "asia", sel: "now" },
   { ...FBJP_CHART, cat: "sev" }, // その日の悪天の全体像（「すべて」だけに表示。SIG WX にも同じ図）
   // mapLines は地図の線（海岸線・経緯線など）を淡い赤で描く（解析の線と見分けるため）。値は地図の線の見分け方（pdfmap.js）
-  { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48], mapLines: "panels" },
+  // thetaE は色を付ける等相当温位線（数字のラベルと線の描かれた順から見分ける。thetae.js）
+  { key: "fxjp854", cat: "upper", title: "850hPa 相当温位 予想", code: "FXJP854", kind: "pdf", file: "fxjp854", ft: [12, 24, 36, 48], mapLines: "panels", thetaE: THETA_E },
   // 気象庁 AUPQ78＝850・700hPa、AUPQ35＝500・300hPa。isotherm は寒気の目安として色を付ける等温線（下段の図）
   { key: "aupq78", cat: "upper", title: "850/700hPa 解析", code: "AUPQ78", kind: "pdf", file: "aupq78", isotherm: { target: -6, level: "850hPa" }, mapLines: "thinnest" },
   { key: "aupq35", cat: "upper", title: "500/300hPa 解析", code: "AUPQ35", kind: "pdf", file: "aupq35", isotherm: { target: -30, level: "500hPa" }, mapLines: "thinnest" },
@@ -230,12 +249,12 @@ function useChartSources(charts, manualRefresh, autoTick, isoOn = false, xsecOn 
       const url = `${NWP_PDF}${c.file}_${init}.pdf`;
       patch(c.key, { href: url });
       setData((p) => (p[c.key]?.src ? p : { ...p, [c.key]: { ...(p[c.key] || {}), status: "loading" } }));
-      getPdfImage(url, manualRefresh, c.isotherm && isoOn ? { target: c.isotherm.target, color: ISO_COLOR } : null, c.mapLines ? { rule: c.mapLines, color: MAP_COLOR } : null)
+      getPdfImage(url, manualRefresh, c.isotherm && isoOn ? { target: c.isotherm.target, color: ISO_COLOR } : null, c.mapLines ? { rule: c.mapLines, color: MAP_COLOR } : null, c.thetaE && isoOn ? c.thetaE : null)
         .then((r) => {
           if (!alive) return;
           const modified = r.modified ? new Date(r.modified) : null;
           const base = modified ? initFromModified(modified, init) : null;
-          patch(c.key, { status: "ok", src: r.src, error: null, timeLabel: base ? runLabel(c, base) : `${c.ft ? "初期値" : "解析"} ${init}Z`, ageFrom: null, iso: r.isotherm });
+          patch(c.key, { status: "ok", src: r.src, error: null, timeLabel: base ? runLabel(c, base) : `${c.ft ? "初期値" : "解析"} ${init}Z`, ageFrom: null, iso: r.isotherm, te: r.thetae });
         })
         .catch((e) => alive && patch(c.key, { status: "error", error: `PDF を取得できません（${e.message}）` }));
     });
@@ -272,6 +291,7 @@ function ChartCard({ chart, d, dim, nowMs, isoOn, xsecOn, onOpen, onRetry }) {
   const ready = src && src === loadedSrc;
   const meta = [d?.timeLabel, d?.ageFrom ? ago(d.ageFrom, nowMs) : null].filter(Boolean).join(" · ");
   const iso = isoNote(chart, d, isoOn);
+  const te = teNote(chart, d, isoOn);
 
   return (
     <button
@@ -294,6 +314,12 @@ function ChartCard({ chart, d, dim, nowMs, isoOn, xsecOn, onOpen, onRetry }) {
         <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "0 12px 8px", fontSize: FS.xs, color: d.iso > 0 ? C.text : C.textMuted }}>
           {d.iso > 0 && <span aria-hidden="true" style={{ width: "18px", height: "4px", borderRadius: "2px", background: ISO_COLOR, flexShrink: 0 }} />}
           {iso}
+        </div>
+      )}
+      {te && (
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "0 12px 8px", fontSize: FS.xs, color: te.shown.length ? C.text : C.textMuted }}>
+          {te.shown.map((t) => <span key={t.value} aria-hidden="true" style={{ width: "18px", height: "4px", borderRadius: "2px", background: t.color, flexShrink: 0 }} />)}
+          {te.text}
         </div>
       )}
       {chart.colorize && xsecOn && d?.colored && <XsecLegend />}
@@ -462,7 +488,7 @@ export function ChartFigure({ src, alt, dim, onOpen, aspect, minHeight = 240, mi
 
 // 図の一覧（カード）。cats を渡すと分類の切替を出す
 export function ChartGallery({ title, charts, cats, filterKey, links, note, minCard = 300 }) {
-  const hasIso = charts.some((c) => c.isotherm);
+  const hasIso = charts.some((c) => c.isotherm || c.thetaE);
   const [isoOn, setIsoOnState] = useState(() => loadPref(ISO_KEY, true) !== false);
   const setIsoOn = (v) => { setIsoOnState(v); savePref(ISO_KEY, v); };
   const hasXsec = charts.some((c) => c.colorize);
@@ -492,7 +518,7 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
     const d = data[c.key] || {};
     return {
       key: c.key, title: c.title, code: c.code, src: d.status === "ok" ? d.src : null, href: d.href,
-      meta: [d.timeLabel, d.ageFrom ? ago(d.ageFrom, nowMs) : null, isoNote(c, d, isoOn), c.colorize && xsecOn && d.colored ? XSEC_TEXT : null].filter(Boolean).join(" · "),
+      meta: [d.timeLabel, d.ageFrom ? ago(d.ageFrom, nowMs) : null, isoNote(c, d, isoOn), teNote(c, d, isoOn)?.text, c.colorize && xsecOn && d.colored ? XSEC_TEXT : null].filter(Boolean).join(" · "),
     };
   });
 
@@ -510,9 +536,9 @@ export function ChartGallery({ title, charts, cats, filterKey, links, note, minC
           <span style={{ fontSize: FS.xs, color: C.textMuted }}>タップで全画面{charts.length > 1 ? "、左右スワイプで次の図へ" : ""}</span>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             {hasIso && (
-              <label title="500hPa の −30℃線と 850hPa の −6℃線を、図のラベルを読み取って青で示します（目安）" style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
+              <label title="500hPa の −30℃線・850hPa の −6℃線（寒気の目安、青）と、850hPa 相当温位の 300K（青）・345K（赤）の線を、図の数字を読み取って色で示します（目安）" style={{ display: "inline-flex", alignItems: "center", gap: "8px", minHeight: "44px", fontSize: FS.sm, color: C.textSub, cursor: "pointer" }}>
                 <input type="checkbox" checked={isoOn} onChange={(e) => setIsoOn(e.target.checked)} style={{ width: "20px", height: "20px", accentColor: C.accent }} />
-                寒気の目安を色付け
+                目安の線を色付け
               </label>
             )}
             {hasXsec && (
@@ -568,7 +594,7 @@ export default function WxChartsGallery() {
   return (
     <ChartGallery
       title="天気図一覧" charts={WX_CHARTS} cats={WX_CATS} filterKey={FILTER_KEY} links={WX_LINKS}
-      note="出典: 気象庁（天気図・数値予報天気図・航空気象情報）。数値予報天気図は PDF を画像化して表示。250hPa 24時間予想は「上空」に表示。寒気の目安（500hPa −30℃線・850hPa −6℃線）は図のラベルを読み取って自動で色付けしたもので、読み取れない部分は色が付きません"
+      note="出典: 気象庁（天気図・数値予報天気図・航空気象情報）。数値予報天気図は PDF を画像化して表示。250hPa 24時間予想は「上空」に表示。目安の線（寒気の目安の 500hPa −30℃線・850hPa −6℃線、850hPa 相当温位の 300K・345K の線）は図の数字を読み取って自動で色付けしたもので、読み取れない部分は色が付きません"
     />
   );
 }

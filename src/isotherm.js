@@ -110,13 +110,13 @@ function matchGlyph(norm) {
   return best && best.d < 0.09 ? best.ch : null;
 }
 
-// ラベルを数値として読む（大きい縦字だけ。観測値の斜体の小さい字は対象外）
-function readLabels(groups) {
+// ラベルを数値として読む（大きい縦字だけ。観測値の斜体の小さい字は対象外）。minH〜maxH: 字の高さ（pt）
+function readLabels(groups, minH = 6.5, maxH = 10) {
   const labels = [];
   for (const glyphs of groups) {
     const parts = glyphs.map((g) => ({ pts: g.pts, b: bboxOf(g.pts) }));
     const H = Math.max(...parts.map((p) => p.b.y1 - p.b.y0));
-    if (H < 6.5 || H > 10) continue;
+    if (H < minH || H > maxH) continue;
     const base = Math.min(...parts.map((p) => p.b.y0));
     const chars = [];
     for (const p of [...parts].sort((a, b) => a.b.x0 - b.b.x0)) {
@@ -202,4 +202,11 @@ export function findIsotherm(opList, OPS, target) {
     }
   }
   return [...picked].map((i) => lines[i]);
+}
+
+// 白いふち取り付きのラベル（大きい縦字の数字）を読む。strokes は描かれた順の線（{ lw, white, pts }）。
+// minH〜maxH: 字の高さ（pt。FXJP854 の字は 6.3pt と AUPQ より小さい）。
+// 戻り値: [{ value, x0, x1, y0, y1 }]（PDF の座標）。相当温位の線（thetae.js）でも使う
+export function readHaloLabels(strokes, minH = 6.5, maxH = 10) {
+  return readLabels(haloGroups(strokes), minH, maxH);
 }

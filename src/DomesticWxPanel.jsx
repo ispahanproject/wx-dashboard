@@ -9,6 +9,7 @@ import { PanelFrame, ExtLink, Segmented, actionBtnStyle } from "./ui.jsx";
 import { C, FS, FONT } from "./theme.js";
 import { findIsotherm } from "./isotherm.js";
 import { mapStrokeFlags, recolorStrokes } from "./pdfmap.js";
+import { findThetaE } from "./thetae.js";
 
 const MONO = FONT.ui;
 const GREEN = "#6ee7b7";
@@ -200,7 +201,8 @@ function fetchPdf(url, refresh) {
 
 // isotherm: { target: -30, color } を渡すと、その等温線に色を付ける（線の下に蛍光ペンのように引く）
 // map: { color, rule } を渡すと、地図の線（海岸線・経緯線など）をその色で描く（解析の線と見分けるため）。rule は pdfmap.js の見分け方
-async function renderPdfToImage(url, refresh, isotherm, map) {
+// thetae: [{ value: 300, color }] を渡すと、その値の等相当温位線（FXJP854 の太線）をその色・少し太い線で描く
+async function renderPdfToImage(url, refresh, isotherm, map, thetae) {
   const [pdfjs, worker] = await Promise.all([
     import("pdfjs-dist"),
     import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
@@ -221,21 +223,28 @@ async function renderPdfToImage(url, refresh, isotherm, map) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     let lines = null; // null＝色付けしない／失敗、[]＝見つからない
-    const opList = isotherm || map ? await page.getOperatorList() : null;
+    const opList = isotherm || map || thetae ? await page.getOperatorList() : null;
     if (isotherm) {
       try { lines = findIsotherm(opList, pdfjs.OPS, isotherm.target); } catch { lines = null; }
     }
-    // 地図の線の色を替えて描く。stroke の数が合わないとき（PDF の作りが違う）は、色を替えずに描き直す
-    let flags = null;
+    // 地図の線・等相当温位線の色を替えて描く。stroke の数が合わないとき（PDF の作りが違う）は、色を替えずに描き直す
+    let flags = null, te = null, styles = null;
     if (map) {
       try { flags = mapStrokeFlags(opList, pdfjs.OPS, map.rule); } catch { flags = null; }
     }
+    if (thetae) {
+      try { te = findThetaE(opList, pdfjs.OPS, thetae); } catch { te = null; }
+    }
+    if (flags || te?.colors.some(Boolean)) {
+      const n = flags ? flags.length : te.colors.length;
+      styles = Array.from({ length: n }, (_, k) => (te?.colors[k] ? { color: te.colors[k], widthScale: 1.6 } : flags?.[k] ? { color: map.color } : null));
+    }
     const render = async (target, background) => {
       const c2d = target.getContext("2d");
-      if (flags) {
-        const r = recolorStrokes(c2d, flags, map.color);
+      if (styles) {
+        const r = recolorStrokes(c2d, styles);
         await page.render({ canvasContext: r.ctx, viewport: vp, background }).promise;
-        if (r.count() === flags.length) return;
+        if (r.count() === styles.length) return;
         c2d.setTransform(1, 0, 0, 1, 0, 0);
         c2d.clearRect(0, 0, target.width, target.height);
         if (background) { c2d.fillStyle = background; c2d.fillRect(0, 0, target.width, target.height); }
@@ -265,17 +274,21 @@ async function renderPdfToImage(url, refresh, isotherm, map) {
       await render(canvas, "#fff");
     }
     const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-    return { src: URL.createObjectURL(blob), modified, isotherm: isotherm ? (lines ? lines.length : null) : undefined };
+    return {
+      src: URL.createObjectURL(blob), modified,
+      isotherm: isotherm ? (lines ? lines.length : null) : undefined,
+      thetae: thetae ? (te ? { panels: te.panels, read: te.read, found: te.found } : null) : undefined,
+    };
   } finally {
     doc.destroy();
   }
 }
 
 // PDF を画像化した結果（キャッシュ付き）。天気図一覧タブからも使う
-export function getPdfImage(url, refresh = 0, isotherm = null, map = null) {
-  const key = `${url}|${refresh}|${isotherm ? isotherm.target : ""}|${map ? `${map.rule}:${map.color}` : ""}`;
+export function getPdfImage(url, refresh = 0, isotherm = null, map = null, thetae = null) {
+  const key = `${url}|${refresh}|${isotherm ? isotherm.target : ""}|${map ? `${map.rule}:${map.color}` : ""}|${thetae ? thetae.map((t) => `${t.value}:${t.color}`).join(",") : ""}`;
   if (!pdfCache.has(key)) {
-    pdfCache.set(key, renderPdfToImage(url, refresh, isotherm, map).catch((e) => { pdfCache.delete(key); throw e; }));
+    pdfCache.set(key, renderPdfToImage(url, refresh, isotherm, map, thetae).catch((e) => { pdfCache.delete(key); throw e; }));
   }
   return pdfCache.get(key);
 }

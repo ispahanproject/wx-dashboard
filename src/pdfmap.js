@@ -24,6 +24,12 @@ const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[
 const isBlack = (a) => (typeof a[0] === "string" ? /^#(0{6}|0{3})$/i.test(a[0]) : a[0] < 60 && a[1] < 60 && a[2] < 60);
 const near = (v, target, tol) => Math.abs(v - target) <= tol;
 
+// stroke() の数がずれるおそれのある命令があるか（あれば線の色を替えない）
+export function hasUnsafeStrokeOps(opList, OPS) {
+  const unsafe = new Set(UNSAFE_OPS.map((n) => OPS[n]).filter((v) => v !== undefined));
+  return opList.fnArray.some((fn) => unsafe.has(fn));
+}
+
 // 線の範囲（PDF の座標）。constructPath の3つ目の引数（線の座標の最小・最大）から
 function boxOf(path, ctm) {
   const mm = path?.[2];
@@ -102,18 +108,22 @@ export function mapStrokeFlags(opList, OPS, rule = "thinnest") {
   return rule === "panels" ? panelFlags(list) : thinnestFlags(list);
 }
 
-// canvas の描画先をくるみ、地図の線の番だけ線の色を color にする。count() で数えた stroke の数を返す
-export function recolorStrokes(ctx, flags, color) {
+// canvas の描画先をくるみ、stroke の番ごとに線の色（と太さ）を替える。styles[k]: null（そのまま）か
+// { color, widthScale }（widthScale は線の太さの倍率）。count() で数えた stroke の数を返す
+export function recolorStrokes(ctx, styles) {
   let k = 0;
   const proxy = new Proxy(ctx, {
     get(target, prop) {
       if (prop === "stroke") {
         return (...args) => {
-          if (flags[k++]) {
-            const prev = target.strokeStyle;
-            target.strokeStyle = color;
+          const st = styles[k++];
+          if (st) {
+            const prev = target.strokeStyle, prevW = target.lineWidth;
+            target.strokeStyle = st.color;
+            if (st.widthScale) target.lineWidth = prevW * st.widthScale;
             target.stroke(...args);
             target.strokeStyle = prev;
+            target.lineWidth = prevW;
           } else {
             target.stroke(...args);
           }

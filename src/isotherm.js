@@ -173,17 +173,24 @@ export function findIsotherm(opList, OPS, target) {
   if (!strokes.length) return [];
   const panel = bottomPanel(clips, strokes);
   const groups = haloGroups(strokes);
-  const labels = readLabels(groups).filter((l) => l.value === target && l.y1 > panel.y0 && l.y0 < panel.y1 && l.x1 > panel.x0 && l.x0 < panel.x1);
-  if (!labels.length) return [];
+  const allLabels = readLabels(groups).filter((l) => l.y1 > panel.y0 && l.y0 < panel.y1 && l.x1 > panel.x0 && l.x0 < panel.x1);
+  if (!allLabels.some((l) => l.value === target)) return [];
   const lines = dashedLines(strokes, groups, panel);
   const ends = lines.map((pts) => [pts[0], pts[pts.length - 1]]);
   const atEdge = ([x, y]) => x - panel.x0 < 3 || panel.x1 - x < 3 || y - panel.y0 < 3 || panel.y1 - y < 3;
-  const touches = (p, l) => p[0] > l.x0 - 6.5 && p[0] < l.x1 + 6.5 && p[1] > l.y0 - 6.5 && p[1] < l.y1 + 6.5;
+  // 線の端からラベルの枠までの距離。ラベルの前後の途切れは 4〜7pt ほど（線の向きで左右が違う）
+  const gapTo = ([x, y], l) => Math.hypot(Math.max(l.x0 - x, 0, x - l.x1), Math.max(l.y0 - y, 0, y - l.y1));
+  // 端にいちばん近いラベルが目的の温度で、9pt 以内のとき（隣の等温線の、別のラベルのそばの端は拾わない）
+  const touches = (p) => {
+    let best = null;
+    for (const l of allLabels) { const d = gapTo(p, l); if (!best || d < best.d) best = { d, l }; }
+    return best && best.d <= 9 && best.l.value === target;
+  };
 
   // ラベルの両側で途切れている線を起点に、端どうしが近い（＝同じ線の続き）ものをつなぐ
   const picked = new Set();
   const queue = [];
-  lines.forEach((_, i) => { if (labels.some((l) => ends[i].some((p) => touches(p, l)))) { picked.add(i); queue.push(i); } });
+  lines.forEach((_, i) => { if (ends[i].some(touches)) { picked.add(i); queue.push(i); } });
   while (queue.length) {
     const i = queue.shift();
     for (const p of ends[i]) {
